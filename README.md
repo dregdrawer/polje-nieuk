@@ -11,7 +11,7 @@ Signal flows **left → right**: inlets on the left edge of a box, outlets on th
 |---|---|
 | Add a module | Double-tap (double-click) empty space and type a name: `delay`, `grain`, `lfo`, `comp`, `verb`… Or use the **+** in the top bar |
 | Connect audio | Drag from an outlet (right edge ●) to an inlet (left edge ○) |
-| Modulate a parameter | Drag any outlet onto the small ○ at the left of a parameter row. Dashed cable = modulation; a white tick shows the live value. ±1.0 (≈ ±10 V from the disting) sweeps the full range, so use `atten~` to scale |
+| Modulate a parameter | Drag any outlet onto the small ○ at the left of a parameter row. Dashed cable = modulation; a white tick shows the live value. ±1.0 (≈ ±10 V from the disting) sweeps the full range, so use `atten~` to scale — except semitone rows (frequency, pitch, tune): those take patched CV at 1 V/oct, like the pitch inlets |
 | Bypass a module | Click the circle left of its name: filled = on, hollow = bypassed (audio passes straight through, modulators go silent, with a click-free crossfade). Switching an effect back on starts it with empty buffers — no old echoes or tails |
 | Delete a cable | Tap it, then tap the **×** in the middle |
 | Move a cable | Drag its input end to another inlet (drop on empty space to remove it) |
@@ -86,7 +86,7 @@ Most modules are stereo: with only **L** patched, **R** follows L. Effects with 
 - `rack~`: sampling drum machine. A drum roll (16 lanes × up to 32 steps, app clock or clock inlet, division, swing) above 4 × 4 pads, each with **M ▶ S** (mute, play, solo). Tap a pad to select it — its tune, attack, decay, level and pan show as rows — and hear it when nothing is patched into the clock inlet (▶ always plays). Changing the division keeps the pattern in time — 1/16 → 1/32 turns 16 steps into 32 finer ones with the hits on the same beats (same in drumsynth~, drums~ and roll~) — and the grid shows beat and bar lines, and the bin in the title bar clears the pattern (undo brings it back). Drop an audio file on a pad (or select the rack and click a file in the browser) to load it; right-click / long-press a pad to go back to the built-in sound. Starts with a synthesized kit (kick, snare, hats, clap, toms, crash, ride, cowbell, shaker, clave, 808, zap) and a starter beat. Pad samples are kept with the patch.
 - `shapes~`: macro oscillator with 47 shapes (analog, sync, triple, swarm, filters, vowels, FM, plucked/bowed/blown, bell, drums, wavetables, noise). Trig and pitch inlets; optional decay envelope (0 = drone). **attack** fades each triggered note in; decay 0 = drone; with nothing in trig it always drones.
 
-Every voice takes **pitch first**, then its gate / trigger — the same order the sequencers send them (pitch, gate). Pitch inlets are 1 V/oct in the app's scale: 0.1 = 1 octave (±1.0 = ±10 V).
+Every voice takes **pitch first**, then its gate / trigger — the same order the sequencers send them (pitch, gate). Pitch inlets are 1 V/oct in the app's scale: 0.1 = 1 octave (±1.0 = ±10 V) — the same for pitch coming in through `in~`. `out~`'s **audio gain** leaves channels fed by sequencers, keys, clocks and modulators alone, so pitch leaves at exactly 1 V/oct and gates keep their level however the audio is set. (This assumes the interface's full scale is ±10 V, as on Expert Sleepers interfaces; check with `scope~` and a tuner.)
 
 **Effects**
 - `delay~`: digital, tape (wow, flutter, saturation) or analog BBD; synced or free, with ping-pong. Moving **division** switches sync on, moving **free time** switches it off (same for the rate of lfo~, tremolo and the other synced modules).
@@ -119,6 +119,7 @@ Every voice takes **pitch first**, then its gate / trigger — the same order th
 
 **Utility**
 - `gain~`: gain, balance, width, mono, phase invert, mute.
+- `scope~`: two-channel oscilloscope for anything — audio, LFOs, envelopes, gates, pitch CV. Shows the waveforms (A bright, B dim) and measures each: average, range and frequency in volts (0.1 = 1 V); a steady voltage also reads as the note it plays at 1 V/oct (0 V = C4), with cents. Time window 1 ms – 10 s, trigger free / on A rising / on the bar, auto or fixed scale, hold.
 - `mix~`: four-input mixer.
 
 ## Files

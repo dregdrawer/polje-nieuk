@@ -43,7 +43,7 @@ struct WaveformView: View {
 
     var body: some View {
         GeometryReader { geo in
-            LiveCanvas { ctx, size in draw(ctx, size) }
+            LiveCanvas(smooth: true) { ctx, size in draw(ctx, size) }
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 4)
@@ -227,7 +227,8 @@ struct EQCurveView: View {
 
     var body: some View {
         GeometryReader { geo in
-            LiveCanvas { ctx, size in draw(ctx, size) }
+            // the spectrum analyser: 10 fps is plenty for the eye
+            LiveCanvas(every: 2) { ctx, size in draw(ctx, size) }
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)

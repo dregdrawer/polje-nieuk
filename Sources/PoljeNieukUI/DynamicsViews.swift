@@ -37,8 +37,9 @@ struct CompView: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            LiveCanvas { ctx, size in drawHistory(ctx, size) }
-            LiveCanvas { ctx, size in drawCurve(ctx, size) }
+            // 10 fps: a gain-reduction history looks the same, at half the redraws
+            LiveCanvas(every: 2) { ctx, size in drawHistory(ctx, size) }
+            LiveCanvas(every: 2) { ctx, size in drawCurve(ctx, size) }
                 .aspectRatio(1, contentMode: .fit)
         }
         .padding(.vertical, 4)
@@ -123,7 +124,7 @@ struct LFOView: View {
     let patchNode: PatchNode
 
     var body: some View {
-        LiveCanvas { ctx, size in draw(ctx, size) }
+        LiveCanvas(smooth: true) { ctx, size in draw(ctx, size) }
             .padding(.vertical, 4)
     }
 

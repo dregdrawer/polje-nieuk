@@ -22,9 +22,9 @@ struct ModuleBox: View {
     private var width: CGFloat { BoxLayout.width(node) }
     @Environment(\.hostedNodes) private var hosted
     /// Where drags are measured: the canvas — or, when the boxes sit in their own layer (see NodesHost), that layer.
-    private var boxSpace: CoordinateSpace { hosted ? .named(NodesHost.space) : .named("canvas") }
+    private var boxSpace: CoordinateSpace { hosted ? .global : .named("canvas") }
     /// A drag location in canvas-view coordinates, whichever space it was measured in.
-    private func viewPoint(_ p: CGPoint) -> CGPoint { hosted ? model.fromHosted(p) : p }
+    private func viewPoint(_ p: CGPoint) -> CGPoint { hosted ? model.fromGlobal(p) : p }
 
     /// Whether any of this box is on screen (with a margin): off-screen boxes don't redraw their displays.
     private func onScreen(_ h: CGFloat) -> Bool {
@@ -211,19 +211,19 @@ struct ModuleBox: View {
                         groupDrag = model.selectedNodes.contains(node.id) && model.selectedNodes.count > 1
                         if groupDrag { model.beginGroupDrag() } else { model.select(node.id) }
                     }
-                    guard let s = dragStart else { return }
+                    guard dragStart != nil else { return }
                     let d = CGSize(width: v.translation.width / model.viewScale, height: v.translation.height / model.viewScale)
                     if groupDrag {
                         model.groupDrag(by: d)                          // the whole selection moves together
                     } else {
-                        model.moveNode(node.id, to: CGPoint(x: s.x + d.width, y: s.y + d.height))
+                        model.dragMove([node.id], by: d)
                         model.updateInsertCandidate(for: node.id, at: viewPoint(v.location))
                     }
                 }
                 .onEnded { _ in
                     if model.threeD { model.end3DMove(); model.scheduleAutosave(); return }
                     dragStart = nil
-                    if groupDrag { model.endGroupDrag() } else { model.finishInsert(node.id) }
+                    if groupDrag { model.endGroupDrag() } else { model.endDragMove(); model.finishInsert(node.id) }
                     groupDrag = false
                     model.scheduleAutosave()
                 }
@@ -491,6 +491,7 @@ struct ParamRow: View {
     var width: CGFloat = 170
     let onChange: (Float) -> Void
     @State private var dragStart: Float?
+    @State private var showOptions = false
     private var rowH: CGFloat { BoxLayout.row - 3 }
 
     var body: some View {
@@ -502,8 +503,11 @@ struct ParamRow: View {
             }
             .buttonStyle(.plain)
         case .choice(let options):
-            // slide across the row to step through the options; the ▾ at the end opens the whole list
+            // click anywhere on the row for the whole list; slide across it to step through the options
                 rowContent(fill: CGFloat(spec.normalized(value)), valueText: spec.display(value), recOn: false, trailingSpace: 16)
+                    .overlay(alignment: .trailing) {
+                        Text("▾").font(Theme.mono).foregroundStyle(Theme.dim).frame(width: 18, height: rowH)
+                    }
                     .contentShape(Rectangle())
                     .gesture(
                         DragGesture(minimumDistance: 1)
@@ -514,20 +518,32 @@ struct ParamRow: View {
                             }
                             .onEnded { _ in dragStart = nil }
                     )
-                    .onTapGesture(count: 2) { onChange(spec.def) }
-                    .overlay(alignment: .trailing) {
-                        Menu {
-                            ForEach(options.indices, id: \.self) { i in
-                                Button((Int(value.rounded()) == i ? "✓ " : "   ") + options[i]) { onChange(Float(i)) }
+                    // a plain click (no slide) opens the list — straight away, no double-click wait
+                    .onTapGesture { showOptions = true }
+                    .popover(isPresented: $showOptions, arrowEdge: .bottom) {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(options.indices, id: \.self) { i in
+                                    let on = Int(value.rounded()) == i
+                                    Button { onChange(Float(i)); showOptions = false } label: {
+                                        HStack(spacing: 6) {
+                                            Text(on ? "✓" : " ").frame(width: 12)
+                                            Text(options[i])
+                                            Spacer(minLength: 0)
+                                        }
+                                        .font(Theme.mono)
+                                        .foregroundStyle(on ? Theme.text : Theme.dim)
+                                        .padding(.horizontal, 10).padding(.vertical, 5)
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                }
                             }
-                        } label: {
-                            Text("▾").font(Theme.mono).foregroundStyle(Theme.dim)
-                                .frame(width: 18, height: rowH).contentShape(Rectangle())
+                            .padding(.vertical, 4)
                         }
-                        .menuStyle(.button)
-                        .buttonStyle(.plain)
-                        .menuIndicator(.hidden)
-                        .fixedSize()
+                        .frame(minWidth: 180, maxHeight: 420)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .background(Theme.box)
                     }
         default:
                 rowContent(fill: CGFloat(spec.normalized(value)), valueText: spec.display(value), recOn: false)

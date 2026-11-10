@@ -106,7 +106,7 @@ struct FreeText: View {
     }
 
     private var move: some Gesture {
-        DragGesture(minimumDistance: 2, coordinateSpace: hosted ? .named(NodesHost.space) : .named("canvas"))
+        DragGesture(minimumDistance: 2, coordinateSpace: hosted ? .global : .named("canvas"))
             .onChanged { v in
                 if model.isZooming { return }
                 if dragStart == nil {
@@ -114,13 +114,13 @@ struct FreeText: View {
                     groupDrag = selected && model.selectedNodes.count > 1
                     if groupDrag { model.beginGroupDrag() } else { model.select(node.id) }
                 }
-                guard let s = dragStart else { return }
+                guard dragStart != nil else { return }
                 let d = CGSize(width: v.translation.width / model.viewScale, height: v.translation.height / model.viewScale)
-                if groupDrag { model.groupDrag(by: d) } else { model.moveNode(node.id, to: CGPoint(x: s.x + d.width, y: s.y + d.height)) }
+                if groupDrag { model.groupDrag(by: d) } else { model.dragMove([node.id], by: d) }
             }
             .onEnded { _ in
                 dragStart = nil
-                if groupDrag { model.endGroupDrag() }
+                if groupDrag { model.endGroupDrag() } else { model.endDragMove() }
                 groupDrag = false
                 model.scheduleAutosave()
             }

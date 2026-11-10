@@ -146,6 +146,7 @@ struct PatchCanvasView: View {
             .onChange(of: geo.size) { _, s in model.viewSize = s }
             // the browser opening / closing moves the canvas's left edge: move the view the other way,
             // so the patch stays put on screen
+            .onGeometryChange(for: CGPoint.self) { $0.frame(in: .global).origin } action: { model.canvasGlobalOrigin = $0 }
             .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minX } action: { x in
                 if let old = canvasLeft, old != x {
                     model.viewOffset = CGSize(width: model.viewOffset.width - (x - old), height: model.viewOffset.height)
@@ -468,7 +469,7 @@ struct GroupBackdrop: View {
         .contentShape(Rectangle())
         .onTapGesture { model.selectGroup(group) }
         .gesture(
-            DragGesture(minimumDistance: 2, coordinateSpace: hosted ? .named(NodesHost.space) : .named("canvas"))
+            DragGesture(minimumDistance: 2, coordinateSpace: hosted ? .global : .named("canvas"))
                 .onChanged { v in
                     if model.isZooming { return }
                     if !dragging {
@@ -501,16 +502,18 @@ struct NodesLayer: View, Equatable {
             // group backdrops sit behind their boxes
             ForEach(model.groups) { g in
                 if let r = model.groupRect(g) {
-                    GroupBackdrop(model: model, group: g, rect: r)
-                        .offset(x: r.minX, y: r.minY)
+                    DragShift(drag: model.dragState, ids: Set(g.members)) {
+                        GroupBackdrop(model: model, group: g, rect: r)
+                    }
+                    .offset(x: r.minX, y: r.minY)
                 }
             }
             ForEach(model.patch.nodes) { n in
                 if n.kind == "text" {
-                    FreeText(model: model, node: n)
+                    DragShift(drag: model.dragState, ids: [n.id]) { FreeText(model: model, node: n) }
                         .offset(x: n.x, y: n.y)
                 } else if let spec = ModuleRegistry.spec(n.kind) {
-                    ModuleBox(model: model, node: n, spec: spec)
+                    DragShift(drag: model.dragState, ids: [n.id]) { ModuleBox(model: model, node: n, spec: spec) }
                         .offset(x: n.x, y: n.y)
                 }
             }
@@ -568,5 +571,18 @@ private struct PendingCableView: View {
             ctx.stroke(p, with: .color(Theme.text),
                        style: StrokeStyle(lineWidth: max(1, 1.5 * model.viewScale), lineCap: .round, dash: [5, 4]))
         }
+    }
+}
+
+/// Shifts its content while it's being dragged — the only thing that changes on each pointer move.
+/// (The box itself isn't rebuilt: only this wrapper reads the drag.) A group backdrop follows when all its
+/// boxes are dragged together.
+struct DragShift<Content: View>: View {
+    @ObservedObject var drag: DragState
+    let ids: Set<UUID>
+    @ViewBuilder let content: () -> Content
+    var body: some View {
+        let moving = !ids.isEmpty && ids.isSubset(of: drag.ids)
+        content().offset(moving ? drag.delta : .zero)
     }
 }

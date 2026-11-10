@@ -67,11 +67,10 @@ public final class AppModel: ObservableObject {
     /// The zoom the boxes' own layer was last drawn at (see NodesHost): while you pinch, that layer is just
     /// stretched; once you stop it redraws sharp at the new zoom.
     let hostedZoom = HostedZoom()
-    /// A point in the boxes' layer (NodesHost.space) → canvas-view coordinates.
-    func fromHosted(_ p: CGPoint) -> CGPoint {
-        let z = hostedZoom
-        return toScreen(CGPoint(x: (p.x - z.margin - z.offset.width) / z.scale, y: (p.y - z.margin - z.offset.height) / z.scale))
-    }
+    /// Where the canvas view's top-left corner is in window coordinates (set by the canvas).
+    var canvasGlobalOrigin: CGPoint = .zero
+    /// A window-coordinate point (drags inside the boxes' own views are measured there) → canvas-view coordinates.
+    func fromGlobal(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x - canvasGlobalOrigin.x, y: p.y - canvasGlobalOrigin.y) }
     /// Is there a box, note or group backdrop at this canvas point? (Elsewhere touches fall through to the canvas.)
     func hasContent(at c: CGPoint) -> Bool {
         let m: CGFloat = 14                        // ports stick out over the box edges
@@ -782,10 +781,28 @@ public final class AppModel: ObservableObject {
     func beginGroupDrag() {
         groupDragStart = Dictionary(uniqueKeysWithValues: patch.nodes.filter { selectedNodes.contains($0.id) }.map { ($0.id, CGPoint(x: $0.x, y: $0.y)) })
     }
-    func groupDrag(by d: CGSize) {
-        for (id, p) in groupDragStart { moveNode(id, to: CGPoint(x: p.x + d.width, y: p.y + d.height)) }
+    func groupDrag(by d: CGSize) { dragMove(Set(groupDragStart.keys), by: d) }
+    func endGroupDrag() { endDragMove(); groupDragStart = [:] }
+
+    /// While boxes are dragged only this changes — the patch is written once, when they're let go.
+    /// (Writing the patch on every pointer move made every box on screen rebuild itself each time.)
+    let dragState = DragState()
+    func dragMove(_ ids: Set<UUID>, by d: CGSize) {
+        if dragState.ids != ids { dragState.ids = ids }
+        dragState.delta = d
     }
-    func endGroupDrag() { groupDragStart = [:] }
+    func endDragMove() {
+        let d = dragState.delta, ids = dragState.ids
+        guard !ids.isEmpty else { return }
+        var p = patch
+        for i in p.nodes.indices where ids.contains(p.nodes[i].id) {
+            p.nodes[i].x = max(-2000, (p.nodes[i].x + d.width).rounded())
+            p.nodes[i].y = max(-2000, (p.nodes[i].y + d.height).rounded())
+        }
+        patch = p
+        dragState.ids = []
+        dragState.delta = .zero
+    }
 
     func clearSelection() {
         selectedNodes = []
@@ -874,10 +891,11 @@ public final class AppModel: ObservableObject {
               let spec = ModuleRegistry.spec(n.kind) else { return }
         let old = patch.cables.filter { insertCandidates.contains($0.id) }.sorted { $0.toPort < $1.toPort }
         guard !old.isEmpty else { return }
+        // L / R — or A / B (scope~): the second side of a stereo pair goes through the second channel
         let lIn = spec.inputs.firstIndex(of: "L") ?? 0
-        let rIn = spec.inputs.firstIndex(of: "R")
+        let rIn = spec.inputs.firstIndex(of: "R") ?? spec.inputs.firstIndex(of: "B")
         let lOut = spec.outputs.firstIndex { $0.hasSuffix("L") } ?? 0
-        let rOut = spec.outputs.firstIndex { $0.hasSuffix("R") }
+        let rOut = spec.outputs.firstIndex { $0.hasSuffix("R") } ?? spec.outputs.firstIndex(of: "B")
         func isRight(_ c: PatchCable, _ k: Int) -> Bool {
             if let a = patch.nodes.first(where: { $0.id == c.fromNode }), let sa = ModuleRegistry.spec(a.kind),
                c.fromPort < sa.outputs.count, sa.outputs[c.fromPort].hasSuffix("R") { return true }
@@ -1628,6 +1646,13 @@ final class HostedZoom: ObservableObject {
     @Published var offset: CGSize = .zero
     /// how far the layer reaches past the window on each side
     @Published var margin: CGFloat = 600
+}
+
+/// Boxes being dragged and how far (canvas points): only the dragged boxes and their cables follow it.
+final class DragState: ObservableObject {
+    @Published var ids: Set<UUID> = []
+    @Published var delta: CGSize = .zero
+    func offset(_ id: UUID) -> CGSize { ids.contains(id) ? delta : .zero }
 }
 
 final class Viewport: ObservableObject {

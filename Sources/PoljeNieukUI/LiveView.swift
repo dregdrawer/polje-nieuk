@@ -16,12 +16,15 @@ final class Ticker {
     /// Every live display on screen (weakly held): each is asked on every tick whether it changed.
     private let slots = NSHashTable<LiveSlot>.weakObjects()
 
-    private init() { setRate(20) }
+    private init() { setRate(60) }
 
     func register(_ slot: LiveSlot) { slots.add(slot) }
 
-    /// Audio on: 20 Hz (smooth enough for playheads and meters). Audio off: 4 Hz.
-    func setActive(_ on: Bool) { setRate(on ? 20 : 4) }
+    /// Ticks three times per base frame: displays that glide continuously (an LFO's dot, playheads)
+    /// redraw on every tick — the screen's 60 fps — the rest on every third (20 Hz, as before).
+    static let substeps = 3
+    /// Audio on: 60 Hz (20 Hz for most displays). Audio off: 12 Hz (4 Hz).
+    func setActive(_ on: Bool) { setRate(on ? 60 : 12) }
 
     private func setRate(_ hz: Double) {
         guard hz != rate else { return }
@@ -49,6 +52,8 @@ final class LiveSlot: ObservableObject {
     var signature: (() -> Int)?
     /// Poll every Nth tick: 2 for small indicators (dots, meters, live values — 10 Hz looks the same).
     var every = 1
+    /// Moves continuously (LFO dot, playheads): redrawn at the full tick rate, so it glides instead of stepping.
+    var smooth = false
     private(set) var version = 0
     private var last = Int.min
     init() { Ticker.shared.register(self) }
@@ -58,7 +63,9 @@ final class LiveSlot: ObservableObject {
         return version
     }
     @discardableResult func poll(_ frame: Int) -> Bool {
-        if every > 1 && frame % every != 0 { return false }
+        // gliding displays: 30 fps (smooth to the eye at a fraction of 60's cost); the rest: 20 fps
+        let step = smooth ? max(every, 1) * 2 : max(every, 1) * Ticker.substeps
+        if step > 1 && frame % step != 0 { return false }
         let s = signature?() ?? frame              // no fingerprint: it moves every tick (an LFO wave …)
         if s != last { last = s; version &+= 1; objectWillChange.send(); return true }
         return false
@@ -118,12 +125,14 @@ struct LiveCanvas: View {
     let draw: (GraphicsContext, CGSize) -> Void
 
     var every = 1
-    init(signature: (() -> Int)? = nil, every: Int = 1, draw: @escaping (GraphicsContext, CGSize) -> Void) {
-        self.signature = signature; self.every = every; self.draw = draw
+    /// glides continuously (an LFO's dot, a playhead): redrawn at 60 fps instead of 20
+    var smooth = false
+    init(signature: (() -> Int)? = nil, every: Int = 1, smooth: Bool = false, draw: @escaping (GraphicsContext, CGSize) -> Void) {
+        self.signature = signature; self.every = every; self.smooth = smooth; self.draw = draw
     }
 
     var body: some View {
-        if on { Ticking(signature: signature, draw: draw, zoom: zoom, every: every) } else { Drawn(draw: draw, zoom: zoom, tick: 0) }
+        if on { Ticking(signature: signature, draw: draw, zoom: zoom, every: every, smooth: smooth) } else { Drawn(draw: draw, zoom: zoom, tick: 0) }
     }
 
     private struct Ticking: View {
@@ -133,6 +142,7 @@ struct LiveCanvas: View {
         let draw: (GraphicsContext, CGSize) -> Void
         let zoom: CGFloat
         let every: Int
+        let smooth: Bool
         var body: some View {
             let _ = configure()
             // drawn in place at every zoom. (A nested native view per display was cheaper, but native views
@@ -141,6 +151,7 @@ struct LiveCanvas: View {
         }
         private func configure() {
             slot.every = every
+            slot.smooth = smooth
             slot.signature = signature
             _ = slot.current()                          // an edit shows straight away
         }

@@ -49,13 +49,15 @@ struct ReadoutView: View {
             if let node { CompView(node: node) }
         case "lfo":
             if let node { LFOView(node: node, patchNode: patchNode) }
+        case "scope":
+            if let s = node as? ScopeNode { ScopeView(node: s, model: model, patchNode: patchNode).padding(.vertical, 4) }
         case "drumsynth":
             if let n = node as? DrumSynthNode { DrumSynthView(node: n, model: model, patchNode: patchNode).padding(.vertical, 4) }
         case "rack":
             if let n = node as? RackNode { RackView(node: n, model: model, patchNode: patchNode).padding(.vertical, 4) }
         case "segments":
             if let node {
-                LiveCanvas(signature: { LiveSig.readouts(node, 4, steps: 64) &+ LiveSig.patch(patchNode) }) { ctx, size in
+                LiveCanvas(signature: { LiveSig.readouts(node, 4, steps: 1024) &+ LiveSig.patch(patchNode) }, smooth: true) { ctx, size in
                     let n = SegmentsLayout.count(patchNode.params["count"] ?? 1)
                     let active = ri(node.readouts[1]), v = CGFloat(min(max(fin(node.readouts[0]) / 0.8, 0), 1))
                     let w = size.width / CGFloat(n)

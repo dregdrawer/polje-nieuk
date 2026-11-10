@@ -138,13 +138,17 @@ public struct ModuleSpec {
 
     public var bypass: BypassMode {
         switch kind {
-        case "in", "out", "clock", "rec", "mix", "text": return .none
+        case "in", "out", "clock", "rec", "mix", "text", "scope": return .none
         case "atten": return .through
         case "macro", "modal", "shapes", "rack", "drumsynth": return .silent       // sound sources: bypass = mute
         case "keys", "seq", "turing", "roll", "drums", "slider", "knob": return .silent
         default: return category == "Modulation" ? .silent : .through
         }
     }
+
+    /// Control voltages (pitch, gates, clocks, LFOs, envelopes …) rather than audio: out~'s gain leaves
+    /// these alone, so pitch stays exactly 1 V/oct and gates keep their level.
+    public var outputsAreCV: Bool { ["Sequencing", "Modulation", "Clock"].contains(category) }
 
     /// For each outlet, which inlet feeds it when bypassed (-1 = silence).
     /// L/R inlets map straight across; everything else takes the first inlet.

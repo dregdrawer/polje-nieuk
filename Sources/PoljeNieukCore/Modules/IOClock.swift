@@ -30,6 +30,9 @@ final class HardwareInNode: DSPNode {
 /// out~ : every hardware output channel as its own inlet.
 final class HardwareOutNode: DSPNode {
     private var peaks = [Float](repeating: 0, count: kMaxHardwareChannels)
+    /// Channels fed only by control voltages (pitch, gates, LFOs …): the gain doesn't touch them, so a
+    /// pitch CV stays exactly 1 V/oct however loud the audio is set. Set by the graph when it's built.
+    var cvChannels: UInt64 = 0
 
     override func process(frames: Int, inputs: UnsafePointer<UnsafePointer<Float>>, connected: UInt64, ctx: ProcessContext) {
         let g = params[0] <= -59.9 ? 0 : dbToGain(params[0])
@@ -39,7 +42,8 @@ final class HardwareOutNode: DSPNode {
             guard isConnected(connected, c) else { peaks[c] = 0; readouts[c] = 0; continue }
             let src = inputs[c], o = ctx.outputs[c]
             var m: Float = 0
-            for i in 0..<frames { let v = src[i] * g; o[i] += v; m = max(m, abs(v)) }
+            let gc = cvChannels & (1 << UInt64(c)) != 0 ? 1 : g
+            for i in 0..<frames { let v = src[i] * gc; o[i] += v; m = max(m, abs(v)) }
             peaks[c] = max(m, peaks[c] * decay)
             readouts[c] = peaks[c]
         }

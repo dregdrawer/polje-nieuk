@@ -15,6 +15,8 @@ public struct ParamRT {
     var cubic: Bool
     var round: Bool
     var trigger: Bool
+    /// a semitone parameter (frequency, pitch, tune …): patched CV moves it 1 V/oct (0.1 = 12 st)
+    var semis: Bool = false
 }
 
 /// Shared per-block state handed to every node: hardware I/O and the musical clock.
@@ -116,7 +118,7 @@ open class DSPNode {
             var round = true
             if case .continuous = p.kind { round = false }
             rt[i] = ParamRT(min: p.min, max: p.max, exp: p.curve == .exponential, cubic: p.curve == .cubic,
-                            round: round, trigger: p.isTrigger)
+                            round: round, trigger: p.isTrigger, semis: p.unit == "st")
         }
         readouts = .allocate(capacity: Self.readoutCount)
         readouts.initialize(repeating: 0, count: Self.readoutCount)
@@ -256,6 +258,13 @@ open class DSPNode {
         }
         let src = autoOn[i] && !autoHold[i] ? params[i] : base[i]
         let b = src.isFinite ? src : r.min
+        if r.semis && position.isNaN {
+            // pitch CV into a semitone row: 1 V/oct, like the pitch inlets (not scaled to the row's range)
+            var v = min(max(b + m * 120, r.min), r.max)
+            if r.round { v = v.rounded() }
+            params[i] = v
+            return
+        }
         let a = max(abs(r.min), abs(r.max))
         let unipolar = r.min >= 0
         var n: Float = r.exp ? logf(max(b, r.min) / r.min) / logf(r.max / r.min)

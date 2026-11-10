@@ -1700,5 +1700,77 @@ running.pointee = false
 usleep(50_000)
 check(blocks.pointee > 100, "audio kept rendering through 400 live edits (\(blocks.pointee) blocks, \(sp.nodes.count) modules)")
 
+print("1 V/oct (0.1 = 1 V = one octave)")
+do {
+    /// Runs a small patch for `seconds`; returns hardware output channel 0 and the host.
+    func runPatch(_ p: Patch, seconds: Double = 0.5, input: Float = 0) -> ([Float], GraphHost) {
+        let h = GraphHost(sampleRate: sr)
+        h.load(p); h.prepareForStart()
+        let ins = UnsafeMutablePointer<UnsafeMutablePointer<Float>>.allocate(capacity: 1); ins[0] = .allocate(capacity: kMaxBlock)
+        ins[0].update(repeating: input, count: kMaxBlock)
+        let outs = UnsafeMutablePointer<UnsafeMutablePointer<Float>>.allocate(capacity: 2)
+        outs[0] = .allocate(capacity: kMaxBlock); outs[1] = .allocate(capacity: kMaxBlock)
+        var res: [Float] = []
+        for _ in 0..<Int(seconds * sr / Double(kMaxBlock)) {
+            outs[0].update(repeating: 0, count: kMaxBlock); outs[1].update(repeating: 0, count: kMaxBlock)
+            h.process(frames: kMaxBlock, inputs: ins, inputCount: 1, outputs: outs, outputCount: 2)
+            res.append(contentsOf: UnsafeBufferPointer(start: outs[0], count: kMaxBlock))
+        }
+        return (res, h)
+    }
+    // every step +12 semitones: the pitch output is exactly 0.1 (1 V)
+    let up: [Float] = [Float](repeating: 12, count: 16), on: [Float] = [Float](repeating: 1, count: 16)
+    let (_, o) = runSource("seq", params: ["len": 1], data: ["pitch": up, "gate": on], seconds: 0.3)
+    check(abs((o[0].last ?? 0) - 0.1) < 1e-6, "seq~ +12 st = 0.1 (1 V) at its pitch outlet (\(o[0].last ?? 0))")
+    // through out~ with its gain turned down: a pitch CV still leaves at exactly 1 V/oct; audio is turned down
+    var p = Patch()
+    let seq = PatchNode(kind: "seq", x: 0, y: 0, params: ["len": 1], data: ["pitch": up, "gate": on])
+    let out = PatchNode(kind: "out", x: 0, y: 0, params: ["gain": -20])
+    p.nodes = [seq, out]
+    p.cables = [PatchCable(fromNode: seq.id, fromPort: 0, toNode: out.id, toPort: 0)]
+    let (cv, _) = runPatch(p)
+    check(abs((cv.last ?? 0) - 0.1) < 1e-6, "out~ at -20 dB passes pitch CV at unity: 1 V/oct kept (\(cv.last ?? 0))")
+    var pa = Patch()
+    let osc = PatchNode(kind: "shapes", x: 0, y: 0, params: ["shape": 3])
+    let out2 = PatchNode(kind: "out", x: 0, y: 0, params: ["gain": -20])
+    pa.nodes = [osc, out2]
+    pa.cables = [PatchCable(fromNode: osc.id, fromPort: 0, toNode: out2.id, toPort: 0)]
+    let (au, _) = runPatch(pa)
+    let peak = au.suffix(4800).map { abs($0) }.max() ?? 0
+    check(peak > 0.01 && peak < 0.15, "out~'s gain still turns audio down (peak \(peak))")
+    // in~ → a semitone row: 1 V in = +12 semitones (not scaled to the row's range)
+    var pi = Patch()
+    let inn = PatchNode(kind: "in", x: 0, y: 0)
+    let mac = PatchNode(kind: "macro", x: 0, y: 0)
+    pi.nodes = [inn, mac]
+    let noteIdx = ModuleRegistry.spec("macro")!.paramIndex("note")!
+    pi.cables = [PatchCable(fromNode: inn.id, fromPort: 0, toNode: mac.id, toPort: kParamPortBase + noteIdx)]
+    let (_, hi) = runPatch(pi, seconds: 0.1, input: 0.1)
+    let note = hi.node(mac.id)!.params[noteIdx]
+    check(abs(note - 12) < 1e-4, "1 V into in~ → macro~'s frequency row moves exactly +12 st (\(note))")
+    check(abs(cvSemitonesForTest(0.1) - 12) < 1e-6 && abs(cvSemitonesForTest(-0.25) + 30) < 1e-5, "pitch inlets read 0.1 as one octave")
+    // scope~ measures what it sees
+    var ps = Patch()
+    let lfo = PatchNode(kind: "lfo", x: 0, y: 0, params: ["rate": 5, "depth": 0.5, "offset": 0.1])
+    let sc = PatchNode(kind: "scope", x: 0, y: 0, params: ["time": 400, "trig": 0])
+    ps.nodes = [lfo, sc]
+    ps.cables = [PatchCable(fromNode: lfo.id, fromPort: 0, toNode: sc.id, toPort: 0)]
+    let (_, hs) = runPatch(ps, seconds: 2)
+    let r = hs.node(sc.id)!.readouts
+    check(abs(r[1] + 0.4) < 0.01 && abs(r[2] - 0.6) < 0.01 && abs(r[3] - 5) < 0.1 && abs(r[0] - 0.1) < 0.02,
+          "scope~ reads an LFO: -4…+6 V, 5 Hz, average +1 V (min \(r[1]) max \(r[2]) Hz \(r[3]) mean \(r[0]))")
+    check((hs.node(sc.id) as! ScopeNode).version > 0, "scope~ shows sweeps")
+    // scope~ on a cable: passes the signal through untouched, and pitch through it still skips out~'s gain
+    var pt = Patch()
+    let seq2 = PatchNode(kind: "seq", x: 0, y: 0, params: ["len": 1], data: ["pitch": up, "gate": on])
+    let sc2 = PatchNode(kind: "scope", x: 0, y: 0)
+    let out3 = PatchNode(kind: "out", x: 0, y: 0, params: ["gain": -20])
+    pt.nodes = [seq2, sc2, out3]
+    pt.cables = [PatchCable(fromNode: seq2.id, fromPort: 0, toNode: sc2.id, toPort: 0),
+                 PatchCable(fromNode: sc2.id, fromPort: 0, toNode: out3.id, toPort: 0)]
+    let (thru, _) = runPatch(pt)
+    check(abs((thru.last ?? 0) - 0.1) < 1e-6, "scope~ on a pitch cable: passes it through, still exactly 1 V/oct at out~ (\(thru.last ?? 0))")
+}
+
 print(failures == 0 ? "\nAll checks passed." : "\n\(failures) check(s) failed.")
 exit(failures == 0 ? 0 : 1)

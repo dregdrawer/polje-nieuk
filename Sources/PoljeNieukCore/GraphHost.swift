@@ -257,6 +257,15 @@ public final class GraphHost {
                     ptrs[p] = UnsafePointer(dest)
                 }
             }
+            if let out = node as? HardwareOutNode {
+                // channels fed only by control voltages skip out~'s gain (1 V/oct stays 1 V/oct)
+                var cv: UInt64 = 0
+                for p in 0..<min(nIn, 64) {
+                    let srcs = cables.filter { $0.toNode == id && $0.toPort == p }
+                    if !srcs.isEmpty && srcs.allSatisfy({ isCV($0.fromNode, $0.fromPort, cables, depth: 0) }) { cv |= 1 << UInt64(p) }
+                }
+                out.cvChannels = cv
+            }
             var mods: [CompiledGraph.Mod] = []
             for i in 0..<node.paramCount {
                 var sources: [UnsafePointer<Float>] = [], absolute: [UnsafePointer<Float>] = []
@@ -274,6 +283,16 @@ public final class GraphHost {
         }
         let hasClock = entries.contains { $0.node is ClockNode }
         return CompiledGraph(entries: entries, hasClock: hasClock, owned: owned)
+    }
+
+    /// Is this outlet a control voltage? scope~ passes its inputs through, so it is whatever feeds it.
+    private func isCV(_ id: UUID, _ port: Int, _ cables: [PatchCable], depth: Int) -> Bool {
+        guard let n = nodes[id], depth < 8 else { return false }
+        if n.spec.kind == "scope" {
+            let feeds = cables.filter { $0.toNode == id && $0.toPort == port }
+            return !feeds.isEmpty && feeds.allSatisfy { isCV($0.fromNode, $0.fromPort, cables, depth: depth + 1) }
+        }
+        return n.spec.outputsAreCV
     }
 
     /// Kahn's algorithm. Nodes in feedback loops are appended afterwards and read the previous block.

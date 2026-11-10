@@ -103,6 +103,8 @@ final class RateBridge {
 
 /// 1 V/oct CV (0.1 = 1 octave) to semitones, limited to ±10 V like a real jack.
 @inline(__always) func cvSemitones(_ v: Float) -> Float { v.isFinite ? min(max(v, -1), 1) * 120 : 0 }
+/// For the self-test: the same conversion every pitch inlet uses.
+public func cvSemitonesForTest(_ v: Float) -> Float { cvSemitones(v) }
 
 // MARK: - texture~ (granular texture processor)
 
