@@ -160,6 +160,10 @@ scripts/build-mac.sh test   # builds and runs the offline DSP self-test
 scripts/build-mac.sh run    # builds ".build/manual/polje nieuk.app" and opens it
 ```
 
+The app is **universal**: built for Apple Silicon and Intel and joined into one app (Intel runs natively on
+Intel Macs). That takes about four minutes; while developing, `ARCHS=arm64 scripts/build-mac.sh run` builds
+only the Apple Silicon half. Ready-made DMGs are on the repo's Releases page.
+
 The build is signed with your **Apple Development** certificate when there is one, so macOS remembers the
 microphone permission across rebuilds (ad-hoc signed builds ask again every time). Audio devices are opened
 off the main thread: if macOS audio is busy — a permission prompt waiting, an interface being plugged in —
