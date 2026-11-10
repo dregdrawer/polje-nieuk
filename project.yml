@@ -1,0 +1,48 @@
+# XcodeGen spec — generates "polje nieuk.xcodeproj" (one app target for iPad and Mac).
+#   brew install xcodegen && xcodegen
+name: polje nieuk
+options:
+  bundleIdPrefix: com.grzegorzdalmata
+  deploymentTarget:
+    iOS: "18.0"
+    macOS: "15.0"
+packages:
+  PoljeNieukKit:
+    path: .
+targets:
+  polje nieuk:
+    type: application
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: App
+    dependencies:
+      - package: PoljeNieukKit
+        product: PoljeNieukUI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.grzegorzdalmata.poljenieuk
+        PRODUCT_NAME: "polje nieuk"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        MARKETING_VERSION: "0.1"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "2"           # iPad
+        SUPPORTS_MACCATALYST: NO
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: "polje nieuk"
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "polje nieuk processes audio from your modular synth through your audio interface (e.g. disting NT)."
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIRequiresFullScreen: NO
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace: YES
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.music
+        "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": App/polje nieuk-macOS.entitlements
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: YES
+    info:
+      path: App/Info.plist
+      properties:
+        UIBackgroundModes: [audio]                       # keep processing when the app is in the background
+        UIFileSharingEnabled: true                       # the app's Documents (with Recordings) shows in Finder → iPad → Files
+        LSSupportsOpeningDocumentsInPlace: true

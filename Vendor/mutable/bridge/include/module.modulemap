@@ -1,0 +1,4 @@
+module MutableDSP {
+    header "mi_bridge.h"
+    export *
+}

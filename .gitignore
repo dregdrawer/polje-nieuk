@@ -1,0 +1,12 @@
+# build output
+.build/
+.swiftpm/
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+# release files go on GitHub Releases, not in the repo
+*.dmg
+# macOS
+.DS_Store
+# generated from project.yml by xcodegen (scripts/install-ipad.sh does it)
+*.xcodeproj/
