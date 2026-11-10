@@ -10,3 +10,4 @@ DerivedData/
 .DS_Store
 # generated from project.yml by xcodegen (scripts/install-ipad.sh does it)
 *.xcodeproj/
+windows/build/
