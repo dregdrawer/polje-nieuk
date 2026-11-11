@@ -790,6 +790,7 @@ public final class AppModel: ObservableObject {
     func dragMove(_ ids: Set<UUID>, by d: CGSize) {
         if dragState.ids != ids { dragState.ids = ids }
         dragState.delta = d
+        dragState.moved?()
     }
     func endDragMove() {
         let d = dragState.delta, ids = dragState.ids
@@ -1652,6 +1653,9 @@ final class HostedZoom: ObservableObject {
 final class DragState: ObservableObject {
     @Published var ids: Set<UUID> = []
     @Published var delta: CGSize = .zero
+    /// The boxes' container moves the dragged boxes right here, in the same step as the pointer event
+    /// (going through a queued notification put them a frame or more behind the pointer).
+    var moved: (() -> Void)?
     func offset(_ id: UUID) -> CGSize { ids.contains(id) ? delta : .zero }
 }
 

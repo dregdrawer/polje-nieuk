@@ -400,10 +400,7 @@ final class NodesContainer: NSView {
             .receive(on: DispatchQueue.main)   // not RunLoop.main: that pauses while the mouse is held (dragged boxes froze)
             .sink { [weak self] _ in self?.layer2.layoutAll() }
             .store(in: &subs)
-        model.dragState.objectWillChange
-            .receive(on: DispatchQueue.main)   // not RunLoop.main: that pauses while the mouse is held (dragged boxes froze)
-            .sink { [weak self] _ in self?.layer2.layoutDragged() }
-            .store(in: &subs)
+        model.dragState.moved = { [weak self] in self?.layer2.layoutDragged() }
         layer2.layoutAll()
     }
     required init?(coder: NSCoder) { fatalError() }
@@ -521,10 +518,7 @@ final class NodesContainer: UIView, UIGestureRecognizerDelegate {
             .receive(on: DispatchQueue.main)   // not RunLoop.main: that pauses while the mouse is held (dragged boxes froze)
             .sink { [weak self] _ in self?.layer2.layoutAll() }
             .store(in: &subs)
-        model.dragState.objectWillChange
-            .receive(on: DispatchQueue.main)   // not RunLoop.main: that pauses while the mouse is held (dragged boxes froze)
-            .sink { [weak self] _ in self?.layer2.layoutDragged() }
-            .store(in: &subs)
+        model.dragState.moved = { [weak self] in self?.layer2.layoutDragged() }
         layer2.layoutAll()
         // the canvas's own pinch and hover don't see touches that land on boxes: handled here
         let pinch = UIPinchGestureRecognizer(target: self, action: #selector(pinched(_:)))
