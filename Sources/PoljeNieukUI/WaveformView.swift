@@ -15,7 +15,7 @@ final class WaveCache {
 struct WaveformView: View {
     let node: DSPNode
     let buffer: SampleBufferNode
-    @ObservedObject var model: AppModel
+    let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let patchNode: PatchNode
     let spec: ModuleSpec
     @State private var cache = WaveCache()
@@ -200,7 +200,7 @@ final class SpectrumAnalyzer {
 struct EQCurveView: View {
     let node: DSPNode
     let sampleRate: Double
-    @ObservedObject var model: AppModel
+    let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let patchNode: PatchNode
     let spec: ModuleSpec
     @State private var analyzer = SpectrumAnalyzer()

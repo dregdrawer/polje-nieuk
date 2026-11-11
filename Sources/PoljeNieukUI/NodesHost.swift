@@ -25,8 +25,34 @@ struct NodesHost: View {
 }
 
 /// One box's content, drawn at the laid-out zoom, with room around it for the ports that stick out.
+/// Everything a box shows that lives outside its own node. The container recomputes it whenever the model
+/// changes and wakes a box only when its key changed — before, every change (a selection, a drop) woke all
+/// the boxes at once, and a 35-box patch froze for ~400 ms.
+struct BoxKey: Equatable {
+    var node: PatchNode?
+    var cables: [PatchCable] = []
+    var related: [PatchNode] = []     // what a fader / knob drives (its targets' names and ranges)
+    var nodeCount = 0                 // a sampler's "copy audio from" list
+    var selected = false
+    var running = false
+    var threeD = false
+    var hw = HardwareCounts(inputs: 0, outputs: 0)
+    var transport: GraphHost.Transport = .play
+    var autoRec = false
+    var onScreen = true
+    var look = 0                      // colours / light-dark
+    var help = false
+    var groupRect: CGRect?
+}
+
+/// Carries a box's key to its view (one per box).
+final class BoxFeed: ObservableObject {
+    @Published var key = BoxKey()
+}
+
 private struct BoxRoot: View {
-    @ObservedObject var model: AppModel
+    let model: AppModel
+    @ObservedObject var feed: BoxFeed
     @ObservedObject var zoom: HostedZoom
     let id: UUID
     let group: Bool
@@ -36,7 +62,7 @@ private struct BoxRoot: View {
             .environment(\.liveBox, group ? nil : id)
             .environment(\.canvasZoom, zoom.scale <= 1 ? 1 : (zoom.scale * 4).rounded() / 4)
             .environment(\.hostedNodes, true)
-            .environment(\.helpModeOn, model.helpMode)       // a separate view tree: nothing is inherited
+            .environment(\.helpModeOn, feed.key.help)        // a separate view tree: nothing is inherited
             .scaleEffect(zoom.scale, anchor: .topLeading)
             // laid out at exactly its zoomed size: larger, the hosting view would centre it (boxes drifted off
             // their cables)
@@ -46,21 +72,18 @@ private struct BoxRoot: View {
     }
     /// unzoomed size of what this view shows
     private var size: CGSize {
-        if group {
-            if let g = model.groups.first(where: { $0.id == id }), let r = model.groupRect(g) { return r.size }
-            return .zero
-        }
-        guard let n = model.patch.nodes.first(where: { $0.id == id }) else { return .zero }
+        if group { return feed.key.groupRect?.size ?? .zero }
+        guard let n = feed.key.node else { return .zero }
         if n.kind == "text" { return BoxLayout.textSize(n) }
         guard let spec = ModuleRegistry.spec(n.kind) else { return .zero }
-        return CGSize(width: BoxLayout.width(n), height: BoxLayout.height(n, spec, model.hw))
+        return CGSize(width: BoxLayout.width(n), height: BoxLayout.height(n, spec, feed.key.hw))
     }
     @ViewBuilder private var content: some View {
         if group {
-            if let g = model.groups.first(where: { $0.id == id }), let r = model.groupRect(g) {
+            if let g = model.groups.first(where: { $0.id == id }), let r = feed.key.groupRect {
                 GroupBackdrop(model: model, group: g, rect: r)
             }
-        } else if let n = model.patch.nodes.first(where: { $0.id == id }) {
+        } else if let n = feed.key.node {
             if n.kind == "text" { FreeText(model: model, node: n) }
             else if let spec = ModuleRegistry.spec(n.kind) { ModuleBox(model: model, node: n, spec: spec) }
         }
@@ -192,6 +215,46 @@ private final class Layer {
     /// per box: the view its native live displays' layers sit in (above the box's SwiftUI content)
     private var overlays: [UUID: CableView] = [:]
     private let liveEntries = NSHashTable<NativeLiveEntry>.weakObjects()
+    private var feeds: [UUID: BoxFeed] = [:]
+
+    /// Work out every box's key and wake only the boxes whose key changed.
+    private func feedBoxes() {
+        let m = model
+        var byNode: [UUID: [PatchCable]] = [:]
+        for c in m.patch.cables {
+            byNode[c.fromNode, default: []].append(c)
+            if c.toNode != c.fromNode { byNode[c.toNode, default: []].append(c) }
+        }
+        var index: [UUID: Int] = [:]
+        for (k, n) in m.patch.nodes.enumerated() { index[n.id] = k }
+        let look = CustomColours.version &* 2 &+ (Theme.light ? 1 : 0)
+        let base = BoxKey(nodeCount: m.patch.nodes.count, running: m.isRunning, threeD: m.threeD, hw: m.hw,
+                          transport: m.transport, look: look, help: m.helpMode)
+        for n in m.patch.nodes {
+            var k = base
+            k.node = n
+            let cs = byNode[n.id] ?? []
+            k.cables = cs
+            if n.kind == "slider" || n.kind == "knob" {
+                k.related = cs.compactMap { c in c.fromNode == n.id ? index[c.toNode].map { m.patch.nodes[$0] } : nil }
+            }
+            k.selected = m.selectedNodes.contains(n.id)
+            k.autoRec = m.autoRecording.contains(n.id)
+            if n.kind != "text", let spec = ModuleRegistry.spec(n.kind) {
+                k.onScreen = ModuleBox.isOnScreen(m, n, BoxLayout.width(n), BoxLayout.height(n, spec, m.hw))
+            }
+            let f = feeds[n.id] ?? { let f = BoxFeed(); feeds[n.id] = f; return f }()
+            if f.key != k { f.key = k }
+        }
+        for g in m.groups {
+            var k = base
+            k.groupRect = m.groupRect(g)
+            k.selected = g.members.contains { m.selectedNodes.contains($0) }
+            let f = feeds[g.id] ?? { let f = BoxFeed(); feeds[g.id] = f; return f }()
+            if f.key != k { f.key = k }
+        }
+    }
+    private func feed(_ id: UUID) -> BoxFeed { feeds[id] ?? { let f = BoxFeed(); feeds[id] = f; return f }() }
     private var liveZoom: CGFloat = -1
     private var groups: [UUID: PView] = [:]
     private var order: [UUID] = []
@@ -264,13 +327,14 @@ private final class Layer {
 
     /// Everything: views for new boxes, frames, stacking, cables.
     func layoutAll() {
+        feedBoxes()
         let ids = model.patch.nodes.map(\.id)
         let alive = Set(ids)
         for (id, v) in boxes where !alive.contains(id) { v.removeFromSuperview(); boxes[id] = nil; overlays[id] = nil }
         let gids = Set(model.groups.map(\.id))
         for (id, v) in groups where !gids.contains(id) { v.removeFromSuperview(); groups[id] = nil }
         for g in model.groups {
-            let v = groups[g.id] ?? { let h = makeHost(AnyView(BoxRoot(model: model, zoom: model.hostedZoom, id: g.id, group: true)))
+            let v = groups[g.id] ?? { let h = makeHost(AnyView(BoxRoot(model: model, feed: feed(g.id), zoom: model.hostedZoom, id: g.id, group: true)))
                                       groups[g.id] = h
                                       #if os(macOS)
                                       mover.addSubview(h, positioned: .below, relativeTo: cableHolder)
@@ -282,7 +346,7 @@ private final class Layer {
             shift(v, !g.members.isEmpty && Set(g.members).isSubset(of: model.dragState.ids) ? model.dragState.delta : .zero)
         }
         for n in model.patch.nodes {
-            let v = boxes[n.id] ?? { let h = boxView(n.id, AnyView(BoxRoot(model: model, zoom: model.hostedZoom, id: n.id, group: false)))
+            let v = boxes[n.id] ?? { let h = boxView(n.id, AnyView(BoxRoot(model: model, feed: feed(n.id), zoom: model.hostedZoom, id: n.id, group: false)))
                                      boxes[n.id] = h; mover.addSubview(h); return h }()
             if let f = model.boxFrame(n, drag: .zero), v.frame != f { v.frame = f }
             shift(v, model.dragState.offset(n.id))

@@ -14,7 +14,7 @@ import PoljeNieukCore
 struct ReadoutView: View {
     let kind: String
     let node: DSPNode?
-    @ObservedObject var model: AppModel
+    let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let patchNode: PatchNode
     let spec: ModuleSpec
 
@@ -265,7 +265,7 @@ struct ProgressBar: View {
 /// ▶ ❚❚ ■ on the clock box. Pause holds the beat where it is; stop also rewinds, so ▶ starts everything
 /// from its first step.
 struct TransportButtons: View {
-    @ObservedObject var model: AppModel
+    let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     var body: some View {
         HStack(spacing: 1) {
             button("play.fill", .play, "Play")

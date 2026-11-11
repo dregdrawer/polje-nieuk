@@ -5,7 +5,7 @@ import PoljeNieukCore
 /// average, range and frequency — and, for a steady signal, the note it would play at 1 V/oct.
 struct ScopeView: View {
     let node: ScopeNode
-    @ObservedObject var model: AppModel
+    let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let patchNode: PatchNode
 
     var body: some View {

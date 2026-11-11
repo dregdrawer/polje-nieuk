@@ -797,7 +797,9 @@ public final class AppModel: ObservableObject {
     func nativeDragBegan(_ id: UUID) {
         nativeID = id
         nativeGroup = selectedNodes.contains(id) && selectedNodes.count > 1
-        if nativeGroup { beginGroupDrag() } else { select(id) }
+        // selecting re-renders the box (its × button appears): done when it's let go, so the first movement
+        // shows straight away instead of after that
+        if nativeGroup { beginGroupDrag() }
     }
     func nativeDragMoved(by screen: CGSize, at point: CGPoint) {
         guard let id = nativeID else { return }
@@ -810,7 +812,7 @@ public final class AppModel: ObservableObject {
     func nativeDragEnded() {
         guard let id = nativeID else { return }
         nativeID = nil
-        if nativeGroup { endGroupDrag() } else { endDragMove(); finishInsert(id) }
+        if nativeGroup { endGroupDrag() } else { endDragMove(); finishInsert(id); select(id) }
         nativeGroup = false
         scheduleAutosave()
     }

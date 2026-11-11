@@ -6,7 +6,7 @@ import PoljeNieukCore
 /// drop an audio file on a pad to load it (right-click / long-press: back to the built-in sound).
 struct RackView: View {
     let node: RackNode
-    @ObservedObject var model: AppModel
+    let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let patchNode: PatchNode
     private var clocked: Bool { clockPatched(model, patchNode.id) }
     @State private var paint: Float?
@@ -158,7 +158,7 @@ struct RackView: View {
 /// four pads with M ▶ S; tap a pad to play and select it (its settings show as rows below).
 struct DrumSynthView: View {
     let node: DrumSynthNode
-    @ObservedObject var model: AppModel
+    let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let patchNode: PatchNode
     private var clocked: Bool { clockPatched(model, patchNode.id) }
     @State private var paint: Float?

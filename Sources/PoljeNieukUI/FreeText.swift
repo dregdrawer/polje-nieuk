@@ -4,7 +4,7 @@ import PoljeNieukCore
 /// Free-floating text on the canvas, like a Max comment or a Grasshopper scribble: no box, just words.
 /// Drag it to move · tap to select · double-tap (double-click) to edit · a new one opens for typing.
 struct FreeText: View {
-    @ObservedObject var model: AppModel
+    let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let node: PatchNode
     @State private var editing = false
     @State private var draft = ""

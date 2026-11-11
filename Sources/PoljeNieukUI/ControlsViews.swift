@@ -9,7 +9,7 @@ struct ControlsView: View {
     enum Style { case slider, knob }
     let style: Style
     let node: DSPNode
-    @ObservedObject var model: AppModel
+    let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let patchNode: PatchNode
 
     private var count: Int { ControlsLayout.count(patchNode.params["count"] ?? 2) }
@@ -78,7 +78,7 @@ private struct ControlCell: View {
     let style: ControlsView.Style
     let index: Int
     let node: DSPNode
-    @ObservedObject var model: AppModel
+    let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let nodeID: UUID
     let range: Int
     let value: Float

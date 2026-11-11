@@ -2,7 +2,7 @@ import SwiftUI
 import PoljeNieukCore
 
 struct ModuleBox: View {
-    @ObservedObject var model: AppModel
+    let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let node: PatchNode
     let spec: ModuleSpec
     @State private var dragStart: CGPoint?
@@ -27,7 +27,8 @@ struct ModuleBox: View {
     private func viewPoint(_ p: CGPoint) -> CGPoint { hosted ? model.fromGlobal(p) : p }
 
     /// Whether any of this box is on screen (with a margin): off-screen boxes don't redraw their displays.
-    private func onScreen(_ h: CGFloat) -> Bool {
+    private func onScreen(_ h: CGFloat) -> Bool { Self.isOnScreen(model, node, width, h) }
+    static func isOnScreen(_ model: AppModel, _ node: PatchNode, _ width: CGFloat, _ h: CGFloat) -> Bool {
         if model.threeD { return false }           // 3D: displays hold still (a box in perspective is costly to redraw)
         _ = model.viewportSettled                  // re-checked once panning / zooming pauses
         let v = model.viewSize
@@ -618,7 +619,7 @@ struct ParamRow: View {
 
 /// Automation record: hold it and move things in the box (a quick tap latches it on; tap again to stop).
 struct AutoRecordButton: View {
-    @ObservedObject var model: AppModel
+    let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let id: UUID
     @State private var pressStart: Date?
     @State private var stopOnRelease = false

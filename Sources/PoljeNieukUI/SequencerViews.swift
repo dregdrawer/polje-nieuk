@@ -7,7 +7,7 @@ import PoljeNieukCore
 
 struct KeysView: View {
     let node: KeysNode
-    @ObservedObject var model: AppModel
+    let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let patchNode: PatchNode
     @State private var lastKey = -1
 
@@ -99,7 +99,7 @@ struct KeysView: View {
 
 struct SeqView: View {
     let node: SeqNode
-    @ObservedObject var model: AppModel
+    let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let patchNode: PatchNode
     @State private var paintGate: Float?
 
@@ -203,7 +203,7 @@ struct SeqView: View {
 
 struct TuringView: View {
     let node: DSPNode
-    @ObservedObject var model: AppModel
+    let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
 
     var body: some View {
         LiveCanvas(signature: { LiveSig.readouts(node, 24) &+ (model.isRunning ? 1 : 0) }) { ctx, size in draw(ctx, size) }
@@ -258,7 +258,7 @@ struct TuringView: View {
 struct GridEditor: View {
     enum Kind { case roll(RollNode), drums(DrumsNode) }
     let kind: Kind
-    @ObservedObject var model: AppModel
+    let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let patchNode: PatchNode
     @State private var paint: Float?
 
