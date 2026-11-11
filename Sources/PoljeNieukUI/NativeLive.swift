@@ -214,3 +214,25 @@ extension EnvironmentValues {
         set { self[LiveOpacityKey.self] = newValue }
     }
 }
+
+/// Where a box can be grabbed to move it (its title, the empty port-row space, free text), reported in
+/// the box's own coordinates whenever its layout changes. The canvas moves boxes from these places itself,
+/// straight from the mouse / touch events — SwiftUI's gesture handling put a dragged box a frame or more
+/// behind the pointer.
+struct DragZone: View {
+    let model: AppModel
+    let id: UUID
+    let key: Int
+    /// keep clear of the edges, where the ports are (dragging from a port makes a cable)
+    var inset: CGFloat = 0
+    @Environment(\.liveBox) private var box
+    var body: some View {
+        if box != nil {
+            Color.clear
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(NativeLive.space)) } action: { r in
+                    model.dragZones[id, default: [:]][key] = r.insetBy(dx: min(inset, r.width / 2), dy: 0)
+                }
+                .onDisappear { model.dragZones[id]?[key] = nil }
+        }
+    }
+}

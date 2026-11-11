@@ -349,6 +349,20 @@ private final class Layer {
         CATransaction.commit()
     }
 
+    /// The box whose grab area (title, empty port space …) is under this point (mover coordinates), if any.
+    /// Only the topmost box under the point counts.
+    func grabbable(at p: CGPoint) -> UUID? {
+        let z = model.hostedZoom.scale, pad = NodesLayout.pad
+        for n in model.patch.nodes.reversed() {
+            guard let v = boxes[n.id] else { continue }
+            let box = v.frame.insetBy(dx: pad, dy: pad)
+            guard box.contains(p) else { continue }
+            let local = CGPoint(x: (p.x - box.minX) / z, y: (p.y - box.minY) / z)
+            return model.dragZones[n.id]?.values.contains { $0.contains(local) } == true ? n.id : nil
+        }
+        return nil
+    }
+
     /// Is there a box (or backdrop) under this point (mover coordinates)?
     func hasView(at p: CGPoint) -> Bool {
         boxes.values.contains { $0.frame.contains(p) } || groups.values.contains { $0.frame.contains(p) }
@@ -402,8 +416,47 @@ final class NodesContainer: NSView {
             .store(in: &subs)
         model.dragState.moved = { [weak self] in self?.layer2.layoutDragged() }
         layer2.layoutAll()
+        // box drags straight from the mouse (see DragZone); everything else carries on to SwiftUI as before
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] e in
+            MainActor.assumeIsolated { self?.mouse(e) } ?? e
+        }
     }
     required init?(coder: NSCoder) { fatalError() }
+    deinit { if let monitor { NSEvent.removeMonitor(monitor) } }
+
+    private var monitor: Any?
+    private var pressID: UUID?
+    private var pressStart = CGPoint.zero
+    private var dragging = false
+
+    private func mouse(_ e: NSEvent) -> NSEvent {
+        guard e.window === window else { return e }
+        let p = convert(e.locationInWindow, from: nil)
+        switch e.type {
+        case .leftMouseDown:
+            pressID = nil; dragging = false; model.nativeDrag = false
+            guard placement.isStill, !model.threeD, !model.isZooming,
+                  e.modifierFlags.intersection([.shift, .command, .option, .control]).isEmpty,
+                  let hit = window?.contentView?.hitTest(e.locationInWindow), hit.isDescendant(of: self),
+                  let id = layer2.grabbable(at: p) else { return e }
+            pressID = id; pressStart = p; model.nativeDrag = true
+        case .leftMouseDragged:
+            guard let id = pressID else { return e }
+            if !dragging {
+                guard hypot(p.x - pressStart.x, p.y - pressStart.y) > 2 else { return e }
+                dragging = true
+                model.nativeDragBegan(id)
+            }
+            model.nativeDragMoved(by: CGSize(width: p.x - pressStart.x, height: p.y - pressStart.y), at: p)
+        case .leftMouseUp:
+            if dragging { model.nativeDragEnded() }
+            pressID = nil; dragging = false
+            // stand down once SwiftUI has seen this mouse-up too
+            DispatchQueue.main.async { [weak self] in self?.model.nativeDrag = false }
+        default: break
+        }
+        return e
+    }
 
     override var isFlipped: Bool { true }
 
@@ -526,6 +579,11 @@ final class NodesContainer: UIView, UIGestureRecognizerDelegate {
         pinch.cancelsTouchesInView = false
         addGestureRecognizer(pinch)
         addGestureRecognizer(UIHoverGestureRecognizer(target: self, action: #selector(hovered(_:))))
+        // box drags straight from the finger (see DragZone)
+        boxPan.addTarget(self, action: #selector(dragged(_:)))
+        boxPan.delegate = self
+        boxPan.maximumNumberOfTouches = 1
+        addGestureRecognizer(boxPan)
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -560,6 +618,34 @@ final class NodesContainer: UIView, UIGestureRecognizerDelegate {
         }
     }
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+
+    private let boxPan = UIPanGestureRecognizer()
+    private var panID: UUID?
+    private var panStart = CGPoint.zero
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard g === boxPan else { return true }
+        // decided at touch-down, so the box's own (later) gesture stands aside from the start
+        let p = touch.location(in: self)
+        panID = placement.isStill && !model.threeD && !model.isZooming ? layer2.grabbable(at: convert(p, to: mover)) : nil
+        panStart = p
+        model.nativeDrag = panID != nil
+        return panID != nil
+    }
+    @objc private func dragged(_ g: UIPanGestureRecognizer) {
+        guard let id = panID else { return }
+        let p = g.location(in: self)
+        switch g.state {
+        case .began:
+            model.nativeDragBegan(id)
+            model.nativeDragMoved(by: CGSize(width: p.x - panStart.x, height: p.y - panStart.y), at: p)
+        case .changed:
+            model.nativeDragMoved(by: CGSize(width: p.x - panStart.x, height: p.y - panStart.y), at: p)
+        default:
+            model.nativeDragEnded()
+            panID = nil
+            DispatchQueue.main.async { [weak self] in self?.model.nativeDrag = false }
+        }
+    }
 
     private var laidOut: (CGFloat, CGSize)?
     private var pendingSwap = false

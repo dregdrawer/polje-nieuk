@@ -787,6 +787,33 @@ public final class AppModel: ObservableObject {
     /// While boxes are dragged only this changes — the patch is written once, when they're let go.
     /// (Writing the patch on every pointer move made every box on screen rebuild itself each time.)
     let dragState = DragState()
+    /// Where each box can be grabbed (box coordinates, unzoomed) — see DragZone.
+    var dragZones: [UUID: [Int: CGRect]] = [:]
+    /// The canvas is moving a box straight from the pointer: the boxes' own drag gestures stand aside.
+    var nativeDrag = false
+    private var nativeGroup = false, nativeID: UUID?
+
+    /// The canvas's own box drags (from DragZones). `point` is in canvas-view coordinates.
+    func nativeDragBegan(_ id: UUID) {
+        nativeID = id
+        nativeGroup = selectedNodes.contains(id) && selectedNodes.count > 1
+        if nativeGroup { beginGroupDrag() } else { select(id) }
+    }
+    func nativeDragMoved(by screen: CGSize, at point: CGPoint) {
+        guard let id = nativeID else { return }
+        let d = CGSize(width: screen.width / viewScale, height: screen.height / viewScale)
+        if nativeGroup { groupDrag(by: d) } else {
+            dragMove([id], by: d)
+            updateInsertCandidate(for: id, at: point)
+        }
+    }
+    func nativeDragEnded() {
+        guard let id = nativeID else { return }
+        nativeID = nil
+        if nativeGroup { endGroupDrag() } else { endDragMove(); finishInsert(id) }
+        nativeGroup = false
+        scheduleAutosave()
+    }
     func dragMove(_ ids: Set<UUID>, by d: CGSize) {
         if dragState.ids != ids { dragState.ids = ids }
         dragState.delta = d

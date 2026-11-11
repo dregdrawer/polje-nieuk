@@ -55,6 +55,7 @@ struct ModuleBox: View {
                                     .contentShape(Rectangle())
                                     .onTapGesture { tapSelect() }
                                     .gesture(moveGesture)
+                                    .background(DragZone(model: model, id: node.id, key: 1, inset: 16))
                                 ReadoutView(kind: spec.kind, node: model.node(node.id), model: model, patchNode: node, spec: spec)
                                     .frame(width: max(width - 20 - BoxLayout.sideOutletColumn, 10), height: BoxLayout.readoutHeight(node))
                                     .padding(.leading, 10)
@@ -65,6 +66,7 @@ struct ModuleBox: View {
                                 .contentShape(Rectangle())
                                 .onTapGesture { tapSelect() }
                                 .gesture(moveGesture)
+                                .background(DragZone(model: model, id: node.id, key: 1, inset: 16))
                             if BoxLayout.hasReadout(spec.kind) {
                                 ReadoutView(kind: spec.kind, node: model.node(node.id), model: model, patchNode: node, spec: spec)
                                     .frame(height: BoxLayout.readoutHeight(node))
@@ -81,6 +83,7 @@ struct ModuleBox: View {
                         .contentShape(Rectangle())
                         .onTapGesture { tapSelect() }
                         .gesture(moveGesture)
+                        .background(DragZone(model: model, id: node.id, key: 2, inset: 16))
                     if BoxLayout.hasReadout(spec.kind) {
                         ReadoutView(kind: spec.kind, node: model.node(node.id), model: model, patchNode: node, spec: spec)
                             .frame(height: BoxLayout.readoutHeight(node))
@@ -135,11 +138,15 @@ struct ModuleBox: View {
                 .help(node.bypassed ? "Bypassed — click to switch on" : "On — click to bypass")
                 .padding(.leading, -4)
             }
-            Text(spec.name).font(Theme.title)
-                .foregroundStyle(node.bypassed ? Theme.dim : Theme.text)
-                .strikethrough(node.bypassed, color: Theme.dim)
-                .lineLimit(1)
-            Spacer(minLength: 0)
+            HStack(spacing: 0) {
+                Text(spec.name).font(Theme.title)
+                    .foregroundStyle(node.bypassed ? Theme.dim : Theme.text)
+                    .strikethrough(node.bypassed, color: Theme.dim)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .frame(maxHeight: .infinity)
+            .background(DragZone(model: model, id: node.id, key: 0))   // grab the title to move the box
             if AppModel.patternKinds.contains(node.kind) && !node.collapsed {
                 ClearPatternButton { model.clearPattern(node.id) }
             }
@@ -204,7 +211,7 @@ struct ModuleBox: View {
     private var moveGesture: some Gesture {
             DragGesture(minimumDistance: 2, coordinateSpace: boxSpace)
                 .onChanged { v in
-                    if model.isZooming { return }
+                    if model.isZooming || model.nativeDrag { return }      // the canvas is moving it directly
                     // 3D: the finger's place on the tilted board decides where the box goes
                     if model.threeD { model.move3D(node.id, from: v.startLocation, to: v.location); return }
                     if dragStart == nil {
@@ -223,6 +230,7 @@ struct ModuleBox: View {
                 }
                 .onEnded { _ in
                     if model.threeD { model.end3DMove(); model.scheduleAutosave(); return }
+                    guard dragStart != nil else { return }
                     dragStart = nil
                     if groupDrag { model.endGroupDrag() } else { model.endDragMove(); model.finishInsert(node.id) }
                     groupDrag = false

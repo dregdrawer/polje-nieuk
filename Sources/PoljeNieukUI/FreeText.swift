@@ -43,6 +43,7 @@ struct FreeText: View {
         // a finger-sized touch area (reaches past the words), and the drag wins over the canvas pan
         .contentShape(Rectangle().inset(by: editing ? 0 : -10))
         .highPriorityGesture(move, including: editing ? .subviews : .all)
+        .background { if !editing { DragZone(model: model, id: node.id, key: 0) } }
         .onTapGesture(count: 2) { if !editing { startEditing() } }
         .onTapGesture {
             guard !editing else { return }
@@ -108,7 +109,7 @@ struct FreeText: View {
     private var move: some Gesture {
         DragGesture(minimumDistance: 2, coordinateSpace: hosted ? .global : .named("canvas"))
             .onChanged { v in
-                if model.isZooming { return }
+                if model.isZooming || model.nativeDrag { return }      // the canvas is moving it directly
                 if dragStart == nil {
                     dragStart = CGPoint(x: node.x, y: node.y)
                     groupDrag = selected && model.selectedNodes.count > 1
@@ -119,6 +120,7 @@ struct FreeText: View {
                 if groupDrag { model.groupDrag(by: d) } else { model.dragMove([node.id], by: d) }
             }
             .onEnded { _ in
+                guard dragStart != nil else { return }
                 dragStart = nil
                 if groupDrag { model.endGroupDrag() } else { model.endDragMove() }
                 groupDrag = false
