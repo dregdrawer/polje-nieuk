@@ -133,65 +133,62 @@ struct ReadoutView: View {
     }
 
     private var liveBody: some View {
-        // the readout text and small displays: only when their numbers change
-        LiveView(signature: { LiveSig.readouts(node, 24, steps: 200) &+ LiveSig.patch(patchNode) &* 3 &+ (model.isRunning ? 1 : 0) }) {
-            content
+        // the readout text and small displays: drawn natively, only when their numbers change
+        let sig: () -> Int = { [node, patchNode, model] in
+            LiveSig.readouts(node, 24, steps: 200) &+ LiveSig.patch(patchNode) &* 3 &+ (model.isRunning ? 1 : 0)
         }
-        .font(Theme.mono)
-    }
-
-    @ViewBuilder private var content: some View {
-        if let node {
-            let r = node.readouts
-            switch kind {
-            case "clock":
+        return Group {
+            if kind == "clock" {
                 VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Text(r[3] > 0.5 ? (r[2] > 0.5 ? "EXT" : "EXT --") : "INT").foregroundStyle(Theme.dim)
-                        Text(String(format: "%.1f bpm", r[0])).foregroundStyle(Theme.text)
-                        Spacer(minLength: 0)
-                        HStack(spacing: 3) {
-                            ForEach(0..<4, id: \.self) { b in
-                                Circle()
-                                    .fill(ri(r[1]) == b && r[2] > 0.5 ? Theme.text : Theme.faint)
-                                    .frame(width: 6, height: 6)
-                            }
-                        }
-                    }
+                    LiveCanvas(signature: sig) { ctx, size in drawLive(ctx, size) }
+                        .frame(height: 14)
                     TransportButtons(model: model)
                 }
-            case "grain":
-                HStack {
-                    Text("grains \(ri(r[0]))").foregroundStyle(Theme.text)
-                    Spacer()
-                    if r[1] > 0.5 { Text("frozen").foregroundStyle(Theme.text) }
-                }
-            case "rec":
-                HStack {
-                    Circle().fill(r[1] > 0.5 ? Theme.rec : Theme.faint).frame(width: 8, height: 8)
-                    Text(r[1] > 0.5 ? "REC" : "idle").foregroundStyle(r[1] > 0.5 ? Theme.rec : Theme.dim)
-                    Spacer()
-                    Text(timeString(r[0])).foregroundStyle(Theme.text)
-                }
-            case "comp", "limit":
-                HStack(spacing: 6) {
-                    Text("GR").foregroundStyle(Theme.dim)
-                    GainReduction(db: fin(r[0]))
-                    Text(String(format: "%4.1f", r[0])).foregroundStyle(Theme.text).font(Theme.monoSmall)
-                }
-            case "repeat":
-                HStack {
-                    Circle().fill(r[0] > 0.5 ? Theme.text : Theme.faint).frame(width: 7, height: 7)
-                    Text(r[0] > 0.5 ? "repeating" : "waiting").foregroundStyle(r[0] > 0.5 ? Theme.text : Theme.dim)
-                    Spacer()
-                }
-            case "gain", "mix":
-                VStack(spacing: 2) { Meter(level: r[0]); Meter(level: r[1]) }
-            default:
-                EmptyView()
+            } else {
+                LiveCanvas(signature: sig) { ctx, size in drawLive(ctx, size) }
             }
-        } else {
-            Text("—").foregroundStyle(Theme.dim)
+        }
+    }
+
+    /// One line of text at the left / right of a readout.
+    private func text(_ ctx: LiveGC, _ s: String, _ x: CGFloat, _ y: CGFloat, _ c: Color, size: CGFloat = 11, right: Bool = false) {
+        ctx.draw(LiveText(s, size: size, color: c), at: CGPoint(x: x, y: y), anchor: right ? .trailing : .leading)
+    }
+
+    private func drawLive(_ ctx: LiveGC, _ size: CGSize) {
+        guard let node else { text(ctx, "—", 0, size.height / 2, Theme.dim); return }
+        let r = node.readouts, w = size.width, mid = size.height / 2
+        switch kind {
+        case "clock":
+            let src = r[3] > 0.5 ? (r[2] > 0.5 ? "EXT" : "EXT --") : "INT"
+            text(ctx, src, 0, mid, Theme.dim)
+            text(ctx, String(format: "%.1f bpm", r[0]), CGFloat(src.count) * 6.6 + 6, mid, Theme.text)
+            for b in 0..<4 {
+                let x = w - CGFloat(4 - b) * 9 + 1
+                ctx.fill(Path(ellipseIn: CGRect(x: x, y: mid - 3, width: 6, height: 6)),
+                         with: .color(ri(r[1]) == b && r[2] > 0.5 ? Theme.text : Theme.faint))
+            }
+        case "grain":
+            text(ctx, "grains \(ri(r[0]))", 0, mid, Theme.text)
+            if r[1] > 0.5 { text(ctx, "frozen", w, mid, Theme.text, right: true) }
+        case "rec":
+            ctx.fill(Path(ellipseIn: CGRect(x: 0, y: mid - 4, width: 8, height: 8)), with: .color(r[1] > 0.5 ? Theme.rec : Theme.faint))
+            text(ctx, r[1] > 0.5 ? "REC" : "idle", 14, mid, r[1] > 0.5 ? Theme.rec : Theme.dim)
+            text(ctx, timeString(r[0]), w, mid, Theme.text, right: true)
+        case "comp", "limit":
+            text(ctx, "GR", 0, mid, Theme.dim)
+            let label = String(format: "%4.1f", r[0])
+            let barX: CGFloat = 20, barW = max(w - barX - 34, 4)
+            drawGainReduction(ctx, CGRect(x: barX, y: mid - 2, width: barW, height: 4), fin(r[0]))
+            text(ctx, label, w, mid, Theme.text, size: 9, right: true)
+        case "repeat":
+            ctx.fill(Path(ellipseIn: CGRect(x: 0, y: mid - 3.5, width: 7, height: 7)), with: .color(r[0] > 0.5 ? Theme.text : Theme.faint))
+            text(ctx, r[0] > 0.5 ? "repeating" : "waiting", 13, mid, r[0] > 0.5 ? Theme.text : Theme.dim)
+        case "gain", "mix":
+            drawMeter(ctx, CGRect(x: 0, y: mid - 5, width: w, height: 4), r[0])
+            drawMeter(ctx, CGRect(x: 0, y: mid + 1, width: w, height: 4), r[1])
+        default:
+            break
         }
     }
 
@@ -228,9 +225,10 @@ struct ChannelMeter: View {
     let node: DSPNode?
     let channel: Int
     var body: some View {
-        LiveView(signature: { LiveSig.q(node.map { $0.readouts[min(channel, DSPNode.readoutCount - 1)] } ?? 0, 60) }, every: 2) {
-            Meter(level: node.map { $0.readouts[min(channel, DSPNode.readoutCount - 1)] } ?? 0)
+        LiveCanvas(signature: { LiveSig.q(node.map { $0.readouts[min(channel, DSPNode.readoutCount - 1)] } ?? 0, 60) }, every: 2) { ctx, size in
+            drawMeter(ctx, CGRect(origin: .zero, size: size), node.map { $0.readouts[min(channel, DSPNode.readoutCount - 1)] } ?? 0)
         }
+        .frame(height: 4)
     }
 }
 
@@ -287,4 +285,19 @@ struct TransportButtons: View {
         .buttonStyle(.plain)
         .help(help)
     }
+}
+
+/// Classic green / yellow / red level meter (dB scale, -60…0), drawn natively.
+func drawMeter(_ ctx: LiveGC, _ rect: CGRect, _ level: Float) {
+    let db = 20 * log10(max(fin(level), 1e-5))
+    let f = CGFloat(min(max((db + 60) / 60, 0), 1))
+    ctx.fill(Path(rect), with: .color(Theme.row))
+    ctx.fillGradient(rect, [(Theme.meterGreen, 0), (Theme.meterGreen, 0.7), (Theme.meterYellow, 0.88), (Theme.meterRed, 1)], upTo: f)
+}
+
+/// Compressor / limiter gain reduction: grows from the right.
+func drawGainReduction(_ ctx: LiveGC, _ rect: CGRect, _ db: Float) {
+    ctx.fill(Path(rect), with: .color(Theme.row))
+    let w = rect.width * CGFloat(min(max(db / 24, 0), 1))
+    ctx.fill(Path(CGRect(x: rect.maxX - w, y: rect.minY, width: w, height: rect.height)), with: .color(Theme.meterYellow))
 }

@@ -72,6 +72,24 @@ struct LiveGC {
         cg.restoreGState()
     }
 
+    /// A left-to-right gradient across `rect` (stops: colour and 0…1 place), shown up to `upTo` of its width.
+    func fillGradient(_ rect: CGRect, _ stops: [(Color, CGFloat)], upTo: CGFloat = 1) {
+        let shown = CGRect(x: rect.minX, y: rect.minY, width: rect.width * min(max(upTo, 0), 1), height: rect.height)
+        guard shown.width > 0 else { return }
+        if let gc {
+            let g = Gradient(stops: stops.map { .init(color: $0.0, location: $0.1) })
+            gc.fill(Path(shown), with: .linearGradient(g, startPoint: CGPoint(x: rect.minX, y: rect.midY),
+                                                       endPoint: CGPoint(x: rect.maxX, y: rect.midY)))
+            return
+        }
+        guard let cg, let grad = CGGradient(colorsSpace: nil, colors: stops.map { LiveColor.cg($0.0) } as CFArray,
+                                            locations: stops.map { $0.1 }) else { return }
+        cg.saveGState()
+        cg.clip(to: shown)
+        cg.drawLinearGradient(grad, start: CGPoint(x: rect.minX, y: rect.midY), end: CGPoint(x: rect.maxX, y: rect.midY), options: [])
+        cg.restoreGState()
+    }
+
     /// Draw `body` clipped to `p` (GraphicsContext.drawLayer + clip).
     func clipped(to p: Path, _ body: (LiveGC) -> Void) {
         if let gc {
@@ -235,4 +253,97 @@ struct DragZone: View {
                 .onDisappear { model.dragZones[id]?[key] = nil }
         }
     }
+}
+
+/// A line of live text outside the canvas (the top bar), drawn natively in its own layer: an update redraws
+/// just that layer, with no SwiftUI update of the window around it.
+struct BarLiveText: View {
+    let width: CGFloat
+    let signature: () -> Int
+    let text: () -> (String, Color)
+    var body: some View {
+        Platform(signature: signature, text: text)
+            .frame(width: width, height: 14)
+    }
+
+    @MainActor final class Box: NSObject, CALayerDelegate {
+        let layer = CALayer()
+        let slot = LiveSlot()
+        var text: (() -> (String, Color))?
+        override init() {
+            super.init()
+            layer.delegate = self
+            layer.isOpaque = false
+            slot.onChange = { [weak self] in self?.layer.setNeedsDisplay() }
+            slot.every = 3
+            slot.attach()
+        }
+        nonisolated func draw(_ layer: CALayer, in ctx: CGContext) {
+            MainActor.assumeIsolated {
+                guard let text else { return }
+                let s = layer.bounds.size
+                if !layer.contentsAreFlipped() { ctx.translateBy(x: 0, y: s.height); ctx.scaleBy(x: 1, y: -1) }
+                let (t, c) = text()
+                LiveGC(cg: ctx).draw(LiveText(t, size: 10, color: c), at: CGPoint(x: 0, y: s.height / 2), anchor: .leading)
+            }
+        }
+        nonisolated func action(for layer: CALayer, forKey event: String) -> CAAction? { NSNull() }
+    }
+
+    #if os(macOS)
+    struct Platform: NSViewRepresentable {
+        let signature: () -> Int
+        let text: () -> (String, Color)
+        func makeCoordinator() -> Box { Box() }
+        func makeNSView(context: Context) -> NSView {
+            let v = LayerView(); v.wantsLayer = true
+            v.layer?.addSublayer(context.coordinator.layer)
+            v.box = context.coordinator
+            return v
+        }
+        func updateNSView(_ v: NSView, context: Context) {
+            context.coordinator.text = text
+            context.coordinator.slot.signature = signature
+            context.coordinator.layer.contentsScale = v.window?.backingScaleFactor ?? 2
+            context.coordinator.layer.setNeedsDisplay()
+        }
+    }
+    final class LayerView: NSView {
+        weak var box: Box?
+        override func layout() {
+            super.layout()
+            CATransaction.begin(); CATransaction.setDisableActions(true)
+            box?.layer.frame = bounds
+            CATransaction.commit()
+        }
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+    #else
+    struct Platform: UIViewRepresentable {
+        let signature: () -> Int
+        let text: () -> (String, Color)
+        func makeCoordinator() -> Box { Box() }
+        func makeUIView(context: Context) -> UIView {
+            let v = LayerView(); v.isUserInteractionEnabled = false
+            v.layer.addSublayer(context.coordinator.layer)
+            v.box = context.coordinator
+            return v
+        }
+        func updateUIView(_ v: UIView, context: Context) {
+            context.coordinator.text = text
+            context.coordinator.slot.signature = signature
+            context.coordinator.layer.contentsScale = v.window?.screen.scale ?? 2
+            context.coordinator.layer.setNeedsDisplay()
+        }
+    }
+    final class LayerView: UIView {
+        weak var box: Box?
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            CATransaction.begin(); CATransaction.setDisableActions(true)
+            box?.layer.frame = bounds
+            CATransaction.commit()
+        }
+    }
+    #endif
 }

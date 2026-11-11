@@ -196,6 +196,11 @@ private final class Layer {
     private var groups: [UUID: PView] = [:]
     private var order: [UUID] = []
     private let plain = CAShapeLayer(), dashed = CAShapeLayer(), selected = CAShapeLayer()
+    /// While boxes are dragged, the cables at them are drawn here; the rest stay still in the layers above
+    /// (redrawing every cable on every pointer move made macOS's compositor redraw the whole canvas each time).
+    private let movPlain = CAShapeLayer(), movDashed = CAShapeLayer(), movSelected = CAShapeLayer()
+    private var splitFor: Set<UUID> = []
+    private var moving: [CableEnd] = []
     private let cableHolder = CableView()
     let makeHost: (AnyView) -> PView
 
@@ -207,7 +212,7 @@ private final class Layer {
         #if os(iOS)
         cableHolder.isUserInteractionEnabled = false
         #endif
-        for l in [plain, dashed, selected] {
+        for l in [plain, dashed, selected, movPlain, movDashed, movSelected] {
             l.fillColor = nil; l.lineCap = .round
             host.addSublayer(l)
         }
@@ -338,15 +343,27 @@ private final class Layer {
     /// `fresh`: the boxes changed (work the cable ends out again); otherwise reuse them (a drag)
     func layoutCables(fresh: Bool = true) {
         if cableHolder.frame != mover.bounds { cableHolder.frame = mover.bounds }
-        if fresh { ends = model.cableEnds() }
-        let (p, d, s, w) = model.cablePaths(ends)
+        if fresh { ends = model.cableEnds(); splitFor = [] }
+        let ids = fresh ? [] : model.dragState.ids
         CATransaction.begin(); CATransaction.setDisableActions(true)
-        let cable = PColor(Theme.cable).cgColor, sel = PColor(Theme.selected).cgColor
-        plain.path = p; plain.strokeColor = cable; plain.lineWidth = w
-        dashed.path = d; dashed.strokeColor = cable; dashed.lineWidth = w
-        dashed.lineDashPattern = [NSNumber(value: Double(4 * model.hostedZoom.scale)), NSNumber(value: Double(3 * model.hostedZoom.scale))]
-        selected.path = s; selected.strokeColor = sel; selected.lineWidth = w + 1.5
+        if fresh || ids != splitFor {
+            // (re)draw the still cables once; the moving ones go to their own layers
+            splitFor = ids
+            let still = ids.isEmpty ? ends : ends.filter { !ids.contains($0.from) && !ids.contains($0.to) }
+            moving = ids.isEmpty ? [] : ends.filter { ids.contains($0.from) || ids.contains($0.to) }
+            style(model.cablePaths(still), plain, dashed, selected)
+        }
+        style(model.cablePaths(moving), movPlain, movDashed, movSelected)
         CATransaction.commit()
+    }
+
+    private func style(_ paths: (CGPath, CGPath, CGPath, CGFloat), _ p: CAShapeLayer, _ d: CAShapeLayer, _ s: CAShapeLayer) {
+        let cable = PColor(Theme.cable).cgColor, sel = PColor(Theme.selected).cgColor, w = paths.3
+        p.path = paths.0; p.strokeColor = cable; p.lineWidth = w
+        d.path = paths.1; d.strokeColor = cable; d.lineWidth = w
+        let z = model.hostedZoom.scale
+        d.lineDashPattern = [NSNumber(value: Double(4 * z)), NSNumber(value: Double(3 * z))]
+        s.path = paths.2; s.strokeColor = sel; s.lineWidth = w + 1.5
     }
 
     /// The box whose grab area (title, empty port space …) is under this point (mover coordinates), if any.

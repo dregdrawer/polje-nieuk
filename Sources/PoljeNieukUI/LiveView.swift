@@ -61,6 +61,9 @@ final class LiveSlot: ObservableObject {
     /// A native display whose box went away: skip it.
     var active = true
     private var attached = false
+    /// Where in its cycle this display redraws: displays on the same rate are spread over different frames
+    /// (all on one frame made a burst the main thread spent ~10 ms on — a drag waiting behind it stuttered).
+    private let phase = Int.random(in: 0..<1_000)
     /// Joins the tick (once). Not in init: SwiftUI creates a view's initial state object again on every
     /// rebuild and throws the copies away — those copies used to stay registered and fire every tick.
     func attach() {
@@ -76,7 +79,7 @@ final class LiveSlot: ObservableObject {
     @discardableResult func poll(_ frame: Int) -> Bool {
         // gliding displays: 30 fps (smooth to the eye at a fraction of 60's cost); the rest: 20 fps
         let step = smooth ? max(every, 1) * 2 : max(every, 1) * Ticker.substeps
-        if !active || (step > 1 && frame % step != 0) { return false }
+        if !active || (step > 1 && (frame &+ phase) % step != 0) { return false }
         let s = signature?() ?? frame              // no fingerprint: it moves every tick (an LFO wave …)
         if s != last {
             last = s; version &+= 1

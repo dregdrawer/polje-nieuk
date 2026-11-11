@@ -173,24 +173,28 @@ public struct PoljeNieukRootView: View {
 
             // only re-rendered when what it shows changes (tempo, clock source, cpu) — it sits in all four
             // bar layouts the window picks between, so re-rendering it every tick was costly
-            LiveView(signature: {
-                var h = LiveSig.q(Float(model.tempoEditable ? model.setTempo : model.bpm), 10)
-                LiveSig.mix(&h, model.externalClock ? 1 : 0)
-                LiveSig.mix(&h, Int(fin(model.appCPU) * 100))
-                return h
-            }) {
-                HStack(spacing: 10) {
+            HStack(spacing: 10) {
+                // the tempo re-renders only when the tempo or clock source changes
+                LiveView(signature: {
+                    var h = LiveSig.q(Float(model.tempoEditable ? model.setTempo : model.bpm), 10)
+                    LiveSig.mix(&h, model.externalClock ? 1 : 0)
+                    return h
+                }) {
                     TempoField(model: model)            // kept in the compact bar too, so it's always settable
-                    // fixed-width fields (monospaced, padded) so nothing in the bar shifts as the numbers change
-                    if !compact && stats { Text(String(format: "cpu %3.0f%%", min(fin(model.appCPU) * 100, 999)))
-                        .foregroundStyle(model.appCPU > 0.85 ? Theme.rec : Theme.dim)
-                        .help("cpu: everything the app uses — sound and drawing the screen. 100 % is one full core.")
-                        .helpTopic(model, "tb-cpu", "cpu", "How much the app uses — sound and drawing the screen together. 100 % is one full core. If the iPad gets warm, this is the number to watch.") }
                 }
-                .font(Theme.barFont)
-                .lineLimit(1)
-                .fixedSize()
+                // the cpu figure is drawn natively: as a SwiftUI text, its update every second re-laid-out the
+                // whole window (20–100 ms) — a box being dragged then jumped
+                if !compact && stats {
+                    BarLiveText(width: 54, signature: { Int(fin(model.appCPU) * 100) }) {
+                        (String(format: "cpu %3.0f%%", min(fin(model.appCPU) * 100, 999)), model.appCPU > 0.85 ? Theme.rec : Theme.dim)
+                    }
+                    .help("cpu: everything the app uses — sound and drawing the screen. 100 % is one full core.")
+                    .helpTopic(model, "tb-cpu", "cpu", "How much the app uses — sound and drawing the screen together. 100 % is one full core. If the iPad gets warm, this is the number to watch.")
+                }
             }
+            .font(Theme.barFont)
+            .lineLimit(1)
+            .fixedSize()
 
             Button { model.undo() } label: { icon("arrow.uturn.backward", on: model.canUndo).accessibilityLabel("undo") }
                 .disabled(!model.canUndo)
