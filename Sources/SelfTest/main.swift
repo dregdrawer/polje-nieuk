@@ -1244,6 +1244,46 @@ do {
     check(dec.nodes[0].z == 150, "a box's height is saved with the patch")
 }
 
+if let path = ProcessInfo.processInfo.environment["BENCH_PATCH"],
+   let data = FileManager.default.contents(atPath: path),
+   let full = try? JSONDecoder().decode(Patch.self, from: data).migrated() {
+    /// Real-time share of one core to run `p` (5 s at 48 kHz, 128-frame blocks, silent inputs).
+    func cost(_ p: Patch) -> Double {
+        let h = GraphHost(sampleRate: 48000)
+        h.load(p); h.prepareForStart()
+        let ins = UnsafeMutablePointer<UnsafeMutablePointer<Float>>.allocate(capacity: 2)
+        ins[0] = .allocate(capacity: 128); ins[1] = .allocate(capacity: 128)
+        ins[0].update(repeating: 0, count: 128); ins[1].update(repeating: 0, count: 128)
+        let outs = UnsafeMutablePointer<UnsafeMutablePointer<Float>>.allocate(capacity: 4)
+        for k in 0..<4 { outs[k] = .allocate(capacity: 128) }
+        for _ in 0..<400 { h.process(frames: 128, inputs: ins, inputCount: 2, outputs: outs, outputCount: 4) }   // let it get going
+        var best = Double.infinity
+        for _ in 0..<3 {
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            for _ in 0..<(48000 * 2 / 128) {
+                for k in 0..<4 { outs[k].update(repeating: 0, count: 128) }
+                h.process(frames: 128, inputs: ins, inputCount: 2, outputs: outs, outputCount: 4)
+            }
+            best = min(best, Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e9 / 2 * 100)
+        }
+        return best
+    }
+    let all = cost(full)
+    print(String(format: "Patch: %d modules, %.2f %% of one core", full.nodes.count, all))
+    var rows: [(String, Double)] = []
+    for n in full.nodes {
+        var p = full
+        p.nodes.removeAll { $0.id == n.id }
+        p.cables.removeAll { $0.fromNode == n.id || $0.toNode == n.id }
+        var label = n.kind
+        if let a = n.params["algo"] { label += " algo=\(Int(a))" }
+        if n.kind == "peq" { label += " bands=\(Int(n.params["bands"] ?? 0))" }
+        rows.append((label + (n.bypassed ? " (bypassed)" : ""), all - cost(p)))
+    }
+    for (name, pct) in rows.sorted(by: { $0.1 > $1.1 }) { print(String(format: "  %6.2f %%  %@", pct, name)) }
+    exit(0)
+}
+
 if ProcessInfo.processInfo.environment["BENCH"] == "1" {
     print("Benchmark: one instance of each module, 10 s of 48 kHz audio (share of one core in real time)")
     var rows: [(String, Double)] = []

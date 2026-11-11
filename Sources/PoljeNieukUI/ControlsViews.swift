@@ -97,13 +97,13 @@ private struct ControlCell: View {
     /// Target names at the top of the cell; returns the height they take.
     /// Target names at the top of the cell. Returns the label band's height — the same for every
     /// control in the box (whether or not this one is patched), so knobs and faders stay level.
-    private func drawTarget(_ ctx: GraphicsContext, _ size: CGSize, twoLines: Bool) -> CGFloat {
+    private func drawTarget(_ ctx: LiveGC, _ size: CGSize, twoLines: Bool) -> CGFloat {
         guard reserveLabel else { return 0 }
         if let p = targetParam {
-            ctx.draw(Text(fit(p, size.width)).font(Theme.monoSmall).foregroundColor(Theme.text),
+            ctx.draw(LiveText(fit(p, size.width), size: 9, color: Theme.text),
                      at: CGPoint(x: size.width / 2, y: 6), anchor: .center)
             if twoLines, let m = targetModule {
-                ctx.draw(Text(fit(m, size.width)).font(Theme.monoSmall).foregroundColor(Theme.dim),
+                ctx.draw(LiveText(fit(m, size.width), size: 9, color: Theme.dim),
                          at: CGPoint(x: size.width / 2, y: 17), anchor: .center)
             }
         }
@@ -150,7 +150,7 @@ private struct ControlCell: View {
         return String(format: abs(v) < 9.95 ? "%.2f" : "%.1f", v)
     }
 
-    private func drawSlider(_ ctx: GraphicsContext, _ size: CGSize) {
+    private func drawSlider(_ ctx: LiveGC, _ size: CGSize) {
         let labelH: CGFloat = 14
         let top = max(drawTarget(ctx, size, twoLines: size.height > 110), 0) + 6
         let track = CGRect(x: size.width / 2 - 2, y: top, width: 4, height: max(size.height - labelH - 6 - top, 10))
@@ -162,14 +162,14 @@ private struct ControlCell: View {
         let cap = CGRect(x: size.width / 2 - capW / 2, y: y - 6, width: capW, height: 12)
         ctx.fill(Path(roundedRect: cap, cornerRadius: 2), with: .color(Theme.text))
         ctx.fill(Path(CGRect(x: cap.minX + 3, y: y - 0.5, width: cap.width - 6, height: 1)), with: .color(Theme.box))
-        ctx.draw(Text(fit(size.width < 44 ? label : "\(index + 1)  \(label)", size.width)).font(Theme.monoSmall).foregroundColor(Theme.dim),
+        ctx.draw(LiveText(fit(size.width < 44 ? label : "\(index + 1)  \(label)", size.width), size: 9, color: Theme.dim),
                  at: CGPoint(x: size.width / 2, y: size.height - labelH / 2), anchor: .center)
     }
 
     /// Max-style dial: a 270° track with the gap centred at the bottom (both ends level), and the value
     /// as a white arc from the left end. Angles are measured from 12 o'clock, clockwise,
     /// and every point is computed directly, so the drawing is exactly symmetric.
-    private func drawKnob(_ ctx: GraphicsContext, _ size: CGSize) {
+    private func drawKnob(_ ctx: LiveGC, _ size: CGSize) {
         let labelH: CGFloat = 14
         let top = drawTarget(ctx, size, twoLines: size.height > 120)
         let avail = size.height - labelH - top
@@ -197,7 +197,7 @@ private struct ControlCell: View {
         if v > 0.001 {
             ctx.stroke(arc(from: start, to: start + sweep * v), with: .color(Theme.text), style: StrokeStyle(lineWidth: lw, lineCap: .butt))
         }
-        ctx.draw(Text(fit(size.width < 44 ? label : "\(index + 1)  \(label)", size.width)).font(Theme.monoSmall).foregroundColor(Theme.dim),
+        ctx.draw(LiveText(fit(size.width < 44 ? label : "\(index + 1)  \(label)", size.width), size: 9, color: Theme.dim),
                  at: CGPoint(x: size.width / 2, y: size.height - labelH / 2), anchor: .center)
     }
 

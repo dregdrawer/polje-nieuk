@@ -32,6 +32,8 @@ private struct BoxRoot: View {
     let group: Bool
     var body: some View {
         content
+            .coordinateSpace(name: NativeLive.space)          // live displays report their place in the box here
+            .environment(\.liveBox, group ? nil : id)
             .environment(\.canvasZoom, zoom.scale <= 1 ? 1 : (zoom.scale * 4).rounded() / 4)
             .environment(\.hostedNodes, true)
             .environment(\.helpModeOn, model.helpMode)       // a separate view tree: nothing is inherited
@@ -187,6 +189,10 @@ private final class Layer {
     let model: AppModel
     let mover: PView
     private(set) var boxes: [UUID: PView] = [:]
+    /// per box: the view its native live displays' layers sit in (above the box's SwiftUI content)
+    private var overlays: [UUID: CableView] = [:]
+    private let liveEntries = NSHashTable<NativeLiveEntry>.weakObjects()
+    private var liveZoom: CGFloat = -1
     private var groups: [UUID: PView] = [:]
     private var order: [UUID] = []
     private let plain = CAShapeLayer(), dashed = CAShapeLayer(), selected = CAShapeLayer()
@@ -207,13 +213,55 @@ private final class Layer {
         }
         dashed.lineDashPattern = [4, 3]
         mover.addSubview(cableHolder)
+        NativeLive.place = { [weak self] e in self?.placeLive(e) }
+    }
+
+    /// A box's view: its SwiftUI content, with a pass-through view on top for its native live displays.
+    private func boxView(_ id: UUID, _ root: AnyView) -> PView {
+        let host = makeHost(root)
+        let box = PView()
+        let overlay = CableView()
+        #if os(macOS)
+        box.wantsLayer = true
+        host.autoresizingMask = [.width, .height]
+        overlay.autoresizingMask = [.width, .height]
+        #else
+        host.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        overlay.isUserInteractionEnabled = false
+        #endif
+        box.addSubview(host)
+        box.addSubview(overlay)
+        overlays[id] = overlay
+        return box
+    }
+
+    /// Put a native display's layer on its box, at its place at the laid-out zoom.
+    func placeLive(_ e: NativeLiveEntry) {
+        liveEntries.add(e)
+        guard e.slot.active, let id = e.boxID, let overlay = overlays[id], e.rect.width > 0, e.rect.height > 0 else { return }
+        let root = overlay.root
+        if e.layer.superlayer !== root { root.addSublayer(e.layer) }
+        let z = model.hostedZoom.scale, p = NodesLayout.pad
+        #if os(macOS)
+        let scale = mover.window?.backingScaleFactor ?? 2
+        #else
+        let scale = mover.window?.screen.scale ?? 2
+        #endif
+        let f = CGRect(x: p + e.rect.minX * z, y: p + e.rect.minY * z, width: e.rect.width * z, height: e.rect.height * z)
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        if e.layer.frame != f { e.layer.frame = f }
+        if e.layer.contentsScale != scale { e.layer.contentsScale = scale }
+        CATransaction.commit()
+        if e.zoom != z { e.zoom = z }
+        e.layer.setNeedsDisplay()
     }
 
     /// Everything: views for new boxes, frames, stacking, cables.
     func layoutAll() {
         let ids = model.patch.nodes.map(\.id)
         let alive = Set(ids)
-        for (id, v) in boxes where !alive.contains(id) { v.removeFromSuperview(); boxes[id] = nil }
+        for (id, v) in boxes where !alive.contains(id) { v.removeFromSuperview(); boxes[id] = nil; overlays[id] = nil }
         let gids = Set(model.groups.map(\.id))
         for (id, v) in groups where !gids.contains(id) { v.removeFromSuperview(); groups[id] = nil }
         for g in model.groups {
@@ -229,7 +277,7 @@ private final class Layer {
             shift(v, !g.members.isEmpty && Set(g.members).isSubset(of: model.dragState.ids) ? model.dragState.delta : .zero)
         }
         for n in model.patch.nodes {
-            let v = boxes[n.id] ?? { let h = makeHost(AnyView(BoxRoot(model: model, zoom: model.hostedZoom, id: n.id, group: false)))
+            let v = boxes[n.id] ?? { let h = boxView(n.id, AnyView(BoxRoot(model: model, zoom: model.hostedZoom, id: n.id, group: false)))
                                      boxes[n.id] = h; mover.addSubview(h); return h }()
             if let f = model.boxFrame(n, drag: .zero), v.frame != f { v.frame = f }
             shift(v, model.dragState.offset(n.id))
@@ -238,6 +286,10 @@ private final class Layer {
             // stacking follows the patch (the last box is on top)
             order = ids
             for id in ids { if let v = boxes[id] { v.removeFromSuperview(); mover.addSubview(v) } }
+        }
+        if liveZoom != model.hostedZoom.scale {
+            liveZoom = model.hostedZoom.scale
+            for e in liveEntries.allObjects { placeLive(e) }
         }
         layoutCables()
     }

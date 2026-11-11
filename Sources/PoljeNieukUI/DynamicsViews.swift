@@ -49,7 +49,7 @@ struct CompView: View {
         CGFloat(1 - (min(max(db, floorDB), 0) - floorDB) / -floorDB) * h
     }
 
-    private func drawHistory(_ ctx: GraphicsContext, _ size: CGSize) {
+    private func drawHistory(_ ctx: LiveGC, _ size: CGSize) {
         let r = node.readouts
         trace.push([toDB(r[1]), toDB(r[2]), fin(r[0])], at: Date().timeIntervalSinceReferenceDate)
         let w = size.width, h = size.height - 12
@@ -79,11 +79,11 @@ struct CompView: View {
         gr.addLine(to: CGPoint(x: w, y: 0)); gr.closeSubpath()
         ctx.fill(gr, with: .color(Theme.meterYellow.opacity(0.75)))
         let label = String(format: "GR %4.1f dB   in %5.1f   out %5.1f", fin(r[0]), toDB(r[1]), toDB(r[2]))
-        ctx.draw(Text(label).font(Theme.monoSmall).foregroundColor(Theme.dim), at: CGPoint(x: 0, y: size.height - 5), anchor: .leading)
+        ctx.draw(LiveText(label, size: 9, color: Theme.dim), at: CGPoint(x: 0, y: size.height - 5), anchor: .leading)
     }
 
     /// Static transfer curve (input dB → output dB) with the live operating point.
-    private func drawCurve(_ ctx: GraphicsContext, _ size: CGSize) {
+    private func drawCurve(_ ctx: LiveGC, _ size: CGSize) {
         let r = node.readouts
         let thr = fin(r[3]), ratio = max(fin(r[4]), 1), knee = max(fin(r[5]), 0), makeup = fin(r[6])
         let s = min(size.width, size.height)
@@ -128,7 +128,7 @@ struct LFOView: View {
             .padding(.vertical, 4)
     }
 
-    private func draw(_ ctx: GraphicsContext, _ size: CGSize) {
+    private func draw(_ ctx: LiveGC, _ size: CGSize) {
         let r = node.readouts
         let shape = Int((patchNode.params["shape"] ?? 0).rounded())
         let depth = patchNode.params["depth"] ?? 0.5, offset = patchNode.params["offset"] ?? 0
@@ -181,7 +181,7 @@ struct LFOView: View {
         ctx.fill(Path(CGRect(x: bx, y: 0, width: 6, height: h)), with: .color(Theme.row))
         let v0 = h / 2, v1 = y(r[0])
         ctx.fill(Path(CGRect(x: bx, y: min(v0, v1), width: 6, height: abs(v1 - v0))), with: .color(Theme.text.opacity(0.8)))
-        ctx.draw(Text(String(format: "%+.1f", fin(r[0]) * 10)).font(Theme.monoSmall).foregroundColor(Theme.dim),
+        ctx.draw(LiveText(String(format: "%+.1f", fin(r[0]) * 10), size: 9, color: Theme.dim),
                  at: CGPoint(x: size.width, y: h / 2), anchor: .trailing)
     }
 }

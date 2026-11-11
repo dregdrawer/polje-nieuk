@@ -56,7 +56,18 @@ final class LiveSlot: ObservableObject {
     var smooth = false
     private(set) var version = 0
     private var last = Int.min
-    init() { Ticker.shared.register(self) }
+    /// Native displays: redraw their layer (instead of telling SwiftUI).
+    var onChange: (() -> Void)?
+    /// A native display whose box went away: skip it.
+    var active = true
+    private var attached = false
+    /// Joins the tick (once). Not in init: SwiftUI creates a view's initial state object again on every
+    /// rebuild and throws the copies away — those copies used to stay registered and fire every tick.
+    func attach() {
+        guard !attached else { return }
+        attached = true
+        Ticker.shared.register(self)
+    }
     /// When the view re-renders anyway (an edit): pick up a change right now instead of at the next tick.
     func current() -> Int {
         if let sig = signature?(), sig != last { last = sig; version &+= 1 }
@@ -65,9 +76,13 @@ final class LiveSlot: ObservableObject {
     @discardableResult func poll(_ frame: Int) -> Bool {
         // gliding displays: 30 fps (smooth to the eye at a fraction of 60's cost); the rest: 20 fps
         let step = smooth ? max(every, 1) * 2 : max(every, 1) * Ticker.substeps
-        if step > 1 && frame % step != 0 { return false }
+        if !active || (step > 1 && frame % step != 0) { return false }
         let s = signature?() ?? frame              // no fingerprint: it moves every tick (an LFO wave …)
-        if s != last { last = s; version &+= 1; objectWillChange.send(); return true }
+        if s != last {
+            last = s; version &+= 1
+            if let onChange { onChange() } else { objectWillChange.send() }
+            return true
+        }
         return false
     }
 }
@@ -101,6 +116,7 @@ struct LiveView<Content: View>: View {
         let content: () -> Content
         let every: Int
         var body: some View {
+            slot.attach()
             slot.every = every
             slot.signature = signature                 // the latest one (it captures the current state)
             return Unchanged(key: LiveSig.styled(slot.current()), content: content).equatable()
@@ -121,25 +137,64 @@ struct LiveView<Content: View>: View {
 struct LiveCanvas: View {
     @Environment(\.liveDisplaysOn) private var on
     @Environment(\.canvasZoom) private var zoom
+    @Environment(\.liveBox) private var box
+    @Environment(\.liveOpacity) private var opacity
     var signature: (() -> Int)? = nil
-    let draw: (GraphicsContext, CGSize) -> Void
+    let draw: (LiveGC, CGSize) -> Void
 
     var every = 1
-    /// glides continuously (an LFO's dot, a playhead): redrawn at 60 fps instead of 20
+    /// glides continuously (an LFO's dot, a playhead): redrawn at 30 fps instead of 20
     var smooth = false
-    init(signature: (() -> Int)? = nil, every: Int = 1, smooth: Bool = false, draw: @escaping (GraphicsContext, CGSize) -> Void) {
-        self.signature = signature; self.every = every; self.smooth = smooth; self.draw = draw
+    /// false: draw through SwiftUI (for a display with SwiftUI drawn on top of it — a native layer sits above)
+    var native = true
+    init(signature: (() -> Int)? = nil, every: Int = 1, smooth: Bool = false, native: Bool = true,
+         draw: @escaping (LiveGC, CGSize) -> Void) {
+        self.signature = signature; self.every = every; self.smooth = smooth; self.native = native; self.draw = draw
     }
 
     var body: some View {
-        if on { Ticking(signature: signature, draw: draw, zoom: zoom, every: every, smooth: smooth) } else { Drawn(draw: draw, zoom: zoom, tick: 0) }
+        if on, native, let box {
+            NativeCanvas(box: box, signature: signature, draw: draw, every: every, smooth: smooth, opacity: opacity)
+        } else if on {
+            Ticking(signature: signature, draw: draw, zoom: zoom, every: every, smooth: smooth)
+        } else {
+            Drawn(draw: draw, zoom: zoom, tick: 0)
+        }
+    }
+
+    /// Drawn by its own native layer on the box: a tick redraws the layer, SwiftUI isn't involved.
+    private struct NativeCanvas: View {
+        @StateObject private var entry = NativeLiveEntry()
+        let box: UUID
+        let signature: (() -> Int)?
+        let draw: (LiveGC, CGSize) -> Void
+        let every: Int
+        let smooth: Bool
+        let opacity: Double
+        var body: some View {
+            let _ = configure()
+            Color.clear
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(NativeLive.space)) } action: { entry.rect = $0 }
+                .onAppear { entry.reattach() }
+                .onDisappear { entry.detach() }
+        }
+        private func configure() {
+            entry.boxID = box
+            entry.draw = draw                           // the latest one (it captures the current state)
+            entry.slot.every = every
+            entry.slot.smooth = smooth
+            entry.slot.signature = signature
+            if entry.layer.opacity != Float(opacity) { entry.layer.opacity = Float(opacity) }
+            _ = entry.slot.current()
+            entry.layer.setNeedsDisplay()              // the box re-rendered (an edit): show it now
+        }
     }
 
     private struct Ticking: View {
         // held, not observed: this view must not wake on every tick — only the small view below does
         @State private var slot = LiveSlot()
         let signature: (() -> Int)?
-        let draw: (GraphicsContext, CGSize) -> Void
+        let draw: (LiveGC, CGSize) -> Void
         let zoom: CGFloat
         let every: Int
         let smooth: Bool
@@ -150,6 +205,7 @@ struct LiveCanvas: View {
             Observing(slot: slot, draw: draw, zoom: zoom)
         }
         private func configure() {
+            slot.attach()
             slot.every = every
             slot.smooth = smooth
             slot.signature = signature
@@ -160,13 +216,13 @@ struct LiveCanvas: View {
     /// Drawn in place, woken by its own slot (only this view redraws on a tick).
     private struct Observing: View {
         @ObservedObject var slot: LiveSlot
-        let draw: (GraphicsContext, CGSize) -> Void
+        let draw: (LiveGC, CGSize) -> Void
         let zoom: CGFloat
         var body: some View { Drawn(draw: draw, zoom: zoom, tick: LiveSig.styled(slot.version)).equatable() }
     }
 
     private struct Drawn: View, Equatable {
-        let draw: (GraphicsContext, CGSize) -> Void
+        let draw: (LiveGC, CGSize) -> Void
         let zoom: CGFloat
         let tick: Int
         // the draw closure reads live memory itself: only the tick (or signature) and zoom decide a redraw
@@ -179,7 +235,7 @@ struct LiveCanvas: View {
                 // not zoomed in: a plain Canvas (no measuring container — that cost a layout pass every tick)
                 Canvas { ctx, size in
                     _ = tick
-                    draw(ctx, size)
+                    draw(LiveGC(ctx), size)
                 }
             } else {
             GeometryReader { geo in
@@ -188,9 +244,9 @@ struct LiveCanvas: View {
                     if z > 1.01 {
                         var c = ctx
                         c.scaleBy(x: z, y: z)
-                        draw(c, CGSize(width: size.width / z, height: size.height / z))
+                        draw(LiveGC(c), CGSize(width: size.width / z, height: size.height / z))
                     } else {
-                        draw(ctx, size)
+                        draw(LiveGC(ctx), size)
                     }
                 }
                 .frame(width: geo.size.width * (z > 1.01 ? z : 1), height: geo.size.height * (z > 1.01 ? z : 1))
@@ -241,3 +297,4 @@ extension EnvironmentValues {
         set { self[CanvasZoomKey.self] = newValue }
     }
 }
+

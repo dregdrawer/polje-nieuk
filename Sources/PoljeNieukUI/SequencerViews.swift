@@ -70,7 +70,7 @@ struct KeysView: View {
         }
     }
 
-    private func draw(_ ctx: GraphicsContext, _ size: CGSize) {
+    private func draw(_ ctx: LiveGC, _ size: CGSize) {
         // the engine only reports the sounding note while audio runs (its readout starts at 0 = the lowest C)
         let sounding = model.isRunning ? Int(node.readouts[0]) : -1
         // a key lights up as a whole while it's pressed, latched or sounding
@@ -145,7 +145,7 @@ struct SeqView: View {
                                      "gate": (0..<SeqNode.steps).map { node.gates[$0] }])
     }
 
-    private func draw(_ ctx: GraphicsContext, _ size: CGSize) {
+    private func draw(_ ctx: LiveGC, _ size: CGSize) {
         let n = SeqNode.steps
         let colW = size.width / CGFloat(n)
         let barH = size.height - gateRow - 2
@@ -163,7 +163,7 @@ struct SeqView: View {
         for st in stride(from: -Int(range), through: Int(range), by: 12) {
             ctx.fill(Path(CGRect(x: 0, y: yOf(st), width: size.width, height: st == 0 ? 1 : 0.5)),
                      with: .color(st == 0 ? Theme.faint : Theme.faint.opacity(0.8)))
-            ctx.draw(Text(st == 0 ? "0" : String(format: "%+d", st)).font(.system(size: 7, design: .monospaced)).foregroundColor(Theme.dim),
+            ctx.draw(LiveText(st == 0 ? "0" : String(format: "%+d", st), size: 7, color: Theme.dim),
                      at: CGPoint(x: 2, y: min(max(yOf(st) + (st > 0 ? 5 : -5), 4), barH - 4)), anchor: .leading)
         }
         for c in 0..<n {
@@ -191,8 +191,7 @@ struct SeqView: View {
                 hatch.move(to: CGPoint(x: hx, y: size.height)); hatch.addLine(to: CGPoint(x: hx + size.height, y: 0))
                 hx += 6
             }
-            ctx.drawLayer { l in
-                l.clip(to: Path(off))
+            ctx.clipped(to: Path(off)) { l in
                 l.stroke(hatch, with: .color(Theme.faint.opacity(0.35)), lineWidth: 0.5)
             }
             ctx.fill(Path(CGRect(x: x0 - 0.75, y: 0, width: 1.5, height: size.height)), with: .color(Theme.text.opacity(0.6)))
@@ -212,10 +211,10 @@ struct TuringView: View {
 
     /// Top: the shift register — only the bits in the loop, newest on the right. Middle: the loop as it will play (filled = plays, outline = silent).
     /// Bottom: the CV output right now.
-    private func draw(_ ctx: GraphicsContext, _ size: CGSize) {
+    private func draw(_ ctx: LiveGC, _ size: CGSize) {
         guard model.isRunning else {
             ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
-            ctx.draw(Text("audio off").font(Theme.monoSmall).foregroundColor(Theme.dim),
+            ctx.draw(LiveText("audio off", size: 9, color: Theme.dim),
                      at: CGPoint(x: size.width / 2, y: size.height / 2))
             return
         }
@@ -321,7 +320,7 @@ struct GridEditor: View {
     private func rowY(_ r: Int, _ rh: CGFloat, _ h: CGFloat) -> CGFloat { topDown ? CGFloat(r) * rh : h - CGFloat(r + 1) * rh }
     private func rowAt(_ y: CGFloat, _ rh: CGFloat) -> Int { let i = Int(floor(y / rh)); return topDown ? i : rows - 1 - i }
 
-    private func draw(_ ctx: GraphicsContext, _ size: CGSize) {
+    private func draw(_ ctx: LiveGC, _ size: CGSize) {
         let cw = size.width / CGFloat(max(len, 1)), rh = size.height / CGFloat(rows)
         ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
         // piano roll: highlight C rows; drums: alternate lanes

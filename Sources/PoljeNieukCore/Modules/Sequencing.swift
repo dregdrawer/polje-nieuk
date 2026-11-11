@@ -19,10 +19,12 @@ public enum Scales {
         let oct = floor(n / 12), within = n - oct * 12
         var best = Float(d[0]), bestDist: Float = 99
         for deg in d {
-            for o in [-12, 0, 12] {
+            var o = -12
+            while o <= 12 {                       // no array literal: this runs on the audio thread
                 let c = Float(deg + o)
                 let dist = abs(c - within)
                 if dist < bestDist { bestDist = dist; best = c }
+                o += 12
             }
         }
         return oct * 12 + best
@@ -313,6 +315,8 @@ public final class SeqNode: DSPNode {
         let ck = inputs[0], rs = inputs[1]
         let pOut = outputs[0], gOut = outputs[1]
         if ctx.stopPending { step = -1; dir = 1; clock.restart() }
+        // the pitch only changes with the step (or a knob): quantise it then, not on every sample
+        var cvStep = -2, cv: Float = 0
         for i in 0..<frames {
             if hasReset && clock.resetEdge.rising(rs[i]) { step = -1; dir = 1; clock.restart() }
             if clock.tick(beat: ctx.beat[i], div: div, spb: ctx.samplesPerBeat, clockIn: hasClock ? ck[i] : nil, sampleRate: sampleRate, running: ctx.running) {
@@ -334,7 +338,8 @@ public final class SeqNode: DSPNode {
                 if gates[step] > 0.5 { heldStep = step }
             }
             let s = heldStep >= 0 ? heldStep : max(step, 0)
-            pOut[i] = pitchCV(Scales.quantize(pitches[s] + transpose, scale))
+            if s != cvStep { cvStep = s; cv = pitchCV(Scales.quantize(pitches[s] + transpose, scale)) }
+            pOut[i] = cv
             gOut[i] = gateLeft > 0 ? kGateHigh : 0
             if gateLeft > 0 { gateLeft -= 1 }
         }

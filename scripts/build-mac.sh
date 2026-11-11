@@ -37,7 +37,9 @@ for ARCH in "${ARCHS[@]}"; do
   rm -f $A/libMutableDSP.a
   ar rcs $A/libMutableDSP.a $A/mi/*.o
 
-  swiftc "${FLAGS[@]}" -parse-as-library -module-name PoljeNieukCore -emit-module -emit-module-path $A/PoljeNieukCore.swiftmodule \
+  # the audio engine: whole-module optimised, and without the runtime exclusivity checks Swift otherwise
+  # runs on every per-sample access to a module's stored arrays (only the audio thread touches them)
+  swiftc "${FLAGS[@]}" -wmo -enforce-exclusivity=unchecked -parse-as-library -module-name PoljeNieukCore -emit-module -emit-module-path $A/PoljeNieukCore.swiftmodule \
     -emit-library -static -o $A/libPoljeNieukCore.a Sources/PoljeNieukCore/*.swift Sources/PoljeNieukCore/Modules/*.swift
   swiftc "${FLAGS[@]}" -parse-as-library -module-name PoljeNieukUI -emit-module -emit-module-path $A/PoljeNieukUI.swiftmodule \
     -emit-library -static -o $A/libPoljeNieukUI.a Sources/PoljeNieukUI/*.swift

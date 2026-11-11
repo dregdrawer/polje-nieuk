@@ -97,7 +97,7 @@ struct WaveformView: View {
         return p
     }
 
-    private func draw(_ ctx: GraphicsContext, _ size: CGSize) {
+    private func draw(_ ctx: LiveGC, _ size: CGSize) {
         let w = size.width, h = size.height, mid = h / 2
         ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
         let rec = buffer.waveRecording && node.readouts[0] != 4   // looper overdub (4) keeps white
@@ -257,7 +257,7 @@ struct EQCurveView: View {
         }
     }
 
-    private func draw(_ ctx: GraphicsContext, _ size: CGSize) {
+    private func draw(_ ctx: LiveGC, _ size: CGSize) {
         let w = size.width, h = size.height
         ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
         // grid: decades and ±12 dB
@@ -309,13 +309,13 @@ struct EQCurveView: View {
                      with: .color(dragBand == b ? Theme.text : Theme.box))
             ctx.stroke(Path(ellipseIn: CGRect(x: pt.x - r, y: pt.y - r, width: r * 2, height: r * 2)),
                        with: .color(Theme.text), lineWidth: 1.2)
-            ctx.draw(Text("\(b + 1)").font(Theme.monoSmall).foregroundColor(Theme.dim),
+            ctx.draw(LiveText("\(b + 1)", size: 9, color: Theme.dim),
                      at: CGPoint(x: min(max(pt.x, 8), w - 8), y: pt.y < h / 2 ? pt.y + 13 : pt.y - 13))
         }
         if let b = dragBand {
             let fr = Double(node.base[ParametricEQ.freqIndex(b)]), g = node.base[ParametricEQ.gainIndex(b)]
             let label = String(format: fr >= 1000 ? "%.1fk Hz  %+.1f dB" : "%.0f Hz  %+.1f dB", fr >= 1000 ? fr / 1000 : fr, g)
-            ctx.draw(Text(label).font(Theme.monoSmall).foregroundColor(Theme.text), at: CGPoint(x: w / 2, y: 9))
+            ctx.draw(LiveText(label, size: 9, color: Theme.text), at: CGPoint(x: w / 2, y: 9))
         }
     }
 }

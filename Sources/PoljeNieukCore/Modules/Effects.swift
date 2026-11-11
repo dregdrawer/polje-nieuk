@@ -302,8 +302,10 @@ final class ReverbNode: DSPNode {
     /// Input balance (slow): plate and hall tanks blend the two sides completely, so the wet signal is
     /// leaned toward the side the sound comes from. Mono input: no lean, full width.
     private var balEnvL: Float = 0, balEnvR: Float = 0
+    /// the lean's smoothing (worked out once, not per sample)
+    private lazy var leanC: Float = 1 - expf(-1 / (0.25 * Float(sampleRate)))
     @inline(__always) private func lean(_ l: Float, _ r: Float) -> (Float, Float) {
-        let c: Float = 1 - expf(-1 / (0.25 * Float(sampleRate)))
+        let c = leanC
         balEnvL += (abs(l) - balEnvL) * c
         balEnvR += (abs(r) - balEnvR) * c
         let sum = balEnvL + balEnvR
@@ -546,8 +548,12 @@ final class ReverbNode: DSPNode {
             let xL = x + side, xR = x - side
             hLfo += lfoInc
             if hLfo > 2 * .pi { hLfo -= 2 * .pi }
+            // the two modulated lines' wobble: one sine pair per sample (was a sine per line, in double)
+            let s0 = sinf(Float(hLfo)), c0 = cosf(Float(hLfo))
+            let m1 = modDepth * Double(1 + s0 * 0.5403023 + c0 * 0.8414710)      // sin(t + 1)
+            let m6 = modDepth * Double(1 + s0 * 0.9601703 - c0 * 0.2794155)      // sin(t + 6)
             for k in 0..<8 {
-                let mod = (k == 1 || k == 6) ? modDepth * (1 + sin(hLfo + Double(k))) : 0
+                let mod = k == 1 ? m1 : (k == 6 ? m6 : 0)
                 let y = hLines[k].read(Double(hLen[k] - 1) + mod)
                 hDamp[k] += (y - hDamp[k]) * dampC
                 hv[k] = hDamp[k]

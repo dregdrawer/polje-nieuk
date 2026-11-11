@@ -65,7 +65,7 @@ struct ReadoutView: View {
                         let r = CGRect(x: CGFloat(k) * w + 1, y: 0, width: w - 2, height: size.height)
                         ctx.fill(Path(r), with: .color(k == active ? Theme.text.opacity(0.18) : Theme.row))
                         let t = SegmentsLayout.types[clampTypeIndex(patchNode.params["t\(k + 1)"] ?? 0)]
-                        ctx.draw(Text(t).font(Theme.monoSmall).foregroundColor(Theme.dim), at: CGPoint(x: r.midX, y: 8))
+                        ctx.draw(LiveText(t, size: 9, color: Theme.dim), at: CGPoint(x: r.midX, y: 8))
                         if k == active {
                             ctx.fill(Path(CGRect(x: r.minX, y: size.height - v * (size.height - 16), width: r.width, height: v * (size.height - 16))),
                                      with: .color(Theme.text.opacity(0.7)))

@@ -35,7 +35,7 @@ struct ScopeView: View {
         f <= 0 ? "" : (f >= 1000 ? String(format: "%.2f kHz", f / 1000) : (f >= 10 ? String(format: "%.1f Hz", f) : String(format: "%.2f Hz", f)))
     }
 
-    private func draw(_ ctx: GraphicsContext, _ size: CGSize, hasA: Bool, hasB: Bool) {
+    private func draw(_ ctx: LiveGC, _ size: CGSize, hasA: Bool, hasB: Bool) {
         let n = ScopeNode.points
         let r = node.readouts
         let w = size.width, top: CGFloat = hasA && hasB ? 34 : 20, h = max(size.height - top - 14, 10)
@@ -80,12 +80,11 @@ struct ScopeView: View {
         if hasB { lines.append((reading(1), Theme.dim)) }
         if lines.isEmpty { lines = [("patch something into A or B", Theme.dim)] }
         for (k, l) in lines.enumerated() {
-            ctx.draw(Text(l.0).font(Theme.mono).foregroundStyle(l.1), at: CGPoint(x: 2, y: 8 + CGFloat(k) * 15), anchor: .leading)
+            ctx.draw(LiveText(l.0, size: 11, color: l.1), at: CGPoint(x: 2, y: 8 + CGFloat(k) * 15), anchor: .leading)
         }
         let ms = patchNode.params["time"] ?? 20
         let timeText = ms >= 1000 ? String(format: "%.1f s", ms / 1000) : String(format: "%.0f ms", ms)
-        ctx.draw(Text("±\(full * 10 >= 1 ? String(format: "%g", full * 10) : String(format: "%.2g", full * 10)) V · \(timeText)")
-                    .font(Theme.mono).foregroundStyle(Theme.dim),
+        ctx.draw(LiveText("±\(full * 10 >= 1 ? String(format: "%g", full * 10) : String(format: "%.2g", full * 10)) V · \(timeText)", size: 11, color: Theme.dim),
                  at: CGPoint(x: w - 2, y: size.height - 5), anchor: .trailing)
     }
 }

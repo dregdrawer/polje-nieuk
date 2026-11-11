@@ -65,7 +65,7 @@ struct RackView: View {
         }
     }
 
-    private func drawRoll(_ ctx: GraphicsContext, _ size: CGSize) {
+    private func drawRoll(_ ctx: LiveGC, _ size: CGSize) {
         let cw = size.width / CGFloat(max(len, 1)), rh = size.height / 16
         ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
         for lane in 0..<RackLayout.pads where lane % 2 == 1 {
@@ -125,7 +125,7 @@ struct RackView: View {
         .padding(4)
         .frame(height: 42)
         .frame(maxWidth: .infinity)
-        .background(LiveCanvas(signature: { LiveSig.q(min(max(node.readouts[1 + k], 0), 1), 8) }, every: 2) { ctx, size in
+        .background(LiveCanvas(signature: { LiveSig.q(min(max(node.readouts[1 + k], 0), 1), 8) }, every: 2, native: false) { ctx, size in   // pad buttons sit on top
             ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
             let lv = CGFloat(min(max(node.readouts[1 + k], 0), 1))
             if lv > 0.01 { ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.text.opacity(0.35 * lv))) }
@@ -211,7 +211,7 @@ struct DrumSynthView: View {
         }
     }
 
-    private func drawRoll(_ ctx: GraphicsContext, _ size: CGSize) {
+    private func drawRoll(_ ctx: LiveGC, _ size: CGSize) {
         let cw = size.width / CGFloat(max(len, 1)), rh = Self.laneHeight
         ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
         for lane in 0..<V where lane % 2 == 1 {
@@ -264,7 +264,7 @@ struct DrumSynthView: View {
         .padding(4)
         .frame(height: 42)
         .frame(maxWidth: .infinity)
-        .background(LiveCanvas(signature: { LiveSig.q(min(max(node.readouts[1 + v], 0), 1), 8) }, every: 2) { ctx, size in
+        .background(LiveCanvas(signature: { LiveSig.q(min(max(node.readouts[1 + v], 0), 1), 8) }, every: 2, native: false) { ctx, size in   // pad buttons sit on top
             ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
             let lv = CGFloat(min(max(node.readouts[1 + v], 0), 1))
             if lv > 0.01 { ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.text.opacity(0.35 * lv))) }
@@ -288,7 +288,7 @@ struct DrumSynthView: View {
 
 /// The step grid for drum / piano rolls and seq~: a faint line on every step, a stronger one on each beat
 /// and the strongest on each bar — placed from the division, so 1/32 shows 8 steps per beat, 1/8 shows 2.
-func drawStepGrid(_ ctx: GraphicsContext, _ size: CGSize, steps len: Int, division: Float?) {
+func drawStepGrid(_ ctx: LiveGC, _ size: CGSize, steps len: Int, division: Float?) {
     let cw = size.width / CGFloat(max(len, 1))
     let beats = Divisions.beats(division ?? Float(Divisions.index("1/16")))     // beats per step
     for s in 1..<max(len, 1) {

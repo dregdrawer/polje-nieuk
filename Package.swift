@@ -22,7 +22,10 @@ let package = Package(
             publicHeadersPath: "bridge/include",
             cxxSettings: [.define("TEST"), .headerSearchPath("."), .unsafeFlags(["-w"])]
         ),
-        .target(name: "PoljeNieukCore", dependencies: ["MutableDSP"]),
+        // the audio engine: no runtime exclusivity checks on every per-sample access to a module's stored arrays
+        // (only the audio thread touches them while it runs). Release builds are whole-module optimised.
+        .target(name: "PoljeNieukCore", dependencies: ["MutableDSP"],
+                swiftSettings: [.unsafeFlags(["-enforce-exclusivity=unchecked"])]),
         .target(name: "PoljeNieukUI", dependencies: ["PoljeNieukCore"]),
         .executableTarget(name: "PoljeNieukMac", dependencies: ["PoljeNieukUI"]),
         .executableTarget(name: "SelfTest", dependencies: ["PoljeNieukCore", "PoljeNieukUI"]),

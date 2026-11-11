@@ -96,6 +96,7 @@ struct ModuleBox: View {
         }
         .frame(width: width, height: h)
         .environment(\.liveDisplaysOn, onScreen(h))
+        .environment(\.liveOpacity, node.bypassed ? 0.35 : 1)
         .helpTopic(model, "box-\(node.id)", PortHelp.module(spec).0, PortHelp.module(spec).1)
         .overlay(alignment: .bottomTrailing) {
             if !model.threeD && !node.collapsed && (BoxLayout.resizable(node.kind).width || BoxLayout.resizable(node.kind).height) {
@@ -561,45 +562,48 @@ struct ParamRow: View {
         }
     }
 
+    @ViewBuilder
     private func rowContent(fill: CGFloat, valueText: String, recOn: Bool, trailingSpace: CGFloat = 0) -> some View {
-        ZStack(alignment: .leading) {
-            Rectangle().fill(Theme.row)
-            ZStack(alignment: .leading) {
-                if automated, let live {
+        if let live {
+            // a live row (modulated or automated): drawn natively in one go — a tick redraws only this row
+            let name = spec.name, automated = automated, idx = index, sp = spec
+            LiveCanvas(signature: {
+                var h = LiveSig.q(sp.normalized(live.params[idx]), 240)
+                LiveSig.mix(&h, sp.display(live.params[idx]).hashValue)
+                return h
+            }, every: 2) { ctx, size in
+                let v = live.params[idx]
+                let n = CGFloat(sp.normalized(v))
+                ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
+                if automated {
                     // the bar follows what the automation is playing
-                    LiveView(signature: { LiveSig.q(spec.normalized(live.params[index]), 120) }, every: 2) {
-                        Rectangle().fill(Theme.fill)
-                            .frame(width: width * CGFloat(spec.normalized(live.params[index])))
-                    }
-                    Rectangle().fill(Theme.rec).frame(width: 2)
+                    ctx.fill(Path(CGRect(x: 0, y: 0, width: size.width * n, height: size.height)), with: .color(Theme.fill))
+                    ctx.fill(Path(CGRect(x: 0, y: 0, width: 2, height: size.height)), with: .color(Theme.rec))
                 } else {
-                    Rectangle().fill(recOn ? Theme.rec.opacity(0.5) : Theme.fill)
-                        .frame(width: width * fill)
+                    // the knob's own position, and a tick where the modulation has taken it
+                    ctx.fill(Path(CGRect(x: 0, y: 0, width: size.width * fill, height: size.height)),
+                             with: .color(recOn ? Theme.rec.opacity(0.5) : Theme.fill))
+                    ctx.fill(Path(CGRect(x: max(0, size.width * n - 1), y: 0, width: 2, height: size.height)), with: .color(Theme.text))
                 }
-                if let live, !automated {
-                    LiveView(signature: { LiveSig.q(spec.normalized(live.params[index]), 120) }, every: 2) {
-                        let v = live.params[index]
-                        Rectangle().fill(Theme.text)
-                            .frame(width: 2)
-                            .offset(x: max(0, width * CGFloat(spec.normalized(v)) - 1))
-                    }
-                }
+                ctx.draw(LiveText(name, size: 11, color: Theme.dim), at: CGPoint(x: 6, y: size.height / 2), anchor: .leading)
+                ctx.draw(LiveText(sp.display(v), size: 11, color: Theme.text),
+                         at: CGPoint(x: size.width - 6 - trailingSpace, y: size.height / 2), anchor: .trailing)
             }
-            HStack {
-                Text(spec.name).foregroundStyle(Theme.dim)
-                Spacer(minLength: 4)
-                if let live {
-                    LiveView(signature: { spec.display(live.params[index]).hashValue }, every: 2) {
-                        Text(spec.display(live.params[index])).foregroundStyle(Theme.text)
-                    }
-                } else {
+        } else {
+            ZStack(alignment: .leading) {
+                Rectangle().fill(Theme.row)
+                Rectangle().fill(recOn ? Theme.rec.opacity(0.5) : Theme.fill)
+                    .frame(width: width * fill)
+                HStack {
+                    Text(spec.name).foregroundStyle(Theme.dim)
+                    Spacer(minLength: 4)
                     Text(valueText).foregroundStyle(recOn ? Theme.rec : Theme.text)
                 }
+                .font(Theme.mono)
+                .lineLimit(1)
+                .padding(.leading, 6)
+                .padding(.trailing, 6 + trailingSpace)
             }
-            .font(Theme.mono)
-            .lineLimit(1)
-            .padding(.leading, 6)
-            .padding(.trailing, 6 + trailingSpace)
         }
     }
 }
