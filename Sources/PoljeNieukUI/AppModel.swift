@@ -1009,6 +1009,15 @@ public final class AppModel: ObservableObject {
         // (each change redraws the patch, so this matters on a big one)
         if !spec.params[index].isTrigger, (patch.nodes[i].params[key] ?? spec.params[index].def) == value { return }
         defer { if linked { syncLinked(id, spec, index, value) } }
+        if spec.kind == "seq", key == "len", let seq = host.node(id) as? SeqNode {
+            // growing past the old length: the new steps start as copies of the pattern (16 → 32 plays it twice)
+            let old = SeqNode.length(patch.nodes[i].params[key] ?? spec.params[index].def), new = SeqNode.length(value)
+            if new > old {
+                for k in old..<new { seq.pitches[k] = seq.pitches[k % old]; seq.gates[k] = seq.gates[k % old] }
+                patch.nodes[i].data["pitch"] = (0..<SeqNode.steps).map { seq.pitches[$0] }
+                patch.nodes[i].data["gate"] = (0..<SeqNode.steps).map { seq.gates[$0] }
+            }
+        }
         if key == "div", Self.patternKinds.contains(spec.kind) {
             rescalePattern(id, spec, from: patch.nodes[i].params[key] ?? spec.params[index].def, to: value)
         }

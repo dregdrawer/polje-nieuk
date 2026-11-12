@@ -276,7 +276,14 @@ public final class KeysNode: DSPNode {
 public final class SeqNode: DSPNode {
     // 0 length, 1 division, 2 direction, 3 gate length, 4 scale, 5 transpose
     // inputs: clock, reset   outputs: pitch, gate
-    public static let steps = 16
+    public static let steps = 64
+    /// The lengths it plays: every one up to 16, then 32 and 64.
+    public static let lengths: [Float] = (1...16).map(Float.init) + [32, 64]
+    @inline(__always) public static func length(_ v: Float) -> Int {
+        guard v.isFinite else { return 8 }
+        if v <= 16 { return min(max(Int(v.rounded()), 1), 16) }
+        return v < 48 ? 32 : 64
+    }
     public let pitches: UnsafeMutablePointer<Float>    // semitones from middle C
     public let gates: UnsafeMutablePointer<Float>      // 0 / 1
     private var step = -1
@@ -301,11 +308,13 @@ public final class SeqNode: DSPNode {
     public override func setData(_ key: String, _ values: [Float]) {
         let dst = key == "pitch" ? pitches : (key == "gate" ? gates : nil)
         guard let dst else { return }
-        for k in 0..<min(values.count, Self.steps) { dst[k] = values[k].isFinite ? values[k] : 0 }
+        // an older, shorter pattern (16 steps) repeats to fill the rest
+        guard !values.isEmpty else { return }
+        for k in 0..<Self.steps { let v = values[k % values.count]; dst[k] = v.isFinite ? v : 0 }
     }
 
     public override func process(frames: Int, inputs: UnsafePointer<UnsafePointer<Float>>, connected: UInt64, ctx: ProcessContext) {
-        let len = clampIndex(params[0] - 1, Self.steps) + 1
+        let len = Self.length(params[0])
         let div = Divisions.beats(params[1])
         let direction = clampIndex(params[2], 4)
         let gateLen = min(max(params[3], 0.05), 1)

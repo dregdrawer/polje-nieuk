@@ -190,7 +190,9 @@ public enum ModuleRegistry {
         ModuleSpec(kind: "seq", name: "seq~", category: "Sequencing",
                    summary: "16-step pitch + gate sequencer",
                    aliases: ["sequencer", "step", "steps", "pattern"], inputs: ["clock", "reset"], outputs: ["pitch", "gate"],
-                   params: [.integer("len", "length", 1, 16, 8),
+                   params: [{ var p = ParamSpec.integer("len", "length", 1, 64, 8)
+                              p.allowed = SeqNode.lengths                  // 1 … 16, then 32 and 64
+                              return p }(),
                             .choice("div", "division", Divisions.names, def: Divisions.index("1/16")),
                             .choice("dir", "direction", ["forward", "backward", "ping-pong", "random"], def: 0),
                             ParamSpec("gatelen", "gate length", 0.05, 1, 0.5, unit: "%"),

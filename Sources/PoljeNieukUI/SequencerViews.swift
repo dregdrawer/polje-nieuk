@@ -104,6 +104,8 @@ struct SeqView: View {
     @State private var paintGate: Float?
 
     private let range: Float = 24
+    /// Columns shown: 16, or the whole pattern when it's 32 / 64 steps.
+    private var cols: Int { max(16, SeqNode.length(patchNode.params["len"] ?? 8)) }
     private let gateRow: CGFloat = 16
 
     var body: some View {
@@ -127,8 +129,8 @@ struct SeqView: View {
     }
 
     private func edit(_ p: CGPoint, start: CGPoint, _ size: CGSize) {
-        let colW = size.width / CGFloat(SeqNode.steps)
-        let col = min(max(Int(p.x / colW), 0), SeqNode.steps - 1)
+        let colW = size.width / CGFloat(cols)
+        let col = min(max(Int(p.x / colW), 0), cols - 1)
         let barH = size.height - gateRow - 2
         if start.y > barH {
             // gate row: tap toggles, drag paints the same state
@@ -146,10 +148,10 @@ struct SeqView: View {
     }
 
     private func draw(_ ctx: LiveGC, _ size: CGSize) {
-        let n = SeqNode.steps
+        let n = cols
         let colW = size.width / CGFloat(n)
         let barH = size.height - gateRow - 2
-        let len = Int((patchNode.params["len"] ?? 8).rounded())
+        let len = SeqNode.length(patchNode.params["len"] ?? 8)
         let cur = model.isRunning ? Int(node.readouts[0]) : -1      // no playing step while audio is off
         ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
         // pitch grid: a faint line per semitone when there's room, stronger lines (labelled) per octave
@@ -172,9 +174,10 @@ struct SeqView: View {
             if c == cur { ctx.fill(Path(CGRect(x: x, y: 0, width: colW, height: size.height)), with: .color(Theme.text.opacity(0.12))) }
             let v = CGFloat(node.pitches[c] / range)
             let y0 = barH / 2, y1 = barH / 2 - v * barH / 2
-            let r = CGRect(x: x + 2, y: min(y0, y1), width: colW - 4, height: max(abs(y1 - y0), 1.5))
+            let gap: CGFloat = colW < 10 ? 1 : 2
+            let r = CGRect(x: x + gap, y: min(y0, y1), width: colW - 2 * gap, height: max(abs(y1 - y0), 1.5))
             ctx.fill(Path(r), with: .color(active ? Theme.text : Theme.faint))   // same solid colour as the gate buttons
-            let g = CGRect(x: x + 2, y: barH + 2, width: colW - 4, height: gateRow - 2)
+            let g = CGRect(x: x + gap, y: barH + 2, width: colW - 2 * gap, height: gateRow - 2)
             ctx.fill(Path(g),
                      with: .color(node.gates[c] > 0.5 ? (active ? Theme.text : Theme.dim) : Theme.box))
 

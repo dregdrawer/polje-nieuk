@@ -847,6 +847,25 @@ do {
     }
 }
 
+print("seq~ up to 64 steps")
+do {
+    let spec = ModuleRegistry.spec("seq")!.params[0]
+    check(spec.snapped(17) == 16 && spec.snapped(25) == 32 && spec.snapped(50) == 64 && spec.snapped(9) == 9,
+          "length snaps to 1…16, 32, 64")
+    check(spec.value(fromNormalized: 1) == 64 && spec.value(fromNormalized: 16.0 / 17) == 32 && spec.value(fromNormalized: 0) == 1,
+          "sliding the length row goes 1 … 16, then 32, then 64")
+    // 32 steps: steps 16…31 are a fifth up, so the 17th note played is +7
+    let pitch: [Float] = (0..<64).map { $0 < 16 ? 0 : 7 }, gate = [Float](repeating: 1, count: 64)
+    let (_, o) = runSource("seq", params: ["len": 32, "div": Float(Divisions.index("1/16"))], data: ["pitch": pitch, "gate": gate], seconds: 4.2)
+    let notes = notesAtGates(o[0], o[1])
+    check(notes.count >= 33 && notes[15] == 0 && notes[16] == 7 && notes[31] == 7 && notes[32] == 0,
+          "length 32 plays all 32 steps, then loops (\(notes.prefix(34)))")
+    // an old 16-step pattern repeats to fill the longer steps
+    let (_, o2) = runSource("seq", params: ["len": 32], data: ["pitch": (0..<16).map { Float($0) }, "gate": [Float](repeating: 1, count: 16)], seconds: 4.2)
+    let n2 = notesAtGates(o2[0], o2[1])
+    check(n2.count >= 18 && n2[16] == 0 && n2[17] == 1, "a saved 16-step pattern fills 32 steps by repeating")
+}
+
 print("seq~ off steps hold the pitch")
 do {
     // steps: 0 C on, 1 +7 off, 2 +12 on, 3 +3 off …
@@ -921,6 +940,8 @@ print("Undo / redo: the engine follows the patch (patterns, knobs, starter beats
 do {
     let h = GraphHost(sampleRate: sr)
     let rack = PatchNode(kind: "rack", x: 0, y: 0), ds = PatchNode(kind: "drumsynth", x: 0, y: 300)
+    /// seq~ holds 64 steps: a shorter saved pattern repeats to fill them
+    func steps64(_ v: [Float]) -> [Float] { (0..<SeqNode.steps).map { v[$0 % v.count] } }
     let sq = PatchNode(kind: "seq", x: 0, y: 600), rl = PatchNode(kind: "roll", x: 0, y: 900), dr = PatchNode(kind: "drums", x: 0, y: 1200)
     var p0 = Patch(); p0.nodes = [rack, ds, sq, rl, dr]
     h.load(p0)
@@ -951,8 +972,8 @@ do {
         return engine(rack.id, "hits") == (p.nodes[0].data["hits"] ?? rackStart)
             && engine(ds.id, "hits") == (p.nodes[1].data["hits"] ?? dsStart)
             && d.base[si] == (p.nodes[1].params["swing"] ?? 0)
-            && engine(sq.id, "pitch") == (p.nodes[2].data["pitch"] ?? [Float](repeating: 0, count: 16))
-            && engine(sq.id, "gate") == (p.nodes[2].data["gate"] ?? [Float](repeating: 1, count: 16))
+            && engine(sq.id, "pitch") == steps64(p.nodes[2].data["pitch"] ?? [Float](repeating: 0, count: 16))
+            && engine(sq.id, "gate") == steps64(p.nodes[2].data["gate"] ?? [Float](repeating: 1, count: 16))
             && engine(rl.id, "notes") == (p.nodes[3].data["notes"] ?? [Float](repeating: -1, count: 32))
             && engine(dr.id, "hits") == (p.nodes[4].data["hits"] ?? [Float](repeating: 0, count: 256))
     }

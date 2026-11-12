@@ -19,6 +19,8 @@ public struct ParamSpec: Sendable {
     public let unit: String
     public let kind: ParamKind
     public let curve: ParamCurve
+    /// Only these values (ascending): the row slides through them evenly (seq~ length: 1…16, 32, 64).
+    public var allowed: [Float]? = nil
 
     public init(_ key: String, _ name: String, _ min: Float, _ max: Float, _ def: Float,
                 unit: String = "", kind: ParamKind = .continuous, curve: ParamCurve = .linear) {
@@ -41,8 +43,18 @@ public struct ParamSpec: Sendable {
 
     public var isTrigger: Bool { if case .trigger = kind { return true }; return false }
 
+    /// The nearest allowed value (for parameters with a fixed list; otherwise `v`).
+    public func snapped(_ v: Float) -> Float {
+        guard let a = allowed, !a.isEmpty, v.isFinite else { return v }
+        return a.min { abs($0 - v) < abs($1 - v) } ?? v
+    }
+
     public func normalized(_ v: Float) -> Float {
         guard v.isFinite else { return 0 }
+        if let a = allowed, a.count > 1 {
+            let s = snapped(v)
+            return Float(a.firstIndex(of: s) ?? 0) / Float(a.count - 1)
+        }
         let n: Float
         switch curve {
         case .linear: n = (v - min) / (max - min)
@@ -61,6 +73,7 @@ public struct ParamSpec: Sendable {
 
     public func value(fromNormalized n: Float) -> Float {
         let c = n.isFinite ? Swift.min(Swift.max(n, 0), 1) : 0
+        if let a = allowed, a.count > 1 { return a[Swift.min(Int((c * Float(a.count - 1)).rounded()), a.count - 1)] }
         var v: Float
         switch curve {
         case .linear: v = min + (max - min) * c
