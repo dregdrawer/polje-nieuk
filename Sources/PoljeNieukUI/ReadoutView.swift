@@ -39,7 +39,7 @@ struct ReadoutView: View {
         case "seq":
             if let n = node as? SeqNode { SeqView(node: n, model: model, patchNode: patchNode).padding(.vertical, 4) }
         case "turing":
-            if let node { TuringView(node: node, model: model).padding(.vertical, 4) }
+            if let t = node as? TuringNode { TuringView(node: t, model: model).padding(.vertical, 4) }
         case "roll":
             if let n = node as? RollNode { GridEditor(kind: .roll(n), model: model, patchNode: patchNode).padding(.vertical, 4) }
         case "drums":

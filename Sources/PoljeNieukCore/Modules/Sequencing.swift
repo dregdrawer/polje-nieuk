@@ -364,7 +364,29 @@ public final class TuringNode: DSPNode {
     // readouts: 0 register, 1 length, 2 cv, 4 which loop steps play (bits), 5 range,
     //           8… the loop's notes from the current step on (semitones)
     public static let historyLength = 16
-    private var reg: UInt32 = 0xA5C3
+    /// The loop lengths: every one from 2 to 16, then 32 and 64.
+    public static let lengths: [Float] = (2...16).map(Float.init) + [32, 64]
+    @inline(__always) public static func length(_ v: Float) -> Int {
+        guard v.isFinite else { return 8 }
+        if v <= 16 { return min(max(Int(v.rounded()), 2), 16) }
+        return v < 48 ? 32 : 64
+    }
+    public static let maxLength = 64
+    private static let seed: UInt64 = 0x3B91_6E2D_A5C3
+    private var reg: UInt64 = TuringNode.seed
+    /// For the display (written by the audio thread, read when drawing): the register, which loop steps
+    /// play (bits), and the loop's notes from the current step on.
+    public private(set) var regNow: UInt64 = TuringNode.seed
+    public private(set) var playsBits: UInt64 = 0
+    public let loopNotes: UnsafeMutablePointer<Float>
+    private var displayCountdown = 0
+
+    public override init(spec: ModuleSpec, sampleRate: Double) {
+        loopNotes = .allocate(capacity: Self.maxLength)
+        loopNotes.initialize(repeating: 0, count: Self.maxLength)
+        super.init(spec: spec, sampleRate: sampleRate)
+    }
+    deinit { loopNotes.deallocate() }
     private var gateLeft = 0
     private var clock = StepClock()
     private var rng = XorShift(seed: 0x7E57_1A9B)
@@ -374,7 +396,7 @@ public final class TuringNode: DSPNode {
 
     public override func process(frames: Int, inputs: UnsafePointer<UnsafePointer<Float>>, connected: UInt64, ctx: ProcessContext) {
         let change = min(max(params[0], 0), 1)
-        let len = UInt32(clampIndex(params[1] - 2, 15) + 2)
+        let len = UInt64(Self.length(params[1]))
         let range = Float(clampIndex(params[2] - 1, 4) + 1)
         let scale = clampIndex(params[3], Scales.names.count)
         let div = Divisions.beats(params[4])
@@ -384,10 +406,10 @@ public final class TuringNode: DSPNode {
         let hasClock = isConnected(connected, 0), hasReset = isConnected(connected, 1)
         let ck = inputs[0], rs = inputs[1]
         let pOut = outputs[0], gOut = outputs[1], cOut = outputs[2]
-        let mask: UInt32 = (1 << len) - 1
+        let mask: UInt64 = len >= 64 ? ~0 : (1 << len) - 1
         if ctx.stopPending { clock.restart() }
         for i in 0..<frames {
-            if hasReset && clock.resetEdge.rising(rs[i]) { reg = 0xA5C3; clock.restart() }
+            if hasReset && clock.resetEdge.rising(rs[i]) { reg = Self.seed; clock.restart() }
             if clock.tick(beat: ctx.beat[i], div: div, spb: ctx.samplesPerBeat, clockIn: hasClock ? ck[i] : nil, sampleRate: sampleRate, running: ctx.running) {
                 // the bit leaving the loop comes back in — flipped with probability `change`
                 var bit = (reg >> (len - 1)) & 1
@@ -412,23 +434,34 @@ public final class TuringNode: DSPNode {
         readouts[0] = Float(reg & 0xFFFF)
         readouts[1] = Float(len)
         readouts[2] = cvNow
+        readouts[3] = Float((reg >> 16) & 0xFFFF)          // the rest of the register (for the display's fingerprint)
         readouts[5] = range
+        readouts[6] = Float((reg >> 32) & 0xFFFF)
+        readouts[7] = Float((reg >> 48) & 0xFFFF)
+        regNow = reg & mask
         // the display: the loop as it will play from here with the current settings — step 0 is the one
         // sounding now, then the next ones (as if nothing mutates), so changing notes / length / range /
-        // scale / octave shows straight away
-        var st = reg, bits: UInt32 = 0
-        for k in 0..<Int(len) {
-            if Self.plays(st, density) { bits |= 1 << UInt32(k) }
-            readouts[8 + k] = Scales.quantize(Float(st & 0xFF) / 255 * range * 12, scale) + octave
-            st = ((st << 1) | ((st >> (len - 1)) & 1)) & mask
+        // scale / octave shows straight away. (Worked out every few blocks: up to 64 notes.)
+        displayCountdown -= 1
+        if displayCountdown <= 0 {
+            displayCountdown = 4
+            var st = reg & mask, bits: UInt64 = 0
+            for k in 0..<Int(len) {
+                if Self.plays(st, density) { bits |= 1 << UInt64(k) }
+                loopNotes[k] = Scales.quantize(Float(st & 0xFF) / 255 * range * 12, scale) + octave
+                st = ((st << 1) | ((st >> (len - 1)) & 1)) & mask
+            }
+            playsBits = bits
+            // a fingerprint of the shown loop, so the display redraws when any of it changes
+            var h: UInt32 = UInt32(truncatingIfNeeded: bits ^ (bits >> 32))
+            for k in 0..<Int(len) { h = h &* 31 &+ UInt32(bitPattern: Int32(loopNotes[k])) }
+            readouts[4] = Float(h & 0xFF_FFFF)
         }
-        readouts[3] = 0
-        readouts[4] = Float(bits)
     }
 
     /// Whether a step with register `r` plays, for the "notes" amount (0 = none … 1 = every step).
     /// Derived from the register so a locked loop keeps its rhythm.
-    @inline(__always) static func plays(_ r: UInt32, _ density: Float) -> Bool {
+    @inline(__always) static func plays(_ r: UInt64, _ density: Float) -> Bool {
         density >= 1 || Float(((r &* 0x9E37_79B1) >> 24) & 0xFF) / 256 < density
     }
 }

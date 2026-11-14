@@ -136,9 +136,6 @@ enum BoxLayout {
         switch node.kind {
         case "slider": return max(width(node.kind), CGFloat(ControlsLayout.count(node.params["count"] ?? 2)) * 44 + 20 + sideOutletColumn)
         case "knob": return max(width(node.kind), CGFloat(min(ControlsLayout.count(node.params["count"] ?? 2), 4)) * 56 + 20 + sideOutletColumn)
-        case "seq":   // wider for 32 / 64 steps, so each step stays big enough to edit
-            let n = SeqNode.length(node.params["len"] ?? 8)
-            return n > 32 ? 980 : (n > 16 ? 560 : width(node.kind))
         default: return width(node.kind)
         }
     }

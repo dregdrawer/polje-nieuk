@@ -882,6 +882,21 @@ do {
     check(abs(w.waveData[0] - 1) < 1e-4 && w.waveData.count == 1024, "drawn waves are saved and loaded")
 }
 
+print("turing~ loops up to 64 steps")
+do {
+    let spec = ModuleRegistry.spec("turing")!.params[1]
+    check(spec.snapped(20) == 16 && spec.snapped(40) == 32 && spec.snapped(60) == 64 && spec.snapped(5) == 5 && spec.snapped(1) == 2,
+          "length snaps to 2…16, 32, 64")
+    for len in [32, 64] {
+        // locked (change 0): the pitch sequence repeats exactly every `len` steps, and not sooner
+        let (_, o) = runSource("turing", params: ["change": 0, "len": Float(len), "notes": 1, "div": Float(Divisions.index("1/32"))], seconds: Double(len) * 3 * 0.0625 + 0.3)
+        let n = notesAtGates(o[0], o[1])
+        let ok = n.count >= len * 2 + 1 && (0..<len).allSatisfy { n[$0] == n[$0 + len] }
+        let shorter = (1..<len).filter { len % $0 == 0 }.contains { p in (0..<len).allSatisfy { n[$0] == n[($0 + p) % len] } }
+        check(ok && !shorter, "a locked \(len)-step loop repeats every \(len) steps")
+    }
+}
+
 print("seq~ up to 64 steps")
 do {
     let spec = ModuleRegistry.spec("seq")!.params[0]
@@ -1488,7 +1503,8 @@ do {
     check(abs((t1[0][i] - t0[0][i]) - 0.1) < 1e-4, "octave +1 moves the whole melody up exactly an octave")
     let (none, _) = runSource("turing", params: ["change": 0, "len": 8, "notes": 0], seconds: 0.5)
     let (all, _) = runSource("turing", params: ["change": 0, "len": 8, "notes": 1], seconds: 0.5)
-    check(none.readouts[4] == 0 && all.readouts[4] == 255 && Set((8..<16).map { all.readouts[$0] }).count > 1,
+    let tn = none as! TuringNode, ta = all as! TuringNode
+    check(tn.playsBits == 0 && ta.playsBits == 255 && Set((0..<8).map { ta.loopNotes[$0] }).count > 1,
           "the display's loop follows the notes amount at once (none at 0, all 8 at 1)")
     let mixRun = runModule("mix", params: ["chans": 0, "g1": 0.5], input: sine(200, 0.5, 0.8))
     let m0 = mixRun.node.readouts[MixerLayout.channelMeterBase]

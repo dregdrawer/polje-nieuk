@@ -203,7 +203,9 @@ public enum ModuleRegistry {
                    summary: "Looping random sequencer (shift register): lock it or let it mutate",
                    aliases: ["turing", "machine", "shift", "random", "generative"], inputs: ["clock", "reset"], outputs: ["pitch", "gate", "cv"],
                    params: [ParamSpec("change", "change", 0, 1, 0.15, unit: "%"),
-                            .integer("len", "length", 2, 16, 8),
+                            { var p = ParamSpec.integer("len", "length", 2, 64, 8)
+                              p.allowed = TuringNode.lengths               // 2 … 16, then 32 and 64
+                              return p }(),
                             .integer("range", "range oct", 1, 4, 2),
                             .choice("scale", "scale", Scales.names, def: 7),
                             .choice("div", "division", Divisions.names, def: Divisions.index("1/16")),

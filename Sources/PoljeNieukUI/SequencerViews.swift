@@ -205,7 +205,7 @@ struct SeqView: View {
 // MARK: - turing~
 
 struct TuringView: View {
-    let node: DSPNode
+    let node: TuringNode
     let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
 
     var body: some View {
@@ -222,31 +222,33 @@ struct TuringView: View {
             return
         }
         let r = node.readouts
-        let reg = UInt32(max(fin(r[0]), 0))
-        let len = max(min(Int(fin(r[1])), 16), 2)
+        let reg = node.regNow
+        let len = max(min(Int(fin(r[1])), TuringNode.maxLength), 2)
         // register
         let regH: CGFloat = 12
         let cw = size.width / CGFloat(len)
         for b in 0..<len {
             let bit = len - 1 - b                         // leftmost = oldest bit in the loop
-            let on = (reg >> UInt32(bit)) & 1 == 1
-            let cell = CGRect(x: CGFloat(b) * cw + 1, y: 0, width: cw - 2, height: regH - 3)
+            let on = (reg >> UInt64(bit)) & 1 == 1
+            let cg: CGFloat = cw < 8 ? 0.5 : 1
+            let cell = CGRect(x: CGFloat(b) * cw + cg, y: 0, width: cw - 2 * cg, height: regH - 3)
             ctx.fill(Path(cell), with: .color(on ? Theme.text : Theme.row))
         }
         // the loop as it will play from now: step 0 (left, highlighted) is sounding, then the next ones.
         // Dark = plays, plain box colour = silent step (holds the pitch). Follows notes / length / range / scale at once.
         let top = regH + 3, bottom = size.height - 8
-        let gates = UInt32(max(fin(r[4]), 0))
+        let gates = node.playsBits
         var notes: [Float] = []
-        for k in 0..<len { notes.append(fin(r[8 + k])) }
+        for k in 0..<len { notes.append(fin(node.loopNotes[k])) }
         let lo = notes.min() ?? 0, hi = max(notes.max() ?? 1, lo + 12)
         let sw = size.width / CGFloat(len)
         ctx.fill(Path(CGRect(x: 0, y: top, width: size.width, height: bottom - top)), with: .color(Theme.row))
         ctx.fill(Path(CGRect(x: 0, y: top, width: sw, height: bottom - top)), with: .color(Theme.text.opacity(0.1)))
         for k in 0..<len {
             let y = bottom - CGFloat((notes[k] - lo) / (hi - lo)) * (bottom - top - 4) - 4
-            let cell = CGRect(x: CGFloat(k) * sw + 1, y: y, width: sw - 2, height: 3)
-            if (gates >> UInt32(k)) & 1 == 1 { ctx.fill(Path(cell), with: .color(Theme.text)) }
+            let gap: CGFloat = sw < 8 ? 0.5 : 1
+            let cell = CGRect(x: CGFloat(k) * sw + gap, y: y, width: sw - 2 * gap, height: 3)
+            if (gates >> UInt64(k)) & 1 == 1 { ctx.fill(Path(cell), with: .color(Theme.text)) }
             else { ctx.fill(Path(cell), with: .color(Theme.box)) }          // silent step: plain, no outline
         }
         // cv now
