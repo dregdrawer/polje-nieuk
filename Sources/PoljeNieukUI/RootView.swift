@@ -265,6 +265,11 @@ public struct PoljeNieukRootView: View {
                 .help("Delete selection")
                 .helpTopic(model, "tb-delete", "delete", "Deletes the selected boxes or cable.")
 
+            Button { model.showFiles.toggle() } label: { word("browser", on: model.showFiles) }
+                .buttonStyle(.plain)
+                .help("Show / hide the browser")
+                .helpTopic(model, "tb-files", "browser", "Shows your audio files. Drag one onto a looper~, sampler~ or stretch~ to load it.")
+
             Menu {
                 // real toggles: the system draws the tick in its own column, so every label lines up
                 Toggle("Hide cables", isOn: $model.hideCables)
@@ -289,11 +294,6 @@ public struct PoljeNieukRootView: View {
             }
             .fixedSize()
             .helpTopic(model, "tb-view", "view", "How the patch is shown: hide the cables, colours, tidy, fold all boxes, 3D (and lifting sections in 3D), reset the zoom.")
-
-            Button { model.showFiles.toggle() } label: { word("browser", on: model.showFiles) }
-                .buttonStyle(.plain)
-                .help("Show / hide the browser")
-                .helpTopic(model, "tb-files", "browser", "Shows your audio files. Drag one onto a looper~, sampler~ or stretch~ to load it.")
 
             Menu {
                 Button("New…") { confirmNew = true }
