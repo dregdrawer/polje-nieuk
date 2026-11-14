@@ -529,7 +529,7 @@ func exercise(_ kind: String, params: [String: Float], seconds: Double, hostRate
 /// Sound sources and modulators keep producing output in silence; effects should settle.
 let selfSounding: Set<String> = ["clock", "keys", "seq", "turing", "roll", "drums", "lfo", "rand", "atten", "slider", "knob",
                                  "slopes", "chance", "segments", "macro", "shapes", "modal", "resonator", "looper",
-                                 "sampler", "grain", "stretch", "texture", "haze", "in", "env", "xmod"]
+                                 "sampler", "grain", "stretch", "texture", "haze", "in", "env", "xmod", "wave"]
 var moduleProblems: [String] = []
 var sweepRuns = 0
 var sweepPeak: Float = 0
@@ -845,6 +845,41 @@ do {
         }
         check(whole, "choice parameters step through their recorded values (lfo \(key))")
     }
+}
+
+print("wave~ (draw-your-own wavetable synth)")
+do {
+    /// zero crossings upward per second → frequency
+    func hz(_ x: [Float]) -> Double {
+        var c = 0
+        for i in 1..<x.count where x[i - 1] < 0 && x[i] >= 0 { c += 1 }
+        return Double(c) / (Double(x.count) / sr)
+    }
+    let (_, o) = runSource("wave", params: ["pos": 0], seconds: 1.05)
+    let f = hz(Array(o[0].suffix(Int(sr))))
+    check(abs(f - 261.63) < 2, "wave~ sine plays middle C at 0 st (\(f) Hz)")
+    let (_, o2) = runSource("wave", params: ["pos": 0, "note": 12], seconds: 1.05)
+    let f2 = hz(Array(o2[0].suffix(Int(sr))))
+    check(abs(f2 - 523.25) < 3, "+12 st is an octave up (\(f2) Hz)")
+    // position 2 = the saw (wave 3): a sharp edge, so lots of upper harmonics compared with the sine at 0
+    func roughness(_ x: [Float]) -> Float { var r: Float = 0; for i in 1..<x.count { r += abs(x[i] - x[i - 1]) }; return r }
+    let (_, sine) = runSource("wave", params: ["pos": 0], seconds: 0.5)
+    let (_, saw) = runSource("wave", params: ["pos": 2], seconds: 0.5)
+    check(roughness(Array(saw[0].suffix(12000))) > roughness(Array(sine[0].suffix(12000))) * 1.3, "position moves from the sine to the saw")
+    // a drawn square played very high stays band-limited: no step bigger than a smooth wave of that pitch could make
+    let sq = [Float](repeating: 0, count: 256 * 3) + WavetableNode.shape("square")
+    let (_, hi) = runSource("wave", params: ["pos": 3, "note": 48], data: ["wave": sq], seconds: 0.3)
+    let tail = Array(hi[0].suffix(6000))
+    let maxStep = zip(tail.dropFirst(), tail).map { abs($0 - $1) }.max() ?? 0
+    check(maxStep < 1.2, "a square drawn and played at +48 st is band-limited (largest sample step \(maxStep))")
+    // redrawing a wave is quick enough to do on every pencil move
+    let w = WavetableNode(spec: ModuleRegistry.spec("wave")!, sampleRate: sr)
+    let t0 = DispatchTime.now().uptimeNanoseconds
+    for _ in 0..<20 { w.drawn[5] = Float.random(in: -1...1); w.rebuild(frame: 0) }
+    let ms = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6 / 20
+    check(ms < 8, "rebuilding a drawn wave takes \(String(format: "%.2f", ms)) ms")
+    w.setData("wave", WavetableNode.shape("saw") + WavetableNode.shape("saw") + WavetableNode.shape("saw") + WavetableNode.shape("saw"))
+    check(abs(w.waveData[0] - 1) < 1e-4 && w.waveData.count == 1024, "drawn waves are saved and loaded")
 }
 
 print("seq~ up to 64 steps")

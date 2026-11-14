@@ -49,6 +49,8 @@ struct ReadoutView: View {
             if let node { CompView(node: node) }
         case "lfo":
             if let node { LFOView(node: node, patchNode: patchNode) }
+        case "wave":
+            if let w = node as? WavetableNode { WaveDrawView(node: w, model: model, patchNode: patchNode).padding(.vertical, 4) }
         case "scope":
             if let s = node as? ScopeNode { ScopeView(node: s, model: model, patchNode: patchNode).padding(.vertical, 4) }
         case "drumsynth":
