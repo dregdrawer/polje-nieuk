@@ -7,8 +7,10 @@ import Synchronization
 /// of band-limited tables, one per octave (the harmonics that fit under Nyquist at that pitch), rebuilt on
 /// the main thread whenever a wave changes, and handed to the audio thread through a double buffer.
 public final class WavetableNode: DSPNode {
-    // params: 0 edit wave (UI only), 1 position (0…3), 2 frequency (st), 3 fine (ct), 4 attack, 5 decay (0 = drone), 6 level
-    // inputs: 0 pitch (0.1 = 1 octave), 1 trig   outputs: out   readouts: 0 position now
+    // params: 0 edit wave (UI only), 1 position (0…3), 2 frequency (st), 3 fine (ct), 4 attack, 5 decay (0 = drone), 6 level,
+    //         7 voices (1…4)
+    // inputs: 0 pitch (0.1 = 1 octave), 1 trig, then pitch 2 / trig 2 … pitch 4 / trig 4 (one pair per extra voice)
+    // outputs: out (all voices mixed)   readouts: 0 position now
     public static let frames = 4
     /// points per drawn wave
     public static let points = 256
@@ -30,10 +32,12 @@ public final class WavetableNode: DSPNode {
     private let inUse = Atomic<Int>(0)        // the buffer it is reading
     private let blocks = Atomic<Int>(0)       // counts audio blocks (to tell whether audio is running)
 
-    private var phase: Double = 0
+    public static let maxVoices = 4
+    private var phase = [Double](repeating: 0, count: WavetableNode.maxVoices)
     private var pos: Float = 0
-    private var env: Float = 1, rising = false
-    private var trigEdge = EdgeDetector()
+    private var env = [Float](repeating: 1, count: WavetableNode.maxVoices)
+    private var rising = [Bool](repeating: false, count: WavetableNode.maxVoices)
+    private var trigEdge = [EdgeDetector](repeating: EdgeDetector(), count: WavetableNode.maxVoices)
 
     public static let presets = ["sine", "tri", "saw", "square", "pulse", "noise"]
 
@@ -147,43 +151,55 @@ public final class WavetableNode: DSPNode {
         inUse.store(buf, ordering: .releasing)
         blocks.wrappingAdd(1, ordering: .relaxed)
         let base = tables + buf * Self.bufferSize
-        let hasPitch = isConnected(connected, 0), hasTrig = isConnected(connected, 1)
-        let pitch = inputs[0], tr = inputs[1]
         let target = min(max(params[1], 0), Float(Self.frames - 1))
-        let semis = params[2] + params[3] / 100 + (hasPitch ? cvSemitones(pitch[frames - 1]) : 0)
-        let hz = 261.6256 * Double(powf(2, semis / 12))
-        let inc = hz / sampleRate
-        // the band-limited level: only harmonics that fit under ~90 % of Nyquist
-        let fit = max(sampleRate * 0.45 / max(hz, 1), 1)
-        let level = min(max(Int(ceil(log2(Double(Self.harmonics) / fit))), 0), Self.levels - 1)
         let attackMs = params[4], decayMs = params[5], gain = params[6]
         let decays = decayMs > 0.5
-        let useEnv = hasTrig && (decays || attackMs > 0.5)
         let mul = decays ? expf(logf(1e-3) / max(decayMs * 0.001 * Float(sampleRate), 1)) : 1
         let rise: Float = attackMs > 0.5 ? 1 / max(attackMs * 0.001 * Float(sampleRate), 1) : 1
         let posC: Float = 1 - expf(-1 / (0.005 * Float(sampleRate)))
         let T = Self.tableLen, TL = Double(T)
         let o = outputs[0]
-        for i in 0..<frames {
-            pos += (target - pos) * posC
-            let f0 = min(Int(pos), Self.frames - 2), t = pos - Float(f0)
-            let ta = base + f0 * Self.frameSize + level * (T + 1)
-            let tb = ta + Self.frameSize
-            let p = phase * TL
-            let k = Int(p), fr = Float(p - Double(k))
-            let va = ta[k] + (ta[k + 1] - ta[k]) * fr
-            let vb = tb[k] + (tb[k + 1] - tb[k]) * fr
-            var y = va + (vb - va) * t
-            if hasTrig && trigEdge.rising(tr[i]) {
-                if rise < 1 { env = 0; rising = true } else { env = 1; rising = false }
+        o.update(repeating: 0, count: frames)
+        // the morph position moves smoothly; worked out once per sample for all voices
+        let p0 = pos
+        pos += (target - pos) * (1 - powf(1 - posC, Float(frames)))
+        let nVoices = clampIndex(params[7], Self.maxVoices) + 1
+        for v in 0..<nVoices {
+            let pi = v == 0 ? 0 : 2 * v, ti = v == 0 ? 1 : 2 * v + 1
+            let hasPitch = isConnected(connected, pi), hasTrig = isConnected(connected, ti)
+            if v > 0 && !hasPitch && !hasTrig { continue }          // extra voices play once they're patched
+            let pitch = inputs[pi], tr = inputs[ti]
+            let semis = params[2] + params[3] / 100 + (hasPitch ? cvSemitones(pitch[frames - 1]) : 0)
+            let hz = 261.6256 * Double(powf(2, semis / 12))
+            let inc = hz / sampleRate
+            // the band-limited level: only harmonics that fit under ~90 % of Nyquist
+            let fit = max(sampleRate * 0.45 / max(hz, 1), 1)
+            let level = min(max(Int(ceil(log2(Double(Self.harmonics) / fit))), 0), Self.levels - 1)
+            let useEnv = hasTrig && (decays || attackMs > 0.5)
+            var ph = phase[v], e = env[v], up = rising[v], edge = trigEdge[v]
+            var pp = p0
+            for i in 0..<frames {
+                pp += (target - pp) * posC
+                let f0 = min(Int(pp), Self.frames - 2), t = pp - Float(f0)
+                let ta = base + f0 * Self.frameSize + level * (T + 1)
+                let tb = ta + Self.frameSize
+                let p = ph * TL
+                let k = Int(p), fr = Float(p - Double(k))
+                let va = ta[k] + (ta[k + 1] - ta[k]) * fr
+                let vb = tb[k] + (tb[k + 1] - tb[k]) * fr
+                var y = va + (vb - va) * t
+                if hasTrig && edge.rising(tr[i]) {
+                    if rise < 1 { e = 0; up = true } else { e = 1; up = false }
+                }
+                if useEnv {
+                    y *= e
+                    if up { e += rise; if e >= 1 { e = 1; up = false } } else { e *= mul }
+                }
+                o[i] += y * gain
+                ph += inc
+                if ph >= 1 { ph -= floor(ph) }
             }
-            if useEnv {
-                y *= env
-                if rising { env += rise; if env >= 1 { env = 1; rising = false } } else { env *= mul }
-            }
-            o[i] = y * gain
-            phase += inc
-            if phase >= 1 { phase -= floor(phase) }
+            phase[v] = ph; env[v] = e; rising[v] = up; trigEdge[v] = edge
         }
         readouts[0] = pos
     }

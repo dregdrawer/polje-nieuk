@@ -226,56 +226,68 @@ public enum ShapesNames {
 }
 
 final class ShapesNode: DSPNode {
-    // 0 shape, 1 note, 2 timbre, 3 colour, 4 decay (0 = drone), 5 level, 6 attack
-    // inputs: 0 pitch (0.1 = 1 octave), 1 trig
-    private let dsp: OpaquePointer
-    private let bridge: RateBridge
-    private var q = MIShapesParams()
-    private var env: Float = 1
-    private var rising = false
+    // 0 shape, 1 note, 2 timbre, 3 colour, 4 decay (0 = drone), 5 level, 6 attack, 7 voices (1…4)
+    // inputs: 0 pitch (0.1 = 1 octave), 1 trig, then pitch 2 / trig 2 … pitch 4 / trig 4
+    static let maxVoices = 4
+    private final class Voice {
+        let dsp: OpaquePointer
+        let bridge: RateBridge
+        var q = MIShapesParams()
+        var env: Float = 1, rising = false, strikeHeld = false
+        var trigEdge = EdgeDetector()
+        init(_ sr: Double) {
+            dsp = mi_shapes_create()!
+            bridge = RateBridge(hostRate: sr, nativeRate: Double(MI_SHAPES_RATE), block: Int(MI_SHAPES_BLOCK), chIn: 1, chOut: 1)
+        }
+        deinit { mi_shapes_destroy(dsp) }
+    }
+    private let voices: [Voice]
 
     override init(spec: ModuleSpec, sampleRate: Double) {
-        dsp = mi_shapes_create()!
-        bridge = RateBridge(hostRate: sampleRate, nativeRate: Double(MI_SHAPES_RATE), block: Int(MI_SHAPES_BLOCK), chIn: 1, chOut: 1)
+        voices = (0..<Self.maxVoices).map { _ in Voice(sampleRate) }
         super.init(spec: spec, sampleRate: sampleRate)
     }
-    deinit { mi_shapes_destroy(dsp) }
 
     override func process(frames: Int, inputs: UnsafePointer<UnsafePointer<Float>>, connected: UInt64, ctx: ProcessContext) {
-        let pitch = inputs[0], tr = inputs[1]                     // inputs: 0 pitch, 1 trig
-        let hasPitch = isConnected(connected, 0), hasTrig = isConnected(connected, 1)
-        q.shape = Int32(clampIndex(params[0], ShapesNames.names.count))
-        q.note = 60 + params[1] + (hasPitch ? cvSemitones(pitch[frames - 1]) : 0)
-        q.timbre = params[2]; q.color = params[3]
+        let shape = Int32(clampIndex(params[0], ShapesNames.names.count))
         let decayMs = params[4], level = params[5], attackMs = params[6]
-        // the envelope needs a trigger: with nothing in trig it's a drone whatever decay says
         let decays = decayMs > 0.5
-        let useEnv = hasTrig && (decays || attackMs > 0.5)
         let mul = decays ? expf(logf(1e-3) / max(decayMs * 0.001 * Float(sampleRate), 1)) : 1
         let rise: Float = attackMs > 0.5 ? 1 / max(attackMs * 0.001 * Float(sampleRate), 1) : 1
         let o = outputs[0]
-        bridge.run(frames: frames, input: { _, i in hasTrig ? tr[i] : 0 }, render: {
-            var mx: Float = 0
-            let t = bridge.inChannel(0)
-            for k in 0..<bridge.block { mx = max(mx, t[k]) }
-            q.strike = mx > 0.2 && !strikeHeld ? 1 : 0
-            strikeHeld = mx > 0.2
-            mi_shapes_process(dsp, &q, bridge.outChannel(0))
-        }, output: { _, i, v in
-            if hasTrig && trigEdge.rising(tr[i]) {
-                // attack: fade in from silence; without one the note starts at full level
-                if rise < 1 { env = 0; rising = true } else { env = 1; rising = false }
-            }
-            let g: Float = useEnv ? env : 1
-            o[i] = v * g * level
-            if useEnv {
-                if rising { env += rise; if env >= 1 { env = 1; rising = false } }
-                else { env *= mul }                      // decay (mul = 1: drone — hold)
-            }
-        })
+        o.update(repeating: 0, count: frames)
+        let n = clampIndex(params[7], Self.maxVoices) + 1
+        for v in 0..<n {
+            let pi = v == 0 ? 0 : 2 * v, ti = v == 0 ? 1 : 2 * v + 1
+            let hasPitch = isConnected(connected, pi), hasTrig = isConnected(connected, ti)
+            if v > 0 && !hasPitch && !hasTrig { continue }          // extra voices play once they're patched
+            let pitch = inputs[pi], tr = inputs[ti]
+            let vc = voices[v]
+            vc.q.shape = shape
+            vc.q.note = 60 + params[1] + (hasPitch ? cvSemitones(pitch[frames - 1]) : 0)
+            vc.q.timbre = params[2]; vc.q.color = params[3]
+            // the envelope needs a trigger: with nothing in trig it's a drone whatever decay says
+            let useEnv = hasTrig && (decays || attackMs > 0.5)
+            vc.bridge.run(frames: frames, input: { _, i in hasTrig ? tr[i] : 0 }, render: {
+                var mx: Float = 0
+                let t = vc.bridge.inChannel(0)
+                for k in 0..<vc.bridge.block { mx = max(mx, t[k]) }
+                vc.q.strike = mx > 0.2 && !vc.strikeHeld ? 1 : 0
+                vc.strikeHeld = mx > 0.2
+                mi_shapes_process(vc.dsp, &vc.q, vc.bridge.outChannel(0))
+            }, output: { _, i, y in
+                if hasTrig && vc.trigEdge.rising(tr[i]) {
+                    // attack: fade in from silence; without one the note starts at full level
+                    if rise < 1 { vc.env = 0; vc.rising = true } else { vc.env = 1; vc.rising = false }
+                }
+                o[i] += y * (useEnv ? vc.env : 1) * level
+                if useEnv {
+                    if vc.rising { vc.env += rise; if vc.env >= 1 { vc.env = 1; vc.rising = false } }
+                    else { vc.env *= mul }                      // decay (mul = 1: drone — hold)
+                }
+            })
+        }
     }
-    private var strikeHeld = false
-    private var trigEdge = EdgeDetector()
 }
 
 // MARK: - haze~ (granular / delay texture with four "media")

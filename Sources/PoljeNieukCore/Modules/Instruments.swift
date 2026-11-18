@@ -201,55 +201,70 @@ public enum MacroEngines {
 }
 
 final class MacroNode: DSPNode {
-    // 0 engine, 1 note, 2 harmonics, 3 timbre, 4 morph, 5 decay, 6 colour, 7 level, 8 attack
-    // inputs: 0 pitch (0.1 = 1 octave), 1 trig, 2 level (gate/env into the low-pass gate)
-    private let dsp: OpaquePointer
-    private let bridge: RateBridge
-    private var p = MIMacroParams()
-    private var atk: Float = 1               // attack fade-in on each trigger (1 = full)
-    private var trigEdge = EdgeDetector()
+    // 0 engine, 1 note, 2 harmonics, 3 timbre, 4 morph, 5 decay, 6 colour, 7 level, 8 attack, 9 voices (1…4)
+    // inputs: 0 pitch (0.1 = 1 octave), 1 trig, 2 level (gate/env into the low-pass gate),
+    //         then pitch 2 / trig 2 … pitch 4 / trig 4
+    static let maxVoices = 4
+    private final class Voice {
+        let dsp: OpaquePointer
+        let bridge: RateBridge
+        var p = MIMacroParams()
+        var atk: Float = 1               // attack fade-in on each trigger (1 = full)
+        var trigEdge = EdgeDetector()
+        init(_ sr: Double) {
+            dsp = mi_macro_create()!
+            bridge = RateBridge(hostRate: sr, nativeRate: Double(MI_MACRO_RATE), block: Int(MI_MACRO_BLOCK), chIn: 1, chOut: 2)
+        }
+        deinit { mi_macro_destroy(dsp) }
+    }
+    private let voices: [Voice]
 
     override init(spec: ModuleSpec, sampleRate: Double) {
-        dsp = mi_macro_create()!
-        bridge = RateBridge(hostRate: sampleRate, nativeRate: Double(MI_MACRO_RATE), block: Int(MI_MACRO_BLOCK), chIn: 1, chOut: 2)
+        voices = (0..<Self.maxVoices).map { _ in Voice(sampleRate) }
         super.init(spec: spec, sampleRate: sampleRate)
     }
-    deinit { mi_macro_destroy(dsp) }
 
     override func process(frames: Int, inputs: UnsafePointer<UnsafePointer<Float>>, connected: UInt64, ctx: ProcessContext) {
-        // inputs: 0 pitch, 1 trig, 2 level
-        let hasPitch = isConnected(connected, 0), hasTrig = isConnected(connected, 1), hasLevel = isConnected(connected, 2)
-        let pitch = inputs[0], tr = inputs[1], lv = inputs[2]
-        p.engine = Int32(clampIndex(params[0], MacroEngines.names.count))
-        p.note = 60 + params[1]
-        p.harmonics = params[2]; p.timbre = params[3]; p.morph = params[4]
-        p.decay = params[5]; p.lpg_colour = params[6]
-        p.mod_note = hasPitch ? cvSemitones(pitch[frames - 1]) : 0
-        p.trigger_patched = hasTrig ? 1 : 0
-        p.level_patched = hasLevel ? 1 : 0
-        p.mod_level = hasLevel ? min(max(lv[frames - 1], 0), 1) : 0
+        let hasLevel = isConnected(connected, 2), lv = inputs[2]
         let level = params[7], attackMs = params[8]
-        let rise: Float = attackMs > 0.5 && hasTrig ? 1 / max(attackMs * 0.001 * Float(sampleRate), 1) : 1
-        if rise >= 1 { atk = 1 }
         let oL = outputs[0], oR = outputs[1]
-        // the trigger is fed through the native-rate input stream so short gates aren't missed
-        bridge.run(frames: frames, input: { _, i in hasTrig ? tr[i] : 0 }, render: {
-            var mx: Float = 0
-            let t = bridge.inChannel(0)
-            for k in 0..<bridge.block { mx = max(mx, t[k]) }
-            p.trigger = mx > 0.2 ? 1 : 0
-            mi_macro_process(dsp, &p, bridge.outChannel(0), bridge.outChannel(1))
-        }, output: { c, i, v in
-            if c == 0 {
-                // attack: each trigger fades the note in (the low-pass gate's decay still shapes the tail)
-                if rise < 1 {
-                    if trigEdge.rising(tr[i]) { atk = 0 }
-                    atk = min(atk + rise, 1)
-                }
-                oL[i] = v * level * atk
-            } else { oR[i] = v * level * atk }
-        })
-        readouts[0] = Float(mi_macro_active_engine(dsp))
+        oL.update(repeating: 0, count: frames); oR.update(repeating: 0, count: frames)
+        let n = clampIndex(params[9], Self.maxVoices) + 1
+        for v in 0..<n {
+            let pi = v == 0 ? 0 : 1 + 2 * v, ti = v == 0 ? 1 : 2 + 2 * v
+            let hasPitch = isConnected(connected, pi), hasTrig = isConnected(connected, ti)
+            if v > 0 && !hasPitch && !hasTrig { continue }          // extra voices play once they're patched
+            let pitch = inputs[pi], tr = inputs[ti]
+            let vc = voices[v]
+            vc.p.engine = Int32(clampIndex(params[0], MacroEngines.names.count))
+            vc.p.note = 60 + params[1]
+            vc.p.harmonics = params[2]; vc.p.timbre = params[3]; vc.p.morph = params[4]
+            vc.p.decay = params[5]; vc.p.lpg_colour = params[6]
+            vc.p.mod_note = hasPitch ? cvSemitones(pitch[frames - 1]) : 0
+            vc.p.trigger_patched = hasTrig ? 1 : 0
+            vc.p.level_patched = hasLevel ? 1 : 0
+            vc.p.mod_level = hasLevel ? min(max(lv[frames - 1], 0), 1) : 0
+            let rise: Float = attackMs > 0.5 && hasTrig ? 1 / max(attackMs * 0.001 * Float(sampleRate), 1) : 1
+            if rise >= 1 { vc.atk = 1 }
+            // the trigger is fed through the native-rate input stream so short gates aren't missed
+            vc.bridge.run(frames: frames, input: { _, i in hasTrig ? tr[i] : 0 }, render: {
+                var mx: Float = 0
+                let t = vc.bridge.inChannel(0)
+                for k in 0..<vc.bridge.block { mx = max(mx, t[k]) }
+                vc.p.trigger = mx > 0.2 ? 1 : 0
+                mi_macro_process(vc.dsp, &vc.p, vc.bridge.outChannel(0), vc.bridge.outChannel(1))
+            }, output: { c, i, y in
+                if c == 0 {
+                    // attack: each trigger fades the note in (the low-pass gate's decay still shapes the tail)
+                    if rise < 1 {
+                        if vc.trigEdge.rising(tr[i]) { vc.atk = 0 }
+                        vc.atk = min(vc.atk + rise, 1)
+                    }
+                    oL[i] += y * level * vc.atk
+                } else { oR[i] += y * level * vc.atk }
+            })
+            if v == 0 { readouts[0] = Float(mi_macro_active_engine(vc.dsp)) }
+        }
     }
 }
 

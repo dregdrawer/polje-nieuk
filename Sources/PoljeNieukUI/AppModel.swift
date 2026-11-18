@@ -1166,7 +1166,7 @@ public final class AppModel: ObservableObject {
         case "rack": setData(id, "hits", [Float](repeating: 0, count: RackLayout.pads * RackLayout.steps))
         case "drumsynth": setData(id, "hits", [Float](repeating: 0, count: DrumSynthLayout.voices * DrumSynthLayout.steps))
         case "drums": setData(id, "hits", [Float](repeating: 0, count: DrumsNode.steps * DrumsNode.lanes))
-        case "roll": setData(id, "notes", [Float](repeating: -1, count: RollNode.steps))
+        case "roll": setData(id, "grid", [Float](repeating: 0, count: RollNode.steps * RollNode.rows))
         default: break
         }
     }
@@ -1184,7 +1184,7 @@ public final class AppModel: ObservableObject {
         case let r as RackNode: (key, lanes, empty, ptr) = ("hits", RackLayout.pads, 0, r.hits)
         case let d as DrumSynthNode: (key, lanes, empty, ptr) = ("hits", DrumSynthLayout.voices, 0, d.hits)
         case let d as DrumsNode: (key, lanes, empty, ptr) = ("hits", DrumsNode.lanes, 0, d.hits)
-        case let r as RollNode: (key, lanes, empty, ptr) = ("notes", 1, -1, r.notes)
+        case let r as RollNode: (key, lanes, empty, ptr) = ("grid", RollNode.rows, 0, r.grid)
         default: return
         }
         let steps = 32

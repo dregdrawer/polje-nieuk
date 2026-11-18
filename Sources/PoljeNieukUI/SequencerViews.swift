@@ -275,21 +275,21 @@ struct GridEditor: View {
 
     private func isOn(_ step: Int, _ row: Int) -> Bool {
         switch kind {
-        case .roll(let n): return Int(n.notes[step]) == row
+        case .roll(let n): return n.isOn(step, row)
         case .drums(let n): return n.hits[row * DrumsNode.steps + step] > 0.5
         }
     }
 
     private func set(_ step: Int, _ row: Int, _ on: Bool) {
         switch kind {
-        case .roll(let n): n.notes[step] = on ? Float(row) : (Int(n.notes[step]) == row ? -1 : n.notes[step])
+        case .roll(let n): n.grid[row * RollNode.steps + step] = on ? 1 : 0        // any number of notes per step
         case .drums(let n): n.hits[row * DrumsNode.steps + step] = on ? 1 : 0
         }
     }
 
     private func commit() {
         switch kind {
-        case .roll(let n): model.setData(patchNode.id, "notes", (0..<RollNode.steps).map { n.notes[$0] })
+        case .roll(let n): model.setData(patchNode.id, "grid", (0..<RollNode.steps * RollNode.rows).map { n.grid[$0] })
         case .drums(let n): model.setData(patchNode.id, "hits", (0..<DrumsNode.steps * DrumsNode.lanes).map { n.hits[$0] })
         }
     }
@@ -299,7 +299,7 @@ struct GridEditor: View {
             LiveCanvas(signature: {
                 var h = model.isRunning ? playStep : -1
                 switch kind {
-                case .roll(let n): LiveSig.mix(&h, LiveSig.floats(n.notes, RollNode.steps))
+                case .roll(let n): LiveSig.mix(&h, LiveSig.floats(n.grid, RollNode.steps * RollNode.rows))
                 case .drums(let n): LiveSig.mix(&h, LiveSig.floats(n.hits, DrumsNode.steps * DrumsNode.lanes))
                 }
                 LiveSig.mix(&h, LiveSig.patch(patchNode))

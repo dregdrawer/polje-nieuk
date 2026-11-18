@@ -432,8 +432,23 @@ let arpNotes = notesAtGates(kOut[0], kOut[1])
 check(Array(arpNotes.prefix(6)) == [0, 4, 7, 0, 4, 7], "keys~ arpeggiates a latched C major chord upwards (\(arpNotes.prefix(6)))")
 
 var rollNotes = [Float](repeating: -1, count: 32); rollNotes[0] = 12; rollNotes[4] = 19; rollNotes[8] = 16
-let (_, rOut) = runSource("roll", params: ["len": 16, "low": -12], data: ["notes": rollNotes], seconds: 2)
+let (_, rOut) = runSource("roll", params: ["len": 16, "low": -12], data: ["grid": RollNode.grid(fromNotes: rollNotes)], seconds: 2)
 check(Array(notesAtGates(rOut[0], rOut[1]).prefix(3)) == [0, 7, 4], "roll~ plays the drawn notes (C, G, E)")
+do {
+    // a chord: C E G on step 0 → voice 1 = C, voice 2 = E, voice 3 = G; voice 4 stays silent
+    var g = [Float](repeating: 0, count: 32 * 24)
+    for r in [12, 16, 19] { g[r * 32 + 0] = 1 }
+    let (_, c) = runSource("roll", params: ["len": 4, "low": -12], data: ["grid": g], seconds: 0.4)
+    let v1 = notesAtGates(c[0], c[1]).first, v2 = notesAtGates(c[3], c[4]).first, v3 = notesAtGates(c[5], c[6]).first
+    check(v1 == 0 && v2 == 4 && v3 == 7 && notesAtGates(c[7], c[8]).isEmpty,
+          "roll~ chord: C on voice 1, E on voice 2, G on voice 3 (\(String(describing: v1)), \(String(describing: v2)), \(String(describing: v3)))")
+    // an old one-note-per-step patch converts to the grid
+    var old = Patch(); old.version = 10
+    old.nodes = [PatchNode(kind: "roll", x: 0, y: 0, data: ["notes": rollNotes])]
+    let m = old.migrated()
+    check(m.nodes[0].data["notes"] == nil && m.nodes[0].data["grid"] == RollNode.grid(fromNotes: rollNotes),
+          "an older piano roll converts to the chord grid")
+}
 
 let (_, tapOut) = runSource("keys", seconds: 0.5, setup: { n in let k = n as! KeysNode; k.pressNote = 7; k.pressCount = 1 })
 let tapLen = Double(tapOut[1].filter { $0 > 0.2 }.count) / sr
@@ -897,6 +912,56 @@ do {
     }
 }
 
+print("Chords: roll~ voices into a synth's voices")
+do {
+    /// how strongly `hz` is in x (Goertzel)
+    func power(_ x: [Float], _ hz: Double) -> Double {
+        let w = 2 * Double.pi * hz / sr, c = 2 * cos(w)
+        var s1 = 0.0, s2 = 0.0
+        for v in x { let s0 = Double(v) + c * s1 - s2; s2 = s1; s1 = s0 }
+        return (s1 * s1 + s2 * s2 - c * s1 * s2) / Double(x.count * x.count)
+    }
+    for kind in ["wave", "shapes", "macro"] {
+        var g = [Float](repeating: 0, count: 32 * 24)
+        for r in [12, 16, 19] { g[r * 32 + 0] = 1 }               // C E G on every step 0
+        var p = Patch()
+        let roll = PatchNode(kind: "roll", x: 0, y: 0, params: ["len": 1, "low": -12, "gatelen": 1], data: ["grid": g])
+        let params: [String: Float] = kind == "wave" ? ["voices": 1] : (kind == "shapes" ? ["voices": 1, "shape": 3] : ["voices": 1, "engine": 8, "decay": 1])   // choice 1 = "2" voices
+        let syn = PatchNode(kind: kind, x: 0, y: 0, params: params)
+        p.nodes = [roll, syn]
+        let base = kind == "macro" ? 1 : 0
+        for v in 0..<3 {
+            let po = v == 0 ? 0 : 3 + 2 * (v - 1), go = v == 0 ? 1 : 4 + 2 * (v - 1)
+            let pi = v == 0 ? 0 : base + 2 * v, ti = v == 0 ? 1 : base + 2 * v + 1
+            p.cables += [PatchCable(fromNode: roll.id, fromPort: po, toNode: syn.id, toPort: pi),
+                         PatchCable(fromNode: roll.id, fromPort: go, toNode: syn.id, toPort: ti)]
+        }
+        let h = GraphHost(sampleRate: sr)
+        h.load(p); h.prepareForStart()
+        let ins = UnsafeMutablePointer<UnsafeMutablePointer<Float>>.allocate(capacity: 1); ins[0] = .allocate(capacity: kMaxBlock)
+        ins[0].update(repeating: 0, count: kMaxBlock)
+        let outs = UnsafeMutablePointer<UnsafeMutablePointer<Float>>.allocate(capacity: 1); outs[0] = .allocate(capacity: kMaxBlock)
+        var y: [Float] = []
+        for _ in 0..<Int(0.5 * sr / Double(kMaxBlock)) {
+            h.process(frames: kMaxBlock, inputs: ins, inputCount: 0, outputs: outs, outputCount: 1)
+            y.append(contentsOf: UnsafeBufferPointer(start: h.node(syn.id)!.outputs[0], count: kMaxBlock))
+        }
+        let tail = Array(y.suffix(12000))
+        let pc = power(tail, 261.63), pe = power(tail, 329.63), pg = power(tail, 392.0), off = power(tail, 300)
+        // voices 2: the third voice's inlets aren't shown, so G only sounds once voices is 3
+        check(pc > off * 20 && pe > off * 20, "\(kind)~ with 2 voices plays C and E together")
+        // now 3 voices: G joins
+        h.node(syn.id)!.base[ModuleRegistry.spec(kind)!.paramIndex("voices")!] = 2
+        var y3: [Float] = []
+        for _ in 0..<Int(0.5 * sr / Double(kMaxBlock)) {
+            h.process(frames: kMaxBlock, inputs: ins, inputCount: 0, outputs: outs, outputCount: 1)
+            y3.append(contentsOf: UnsafeBufferPointer(start: h.node(syn.id)!.outputs[0], count: kMaxBlock))
+        }
+        let t3 = Array(y3.suffix(12000))
+        check(power(t3, 392.0) > power(t3, 300) * 20 && power(t3, 392.0) > pg * 4, "\(kind)~ with 3 voices adds G (G \(power(t3, 392.0)) vs before \(pg), off \(power(t3, 300)))")
+    }
+}
+
 print("seq~ up to 64 steps")
 do {
     let spec = ModuleRegistry.spec("seq")!.params[0]
@@ -1000,7 +1065,7 @@ do {
         case let r as RackNode: return Array(UnsafeBufferPointer(start: r.hits, count: RackLayout.pads * RackLayout.steps))
         case let d as DrumSynthNode: return Array(UnsafeBufferPointer(start: d.hits, count: DrumSynthLayout.voices * DrumSynthLayout.steps))
         case let s as SeqNode: return Array(UnsafeBufferPointer(start: key == "pitch" ? s.pitches : s.gates, count: SeqNode.steps))
-        case let r as RollNode: return Array(UnsafeBufferPointer(start: r.notes, count: RollNode.steps))
+        case let r as RollNode: return Array(UnsafeBufferPointer(start: r.grid, count: RollNode.steps * RollNode.rows))
         case let d as DrumsNode: return Array(UnsafeBufferPointer(start: d.hits, count: DrumsNode.steps * DrumsNode.lanes))
         default: return []
         }
@@ -1014,7 +1079,7 @@ do {
     hist.commit(p2); h.load(p2)
     var p3 = p2
     p3.nodes[2].data["pitch"] = (0..<16).map { Float($0) }; p3.nodes[2].data["gate"] = (0..<16).map { Float($0 % 2) }
-    var notes = [Float](repeating: -1, count: 32); notes[3] = 7; p3.nodes[3].data["notes"] = notes
+    var notes = [Float](repeating: -1, count: 32); notes[3] = 7; p3.nodes[3].data["grid"] = RollNode.grid(fromNotes: notes)
     var dh = [Float](repeating: 0, count: 256); dh[40] = 1; p3.nodes[4].data["hits"] = dh
     hist.commit(p3); h.load(p3)
     func matches(_ p: Patch) -> Bool {
@@ -1024,7 +1089,7 @@ do {
             && d.base[si] == (p.nodes[1].params["swing"] ?? 0)
             && engine(sq.id, "pitch") == steps64(p.nodes[2].data["pitch"] ?? [Float](repeating: 0, count: 16))
             && engine(sq.id, "gate") == steps64(p.nodes[2].data["gate"] ?? [Float](repeating: 1, count: 16))
-            && engine(rl.id, "notes") == (p.nodes[3].data["notes"] ?? [Float](repeating: -1, count: 32))
+            && engine(rl.id, "grid") == (p.nodes[3].data["grid"] ?? [Float](repeating: 0, count: 32 * 24))
             && engine(dr.id, "hits") == (p.nodes[4].data["hits"] ?? [Float](repeating: 0, count: 256))
     }
     check(matches(p3), "after three edits the engine plays what the patch says")

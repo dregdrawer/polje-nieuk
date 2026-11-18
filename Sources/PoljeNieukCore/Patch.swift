@@ -65,7 +65,7 @@ public struct PatchGroup: Codable, Equatable, Identifiable, Sendable {
 }
 
 public struct Patch: Codable, Equatable, Sendable {
-    public static let currentVersion = 10
+    public static let currentVersion = 11
     public var version: Int = Patch.currentVersion
     public var nodes: [PatchNode] = []
     public var cables: [PatchCable] = []
@@ -167,6 +167,15 @@ public extension Patch {
             for i in p.nodes.indices where p.nodes[i].kind == "clock" && p.nodes[i].params["source"] == nil {
                 let id = p.nodes[i].id
                 if p.cables.contains(where: { $0.toNode == id && $0.toPort == 0 }) { p.nodes[i].params["source"] = 0 }
+            }
+        }
+        if version < 11 {
+            // v11: roll~ holds chords — its one-note-per-step "notes" became a note grid
+            for i in p.nodes.indices where p.nodes[i].kind == "roll" {
+                if let old = p.nodes[i].data["notes"], p.nodes[i].data["grid"] == nil {
+                    p.nodes[i].data["grid"] = RollNode.grid(fromNotes: old)
+                }
+                p.nodes[i].data["notes"] = nil
             }
         }
         if version < 9 {

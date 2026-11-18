@@ -214,6 +214,12 @@ enum BoxLayout {
             let used = (usage[node.id]?.ins.filter { $0 < kParamPortBase }.max() ?? -1) + 1
             return (Array(spec.inputs.prefix(max(hw.outputs, used, 1))), [])
         case "mix": return (Array(spec.inputs.prefix(MixerLayout.channels(node.params["chans"] ?? 1))), spec.outputs)
+        case "wave", "shapes", "macro":
+            // pitch / trig pairs for the extra voices only when "voices" asks for them (and never hide a patched one)
+            let baseIns = node.kind == "macro" ? 3 : 2
+            let v = Int((node.params["voices"] ?? 0).rounded()) + 1
+            let used = (usage[node.id]?.ins.filter { $0 < kParamPortBase }.max() ?? -1) + 1
+            return (Array(spec.inputs.prefix(max(baseIns + 2 * (max(v, 1) - 1), used))), spec.outputs)
         case "div":
             // outlet labels follow each output's division
             return (spec.inputs, (0..<spec.outputs.count).map { k in
@@ -235,6 +241,8 @@ enum BoxLayout {
         var all = spec.params.indices.filter { !spec.params[$0].isTrigger }
         // the algorithm/type selector is stored last (so old cables keep their slots) but shown first
         if let a = all.firstIndex(where: { spec.params[$0].key == "algo" }) { all.insert(all.remove(at: a), at: 0) }
+        // voices is stored last too (old cables keep their slots); shown second, under the engine / shape
+        if let a = all.firstIndex(where: { spec.params[$0].key == "voices" }) { all.insert(all.remove(at: a), at: min(1, all.count - 1)) }
         // attack is stored last too (old cables keep their slots) but sits just before decay
         if let a = all.firstIndex(where: { spec.params[$0].key == "attack" }),
            spec.params.contains(where: { $0.key == "decay" }) {

@@ -470,25 +470,45 @@ public final class TuringNode: DSPNode {
 
 public final class RollNode: DSPNode {
     // 0 length, 1 division, 2 lowest note, 3 gate length
-    // outputs: pitch, gate, vel
+    // outputs: pitch, gate, vel (voice 1, the lowest note), then pitch 2 / gate 2 … pitch 4 / gate 4:
+    // a step with a chord sends each note out on its own voice
     public static let steps = 32
     public static let rows = 24
-    /// Row (0 = lowest) per step, -1 = rest.
-    public let notes: UnsafeMutablePointer<Float>
+    /// Notes on / off: row * steps + step (row 0 = lowest). Any number of notes per step.
+    public let grid: UnsafeMutablePointer<Float>
     private var step = -1
     private var gateLeft = 0
     private var clock = StepClock()
+    public static let voices = 4
+    /// each voice's pitch row, kept while it's silent (so a release doesn't slide)
+    private var held = [Float](repeating: 0, count: RollNode.voices)
+    private var on = [Bool](repeating: false, count: RollNode.voices)
+    /// outlet of voice v's pitch / gate (voice 0 = the first three outlets)
+    @inline(__always) static func pitchOut(_ v: Int) -> Int { v == 0 ? 0 : 3 + 2 * (v - 1) }
+    @inline(__always) static func gateOut(_ v: Int) -> Int { v == 0 ? 1 : 4 + 2 * (v - 1) }
 
     public override init(spec: ModuleSpec, sampleRate: Double) {
-        notes = .allocate(capacity: Self.steps); notes.initialize(repeating: -1, count: Self.steps)
+        grid = .allocate(capacity: Self.steps * Self.rows); grid.initialize(repeating: 0, count: Self.steps * Self.rows)
         super.init(spec: spec, sampleRate: sampleRate)
     }
-    deinit { notes.deallocate() }
-    public override var defaultData: [String: [Float]] { ["notes": [Float](repeating: -1, count: Self.steps)] }
+    deinit { grid.deallocate() }
+    public override var defaultData: [String: [Float]] { ["grid": [Float](repeating: 0, count: Self.steps * Self.rows)] }
 
     public override func setData(_ key: String, _ values: [Float]) {
-        guard key == "notes" else { return }
-        for k in 0..<min(values.count, Self.steps) { notes[k] = values[k].isFinite ? values[k] : -1 }
+        guard key == "grid" else { return }
+        for k in 0..<Self.steps * Self.rows { grid[k] = k < values.count && values[k].isFinite && values[k] > 0.5 ? 1 : 0 }
+    }
+
+    @inline(__always) public func isOn(_ step: Int, _ row: Int) -> Bool { grid[row * Self.steps + step] > 0.5 }
+
+    /// The old one-note-per-step pattern (a row per step, -1 = rest) as a grid.
+    public static func grid(fromNotes notes: [Float]) -> [Float] {
+        var g = [Float](repeating: 0, count: steps * rows)
+        for s in 0..<min(notes.count, steps) {
+            let r = notes[s]
+            if r.isFinite, r >= 0, Int(r) < rows { g[Int(r) * steps + s] = 1 }
+        }
+        return g
     }
 
     public override func process(frames: Int, inputs: UnsafePointer<UnsafePointer<Float>>, connected: UInt64, ctx: ProcessContext) {
@@ -496,19 +516,24 @@ public final class RollNode: DSPNode {
         let div = Divisions.beats(params[1])
         let low = params[2].rounded()
         let gateLen = min(max(params[3], 0.05), 1)
-        let pOut = outputs[0], gOut = outputs[1], vOut = outputs[2]
-        var held: Float = 0
+        let V = Self.voices
         for i in 0..<frames {
             if clock.tick(beat: ctx.beat[i], div: div, spb: ctx.samplesPerBeat, clockIn: nil, sampleRate: sampleRate) {
                 step = safeInt(floor(ctx.beat[i] / div)) % len
-                gateLeft = notes[step] >= 0 ? max(16, Int(Float(clock.stepSamples) * gateLen)) : 0
+                // this step's notes, lowest first, one per voice
+                var v = 0
+                for r in 0..<Self.rows where grid[r * Self.steps + step] > 0.5 && v < V {
+                    held[v] = Float(r); on[v] = true; v += 1
+                }
+                for k in v..<V { on[k] = false }
+                gateLeft = v > 0 ? max(16, Int(Float(clock.stepSamples) * gateLen)) : 0
             }
-            let s = max(step, 0)
-            let row = notes[s]
-            if row >= 0 { held = row }
-            pOut[i] = pitchCV(low + (row >= 0 ? row : held))
-            gOut[i] = gateLeft > 0 ? kGateHigh : 0
-            vOut[i] = gateLeft > 0 ? 0.8 : 0
+            for v in 0..<V {
+                let g = gateLeft > 0 && on[v]
+                outputs[Self.pitchOut(v)][i] = pitchCV(low + held[v])
+                outputs[Self.gateOut(v)][i] = g ? kGateHigh : 0
+                if v == 0 { outputs[2][i] = g ? 0.8 : 0 }
+            }
             if gateLeft > 0 { gateLeft -= 1 }
         }
         readouts[0] = Float(step)
