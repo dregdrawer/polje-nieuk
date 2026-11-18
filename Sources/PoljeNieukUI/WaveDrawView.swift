@@ -172,3 +172,45 @@ struct WaveDrawView: View {
         }
     }
 }
+
+/// chord~'s screen: the chord's name, and its notes on a little keyboard.
+struct ChordView: View {
+    let node: DSPNode
+    let patchNode: PatchNode
+    static let suffix = ["", "m", "7", "maj7", "m7", "sus2", "sus4", "dim", "aug", "6", "m6", "add9", "9", "m9", "m7♭5", "dim7"]
+
+    var body: some View {
+        LiveCanvas(signature: { LiveSig.readouts(node, 7, steps: 100) &+ LiveSig.patch(patchNode) }) { ctx, size in draw(ctx, size) }
+    }
+
+    private func draw(_ ctx: LiveGC, _ size: CGSize) {
+        let r = node.readouts
+        let n = min(max(Int(fin(r[4])), 0), ChordNode.maxVoices)
+        let notes = (0..<n).map { Int(fin(r[$0]).rounded()) }
+        let root = min(max(Int(fin(r[5])), 0), 11), q = Int(fin(r[6]))
+        let name = ChordNode.keys[root] + (q >= 0 && q < Self.suffix.count ? Self.suffix[q] : "")
+        let names = notes.map { ChordNode.keys[(($0 % 12) + 12) % 12] + String(4 + Int(floor(Double($0) / 12))) }.joined(separator: " ")
+        ctx.draw(LiveText(name.isEmpty ? "—" : name, size: 13, color: Theme.text, bold: true), at: CGPoint(x: 0, y: 8), anchor: .leading)
+        ctx.draw(LiveText(names, size: 9, color: Theme.dim), at: CGPoint(x: size.width, y: 8), anchor: .trailing)
+        // a keyboard wide enough for the chord (two octaves, from the octave of its lowest note)
+        let top: CGFloat = 18, h = size.height - top
+        guard let lo = notes.min() else { return }
+        let start = Int(floor(Double(lo) / 12)) * 12
+        let whites = [0, 2, 4, 5, 7, 9, 11], blacks = [1, 3, 6, 8, 10]
+        let span = 2 + (notes.max().map { $0 - start >= 24 ? 1 : 0 } ?? 0)
+        let wCount = 7 * span, ww = size.width / CGFloat(wCount)
+        for o in 0..<span {
+            for (k, w) in whites.enumerated() {
+                let x = CGFloat(o * 7 + k) * ww
+                let lit = notes.contains(start + o * 12 + w)
+                ctx.fill(Path(CGRect(x: x + 0.5, y: top, width: ww - 1, height: h)), with: .color(lit ? Theme.text : Theme.row))
+            }
+            for b in blacks {
+                let k = whites.firstIndex { $0 > b }! - 1
+                let x = CGFloat(o * 7 + k + 1) * ww - ww * 0.3
+                let lit = notes.contains(start + o * 12 + b)
+                ctx.fill(Path(CGRect(x: x, y: top, width: ww * 0.6, height: h * 0.6)), with: .color(lit ? Theme.text : Theme.dim))
+            }
+        }
+    }
+}

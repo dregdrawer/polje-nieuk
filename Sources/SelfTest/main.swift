@@ -544,7 +544,7 @@ func exercise(_ kind: String, params: [String: Float], seconds: Double, hostRate
 /// Sound sources and modulators keep producing output in silence; effects should settle.
 let selfSounding: Set<String> = ["clock", "keys", "seq", "turing", "roll", "drums", "lfo", "rand", "atten", "slider", "knob",
                                  "slopes", "chance", "segments", "macro", "shapes", "modal", "resonator", "looper",
-                                 "sampler", "grain", "stretch", "texture", "haze", "in", "env", "xmod", "wave"]
+                                 "sampler", "grain", "stretch", "texture", "haze", "in", "env", "xmod", "wave", "chord"]
 var moduleProblems: [String] = []
 var sweepRuns = 0
 var sweepPeak: Float = 0
@@ -960,6 +960,44 @@ do {
         let t3 = Array(y3.suffix(12000))
         check(power(t3, 392.0) > power(t3, 300) * 20 && power(t3, 392.0) > pg * 4, "\(kind)~ with 3 voices adds G (G \(power(t3, 392.0)) vs before \(pg), off \(power(t3, 300)))")
     }
+}
+
+print("chord~")
+do {
+    func chord(_ params: [String: Float], seconds: Double = 0.2) -> [Int] {
+        let (_, o) = runSource("chord", params: params, seconds: seconds)
+        return (0..<4).map { Int((o[2 * $0].last! * 120).rounded()) }
+    }
+    check(Array(chord(["size": 0, "voices": 0, "lead": 0]).prefix(3)) == [0, 4, 7], "C major, degree I, triad: C E G")
+    check(chord(["degree": 4, "voices": 1, "lead": 0]) == [7, 11, 14, 17], "degree V seventh: G B D F (G7)")
+    check(chord(["mode": 1, "key": 9, "type": 4, "voices": 1, "lead": 0]) == [9, 12, 16, 19], "free: A m7 = A C E G")
+    check(chord(["size": 0, "voices": 0, "inv": 1, "lead": 0]).prefix(3) == [4, 7, 12], "first inversion: E G C")
+    // voice leading: from C (I) to F (IV) the closest voicing moves less than the plain root position
+    let viaLead = ChordNode.build(mode: 0, key: 0, scale: 0, degree: 3, size: 0, type: 0, voices: 3, inversion: 0, spread: 0,
+                                  octave: 0, shift: 0, previous: [0, 4, 7]).notes
+    let plain = ChordNode.build(mode: 0, key: 0, scale: 0, degree: 3, size: 0, type: 0, voices: 3, inversion: 0, spread: 0,
+                                octave: 0, shift: 0, previous: nil).notes
+    let move: ([Float]) -> Float = { c in zip(c, [Float(0), 4, 7]).reduce(0) { $0 + abs($1.0 - $1.1) } }
+    check(move(viaLead) < move(plain) && Set(viaLead.map { (Int($0) % 12 + 12) % 12 }) == [5, 9, 0],
+          "voice leading: C → F moves \(move(viaLead)) semitones instead of \(move(plain)) (\(viaLead))")
+    // strum: with a gate patched, each voice opens later than the one below
+    var p = Patch()
+    let clk = PatchNode(kind: "lfo", x: 0, y: 0, params: ["shape": 3, "rate": 2, "depth": 0.5, "offset": 0.5])
+    let ch = PatchNode(kind: "chord", x: 0, y: 0, params: ["strum": 50, "voices": 0])
+    p.nodes = [clk, ch]
+    p.cables = [PatchCable(fromNode: clk.id, fromPort: 0, toNode: ch.id, toPort: 1)]
+    let h = GraphHost(sampleRate: sr); h.load(p); h.prepareForStart()
+    let ins = UnsafeMutablePointer<UnsafeMutablePointer<Float>>.allocate(capacity: 1); ins[0] = .allocate(capacity: kMaxBlock); ins[0].update(repeating: 0, count: kMaxBlock)
+    let outs = UnsafeMutablePointer<UnsafeMutablePointer<Float>>.allocate(capacity: 1); outs[0] = .allocate(capacity: kMaxBlock)
+    var g: [[Float]] = [[], [], []]
+    for _ in 0..<Int(0.4 * sr / Double(kMaxBlock)) {
+        h.process(frames: kMaxBlock, inputs: ins, inputCount: 0, outputs: outs, outputCount: 1)
+        for k in 0..<3 { g[k].append(contentsOf: UnsafeBufferPointer(start: h.node(ch.id)!.outputs[2 * k + 1], count: kMaxBlock)) }
+    }
+    let first = g.map { $0.firstIndex { $0 > 0.2 } ?? -1 }
+    let gap = Int(0.05 * sr)
+    check(first[0] >= 0 && abs((first[1] - first[0]) - gap) < 70 && abs((first[2] - first[1]) - gap) < 70,
+          "strum 50 ms: the voices open 50 ms apart (\(first))")
 }
 
 print("seq~ up to 64 steps")
