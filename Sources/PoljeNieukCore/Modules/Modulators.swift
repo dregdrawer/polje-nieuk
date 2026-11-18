@@ -226,9 +226,9 @@ public enum ShapesNames {
 }
 
 final class ShapesNode: DSPNode {
-    // 0 shape, 1 note, 2 timbre, 3 colour, 4 decay (0 = drone), 5 level, 6 attack, 7 voices (1…4)
-    // inputs: 0 pitch (0.1 = 1 octave), 1 trig, then pitch 2 / trig 2 … pitch 4 / trig 4
-    static let maxVoices = 4
+    // 0 shape, 1 note, 2 timbre, 3 colour, 4 decay (0 = drone), 5 level, 6 attack
+    // inputs: 0 pitch (0.1 = 1 octave), 1 trig — a chord on these cables plays every note
+    static let maxVoices = kMaxVoices
     private final class Voice {
         let dsp: OpaquePointer
         let bridge: RateBridge
@@ -256,12 +256,11 @@ final class ShapesNode: DSPNode {
         let rise: Float = attackMs > 0.5 ? 1 / max(attackMs * 0.001 * Float(sampleRate), 1) : 1
         let o = outputs[0]
         o.update(repeating: 0, count: frames)
-        let n = clampIndex(params[7], Self.maxVoices) + 1
-        for v in 0..<n {
-            let pi = v == 0 ? 0 : 2 * v, ti = v == 0 ? 1 : 2 * v + 1
-            let hasPitch = isConnected(connected, pi), hasTrig = isConnected(connected, ti)
-            if v > 0 && !hasPitch && !hasTrig { continue }          // extra voices play once they're patched
-            let pitch = inputs[pi], tr = inputs[ti]
+        let hasPitch = isConnected(connected, 0), hasTrig = isConnected(connected, 1)
+        // one voice per note arriving (a chord); a mono cable is one note
+        let np = hasPitch ? inVoices[0] : 1, nt = hasTrig ? inVoices[1] : 1
+        for v in 0..<max(np, nt) {
+            let pitch = voice(inputs[0], min(v, np - 1)), tr = voice(inputs[1], min(v, nt - 1))
             let vc = voices[v]
             vc.q.shape = shape
             vc.q.note = 60 + params[1] + (hasPitch ? cvSemitones(pitch[frames - 1]) : 0)

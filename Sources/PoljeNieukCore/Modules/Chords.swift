@@ -2,15 +2,15 @@ import Foundation
 
 /// chord~ : a chord generator. "in key": a degree (I–VII) of a scale in a key, stacked in thirds; "free": a
 /// chord type on the root. Voicing (inversion, spread, octave), voice leading (each chord takes the inversion
-/// closest to the last), strum. Each note leaves on its own pitch / gate pair — patch them into a synth's
-/// voice inlets, or out to the modular.
+/// closest to the last), strum. The whole chord leaves on one pitch / gate cable — a synth plays every note
+/// on it; a mono module (out~ to the modular) gets the lowest.
 public final class ChordNode: DSPNode {
     // params: 0 mode, 1 key, 2 scale, 3 degree, 4 size (in key), 5 type (free), 6 voices, 7 inversion,
     //         8 spread, 9 voice leading, 10 octave, 11 strum, 12 strum direction
     // inputs: 0 root (pitch CV, transposes the chord), 1 gate
-    // outputs: pitch, gate, pitch 2, gate 2, pitch 3, gate 3, pitch 4, gate 4
+    // outputs: pitch, gate (all the chord's notes on each)
     // readouts: 0…3 the notes (semitones from middle C), 4 how many, 5 chord root (0…11), 6 quality index
-    public static let maxVoices = 4
+    public static let maxVoices = kMaxVoices
     public static let keys = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
     public static let scales = ["major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "harmonic minor", "melodic minor"]
     static let scaleSteps: [[Int]] = [[0, 2, 4, 5, 7, 9, 11], [0, 2, 3, 5, 7, 8, 10], [0, 2, 3, 5, 7, 9, 10], [0, 1, 3, 5, 7, 8, 10],
@@ -149,6 +149,7 @@ public final class ChordNode: DSPNode {
             retrig = max(16, Int(0.003 * sampleRate))
         }
         let g = inputs[1]
+        outVoices[0] = count; outVoices[1] = count
         for i in 0..<frames {
             if hasGate {
                 if gateEdge.rising(g[i]) { gateHigh = true; strike() }
@@ -161,9 +162,9 @@ public final class ChordNode: DSPNode {
             }
             for k in 0..<Self.maxVoices {
                 if startIn[k] >= 0 { if startIn[k] == 0 { on[k] = true }; startIn[k] -= 1 }
-                let po = 2 * k, go = 2 * k + 1
-                outputs[po][i] = pitchCV(notes[k])
-                outputs[go][i] = on[k] && k < count ? kGateHigh : 0
+                guard k < count else { continue }
+                outVoice(0, k)[i] = pitchCV(notes[k])
+                outVoice(1, k)[i] = on[k] ? kGateHigh : 0
             }
         }
         for k in 0..<Self.maxVoices { readouts[k] = notes[k] }

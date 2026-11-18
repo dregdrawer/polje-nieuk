@@ -8,9 +8,8 @@ import Synchronization
 /// the main thread whenever a wave changes, and handed to the audio thread through a double buffer.
 public final class WavetableNode: DSPNode {
     // params: 0 edit wave (UI only), 1 position (0…3), 2 frequency (st), 3 fine (ct), 4 attack, 5 decay (0 = drone), 6 level,
-    //         7 voices (1…4)
-    // inputs: 0 pitch (0.1 = 1 octave), 1 trig, then pitch 2 / trig 2 … pitch 4 / trig 4 (one pair per extra voice)
-    // outputs: out (all voices mixed)   readouts: 0 position now
+    // inputs: 0 pitch (0.1 = 1 octave), 1 trig — a chord on these cables (roll~, chord~) plays every note
+    // outputs: out (all notes mixed)   readouts: 0 position now
     public static let frames = 4
     /// points per drawn wave
     public static let points = 256
@@ -32,7 +31,7 @@ public final class WavetableNode: DSPNode {
     private let inUse = Atomic<Int>(0)        // the buffer it is reading
     private let blocks = Atomic<Int>(0)       // counts audio blocks (to tell whether audio is running)
 
-    public static let maxVoices = 4
+    public static let maxVoices = kMaxVoices
     private var phase = [Double](repeating: 0, count: WavetableNode.maxVoices)
     private var pos: Float = 0
     private var env = [Float](repeating: 1, count: WavetableNode.maxVoices)
@@ -163,12 +162,11 @@ public final class WavetableNode: DSPNode {
         // the morph position moves smoothly; worked out once per sample for all voices
         let p0 = pos
         pos += (target - pos) * (1 - powf(1 - posC, Float(frames)))
-        let nVoices = clampIndex(params[7], Self.maxVoices) + 1
-        for v in 0..<nVoices {
-            let pi = v == 0 ? 0 : 2 * v, ti = v == 0 ? 1 : 2 * v + 1
-            let hasPitch = isConnected(connected, pi), hasTrig = isConnected(connected, ti)
-            if v > 0 && !hasPitch && !hasTrig { continue }          // extra voices play once they're patched
-            let pitch = inputs[pi], tr = inputs[ti]
+        let hasPitch = isConnected(connected, 0), hasTrig = isConnected(connected, 1)
+        // one voice per note arriving (a chord); a mono cable is one note
+        let np = hasPitch ? inVoices[0] : 1, nt = hasTrig ? inVoices[1] : 1
+        for v in 0..<max(np, nt) {
+            let pitch = voice(inputs[0], min(v, np - 1)), tr = voice(inputs[1], min(v, nt - 1))
             let semis = params[2] + params[3] / 100 + (hasPitch ? cvSemitones(pitch[frames - 1]) : 0)
             let hz = 261.6256 * Double(powf(2, semis / 12))
             let inc = hz / sampleRate

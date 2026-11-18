@@ -65,7 +65,7 @@ public struct PatchGroup: Codable, Equatable, Identifiable, Sendable {
 }
 
 public struct Patch: Codable, Equatable, Sendable {
-    public static let currentVersion = 11
+    public static let currentVersion = 12
     public var version: Int = Patch.currentVersion
     public var nodes: [PatchNode] = []
     public var cables: [PatchCable] = []
@@ -177,6 +177,24 @@ public extension Patch {
                 }
                 p.nodes[i].data["notes"] = nil
             }
+        }
+        if version < 12 {
+            // v12: a chord travels on one pitch / gate cable. 0.3's extra voice outlets (roll~ pitch 2 …,
+            // chord~ pitch 2 …) and the synths' extra voice inlets / "voices" setting are gone.
+            let kinds = Dictionary(p.nodes.map { ($0.id, $0.kind) }, uniquingKeysWith: { a, _ in a })
+            p.cables.removeAll { c in
+                switch kinds[c.fromNode] {
+                case "roll" where c.fromPort >= 3: return true
+                case "chord" where c.fromPort >= 2: return true
+                default: break
+                }
+                switch kinds[c.toNode] {
+                case "wave", "shapes": return (c.toPort >= 2 && c.toPort < kParamPortBase) || c.toPort == kParamPortBase + 7
+                case "macro": return (c.toPort >= 3 && c.toPort < kParamPortBase) || c.toPort == kParamPortBase + 9
+                default: return false
+                }
+            }
+            for i in p.nodes.indices where ["wave", "shapes", "macro"].contains(p.nodes[i].kind) { p.nodes[i].params["voices"] = nil }
         }
         if version < 9 {
             // v9: div~ outlets became a ×16 … ÷64 list; old ÷n (default ÷k on outlet k) keeps its meaning.

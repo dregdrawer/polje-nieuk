@@ -146,6 +146,9 @@ public struct ModuleSpec {
     public let outputs: [String]
     public let params: [ParamSpec]
     public let factory: (ModuleSpec, Double) -> DSPNode
+    /// Outlets whose cable can carry several notes at once (a chord from roll~ / chord~). Note 1 (the lowest)
+    /// is what a mono module reads, so they work as before anywhere else.
+    public var polyOutputs: [Int] = []
 
     public func paramIndex(_ key: String) -> Int? { params.firstIndex { $0.key == key } }
 

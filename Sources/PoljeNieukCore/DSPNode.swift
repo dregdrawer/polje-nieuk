@@ -7,6 +7,10 @@ public let kMaxBlock = 64
 /// Cables whose `toPort` is at or above this number go to a parameter (port - base = parameter index).
 public let kParamPortBase = 1000
 
+/// Notes one cable can carry (a chord). A poly outlet's buffer holds them one after another (note v at
+/// `outputs[k] + v * kMaxBlock`); note 0 is the outlet's ordinary buffer, so mono modules read the first one.
+public let kMaxVoices = 4
+
 /// Per-parameter info the audio thread needs, without touching Swift strings/arrays.
 public struct ParamRT {
     var min: Float
@@ -128,11 +132,17 @@ open class DSPNode {
         autoOn.initialize(repeating: false, count: pc)
         autoHold = .allocate(capacity: pc)
         autoHold.initialize(repeating: false, count: pc)
-        outputs = spec.outputs.map { _ in
-            let b = UnsafeMutablePointer<Float>.allocate(capacity: kMaxBlock)
-            b.initialize(repeating: 0, count: kMaxBlock)
+        let poly = Set(spec.polyOutputs)
+        outputs = spec.outputs.indices.map { k in
+            let n = kMaxBlock * (poly.contains(k) ? kMaxVoices : 1)
+            let b = UnsafeMutablePointer<Float>.allocate(capacity: n)
+            b.initialize(repeating: 0, count: n)
             return b
         }
+        outVoices = .allocate(capacity: max(spec.outputs.count, 1))
+        outVoices.initialize(repeating: 1, count: max(spec.outputs.count, 1))
+        inVoices = .allocate(capacity: max(spec.inputs.count, 1))
+        inVoices.initialize(repeating: 1, count: max(spec.inputs.count, 1))
         outLevel = .allocate(capacity: max(spec.outputs.count, 1))
         outLevel.initialize(repeating: 0, count: max(spec.outputs.count, 1))
     }
@@ -146,6 +156,7 @@ open class DSPNode {
         autoLane.deallocate(); autoOn.deallocate(); autoHold.deallocate()
         outputs.forEach { $0.deallocate() }
         outLevel.deallocate()
+        outVoices.deallocate(); inVoices.deallocate()
     }
 
     open func process(frames: Int, inputs: UnsafePointer<UnsafePointer<Float>>,
@@ -167,6 +178,19 @@ open class DSPNode {
         }
         for (key, start) in defaultData { setData(key, n.data[key] ?? start) }
         loadAutomation(n.data)
+    }
+
+    /// Notes on each outlet this block (poly outlets set it; 1 otherwise).
+    public let outVoices: UnsafeMutablePointer<Int>
+    /// Notes arriving on each inlet this block (set by the graph before `process`; 1 = mono).
+    public let inVoices: UnsafeMutablePointer<Int>
+    /// Note `v` of what arrives on an inlet (only valid for v < inVoices[port]).
+    @inline(__always) public final func voice(_ input: UnsafePointer<Float>, _ v: Int) -> UnsafePointer<Float> {
+        input + v * kMaxBlock
+    }
+    /// Note `v` of a poly outlet's buffer.
+    @inline(__always) public final func outVoice(_ k: Int, _ v: Int) -> UnsafeMutablePointer<Float> {
+        outputs[k] + v * kMaxBlock
     }
 
     /// UI: activity per outlet — block peak with a ~250 ms fall, so short clock / gate pulses still show.

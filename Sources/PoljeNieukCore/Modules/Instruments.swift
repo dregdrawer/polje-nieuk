@@ -201,10 +201,10 @@ public enum MacroEngines {
 }
 
 final class MacroNode: DSPNode {
-    // 0 engine, 1 note, 2 harmonics, 3 timbre, 4 morph, 5 decay, 6 colour, 7 level, 8 attack, 9 voices (1…4)
-    // inputs: 0 pitch (0.1 = 1 octave), 1 trig, 2 level (gate/env into the low-pass gate),
-    //         then pitch 2 / trig 2 … pitch 4 / trig 4
-    static let maxVoices = 4
+    // 0 engine, 1 note, 2 harmonics, 3 timbre, 4 morph, 5 decay, 6 colour, 7 level, 8 attack
+    // inputs: 0 pitch (0.1 = 1 octave), 1 trig, 2 level (gate/env into the low-pass gate) —
+    //         a chord on the pitch / trig cables plays every note
+    static let maxVoices = kMaxVoices
     private final class Voice {
         let dsp: OpaquePointer
         let bridge: RateBridge
@@ -229,12 +229,11 @@ final class MacroNode: DSPNode {
         let level = params[7], attackMs = params[8]
         let oL = outputs[0], oR = outputs[1]
         oL.update(repeating: 0, count: frames); oR.update(repeating: 0, count: frames)
-        let n = clampIndex(params[9], Self.maxVoices) + 1
-        for v in 0..<n {
-            let pi = v == 0 ? 0 : 1 + 2 * v, ti = v == 0 ? 1 : 2 + 2 * v
-            let hasPitch = isConnected(connected, pi), hasTrig = isConnected(connected, ti)
-            if v > 0 && !hasPitch && !hasTrig { continue }          // extra voices play once they're patched
-            let pitch = inputs[pi], tr = inputs[ti]
+        let hasPitch = isConnected(connected, 0), hasTrig = isConnected(connected, 1)
+        // one voice per note arriving (a chord); a mono cable is one note
+        let np = hasPitch ? inVoices[0] : 1, nt = hasTrig ? inVoices[1] : 1
+        for v in 0..<max(np, nt) {
+            let pitch = voice(inputs[0], min(v, np - 1)), tr = voice(inputs[1], min(v, nt - 1))
             let vc = voices[v]
             vc.p.engine = Int32(clampIndex(params[0], MacroEngines.names.count))
             vc.p.note = 60 + params[1]

@@ -470,8 +470,8 @@ public final class TuringNode: DSPNode {
 
 public final class RollNode: DSPNode {
     // 0 length, 1 division, 2 lowest note, 3 gate length
-    // outputs: pitch, gate, vel (voice 1, the lowest note), then pitch 2 / gate 2 … pitch 4 / gate 4:
-    // a step with a chord sends each note out on its own voice
+    // outputs: pitch, gate, vel — a step with a chord sends all its notes down the same cables (up to 4;
+    // the lowest first, which is what a mono module plays)
     public static let steps = 32
     public static let rows = 24
     /// Notes on / off: row * steps + step (row 0 = lowest). Any number of notes per step.
@@ -479,13 +479,10 @@ public final class RollNode: DSPNode {
     private var step = -1
     private var gateLeft = 0
     private var clock = StepClock()
-    public static let voices = 4
-    /// each voice's pitch row, kept while it's silent (so a release doesn't slide)
+    public static let voices = kMaxVoices
+    /// each note's pitch row, kept while it's silent (so a release doesn't slide)
     private var held = [Float](repeating: 0, count: RollNode.voices)
     private var on = [Bool](repeating: false, count: RollNode.voices)
-    /// outlet of voice v's pitch / gate (voice 0 = the first three outlets)
-    @inline(__always) static func pitchOut(_ v: Int) -> Int { v == 0 ? 0 : 3 + 2 * (v - 1) }
-    @inline(__always) static func gateOut(_ v: Int) -> Int { v == 0 ? 1 : 4 + 2 * (v - 1) }
 
     public override init(spec: ModuleSpec, sampleRate: Double) {
         grid = .allocate(capacity: Self.steps * Self.rows); grid.initialize(repeating: 0, count: Self.steps * Self.rows)
@@ -516,23 +513,31 @@ public final class RollNode: DSPNode {
         let div = Divisions.beats(params[1])
         let low = params[2].rounded()
         let gateLen = min(max(params[3], 0.05), 1)
-        let V = Self.voices
+        // notes on the cables: the most any step of the loop has (kept steady, so releases ring out)
+        var V = 1
+        for s in 0..<len {
+            var c = 0
+            for r in 0..<Self.rows where grid[r * Self.steps + s] > 0.5 { c += 1 }
+            V = max(V, c)
+        }
+        V = min(V, Self.voices)
+        for k in 0..<3 { outVoices[k] = V }
         for i in 0..<frames {
             if clock.tick(beat: ctx.beat[i], div: div, spb: ctx.samplesPerBeat, clockIn: nil, sampleRate: sampleRate) {
                 step = safeInt(floor(ctx.beat[i] / div)) % len
                 // this step's notes, lowest first, one per voice
                 var v = 0
-                for r in 0..<Self.rows where grid[r * Self.steps + step] > 0.5 && v < V {
+                for r in 0..<Self.rows where grid[r * Self.steps + step] > 0.5 && v < Self.voices {
                     held[v] = Float(r); on[v] = true; v += 1
                 }
-                for k in v..<V { on[k] = false }
+                for k in v..<Self.voices { on[k] = false }
                 gateLeft = v > 0 ? max(16, Int(Float(clock.stepSamples) * gateLen)) : 0
             }
             for v in 0..<V {
                 let g = gateLeft > 0 && on[v]
-                outputs[Self.pitchOut(v)][i] = pitchCV(low + held[v])
-                outputs[Self.gateOut(v)][i] = g ? kGateHigh : 0
-                if v == 0 { outputs[2][i] = g ? 0.8 : 0 }
+                outVoice(0, v)[i] = pitchCV(low + held[v])
+                outVoice(1, v)[i] = g ? kGateHigh : 0
+                outVoice(2, v)[i] = g ? 0.8 : 0
             }
             if gateLeft > 0 { gateLeft -= 1 }
         }

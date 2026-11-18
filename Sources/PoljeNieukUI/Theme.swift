@@ -216,12 +216,6 @@ enum BoxLayout {
             let used = (usage[node.id]?.ins.filter { $0 < kParamPortBase }.max() ?? -1) + 1
             return (Array(spec.inputs.prefix(max(hw.outputs, used, 1))), [])
         case "mix": return (Array(spec.inputs.prefix(MixerLayout.channels(node.params["chans"] ?? 1))), spec.outputs)
-        case "wave", "shapes", "macro":
-            // pitch / trig pairs for the extra voices only when "voices" asks for them (and never hide a patched one)
-            let baseIns = node.kind == "macro" ? 3 : 2
-            let v = Int((node.params["voices"] ?? 0).rounded()) + 1
-            let used = (usage[node.id]?.ins.filter { $0 < kParamPortBase }.max() ?? -1) + 1
-            return (Array(spec.inputs.prefix(max(baseIns + 2 * (max(v, 1) - 1), used))), spec.outputs)
         case "div":
             // outlet labels follow each output's division
             return (spec.inputs, (0..<spec.outputs.count).map { k in

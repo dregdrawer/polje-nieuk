@@ -401,6 +401,29 @@ func runSource(_ kind: String, params: [String: Float] = [:], data: [String: [Fl
     }
     return (node, res)
 }
+/// Like runSource, but every note a cable carries: [outlet][note][samples].
+func runNotes(_ kind: String, params: [String: Float] = [:], data: [String: [Float]] = [:], seconds: Double) -> [[[Float]]] {
+    let h = GraphHost(sampleRate: sr)
+    var p = Patch()
+    let n = PatchNode(kind: kind, x: 0, y: 0, params: params, data: data)
+    p.nodes = [n]
+    h.load(p); h.prepareForStart()
+    let node = h.node(n.id)!
+    let ins = UnsafeMutablePointer<UnsafeMutablePointer<Float>>.allocate(capacity: 1); ins[0] = .allocate(capacity: kMaxBlock)
+    ins[0].update(repeating: 0, count: kMaxBlock)
+    let outs = UnsafeMutablePointer<UnsafeMutablePointer<Float>>.allocate(capacity: 1); outs[0] = .allocate(capacity: kMaxBlock)
+    var res = [[[Float]]](repeating: [[Float]](repeating: [], count: kMaxVoices), count: node.outputs.count)
+    for _ in 0..<Int(seconds * sr / Double(kMaxBlock)) {
+        h.process(frames: kMaxBlock, inputs: ins, inputCount: 0, outputs: outs, outputCount: 1)
+        for k in 0..<node.outputs.count {
+            for v in 0..<kMaxVoices {
+                if v < node.outVoices[k] { res[k][v].append(contentsOf: UnsafeBufferPointer(start: node.outputs[k] + v * kMaxBlock, count: kMaxBlock)) }
+                else { res[k][v].append(contentsOf: [Float](repeating: 0, count: kMaxBlock)) }
+            }
+        }
+    }
+    return res
+}
 /// Pitch (semitones) at each gate onset.
 func notesAtGates(_ pitch: [Float], _ gate: [Float]) -> [Int] {
     var r: [Int] = [], prev: Float = 0
@@ -438,10 +461,10 @@ do {
     // a chord: C E G on step 0 → voice 1 = C, voice 2 = E, voice 3 = G; voice 4 stays silent
     var g = [Float](repeating: 0, count: 32 * 24)
     for r in [12, 16, 19] { g[r * 32 + 0] = 1 }
-    let (_, c) = runSource("roll", params: ["len": 4, "low": -12], data: ["grid": g], seconds: 0.4)
-    let v1 = notesAtGates(c[0], c[1]).first, v2 = notesAtGates(c[3], c[4]).first, v3 = notesAtGates(c[5], c[6]).first
-    check(v1 == 0 && v2 == 4 && v3 == 7 && notesAtGates(c[7], c[8]).isEmpty,
-          "roll~ chord: C on voice 1, E on voice 2, G on voice 3 (\(String(describing: v1)), \(String(describing: v2)), \(String(describing: v3)))")
+    let c = runNotes("roll", params: ["len": 4, "low": -12], data: ["grid": g], seconds: 0.4)
+    let v1 = notesAtGates(c[0][0], c[1][0]).first, v2 = notesAtGates(c[0][1], c[1][1]).first, v3 = notesAtGates(c[0][2], c[1][2]).first
+    check(v1 == 0 && v2 == 4 && v3 == 7 && notesAtGates(c[0][3], c[1][3]).isEmpty,
+          "roll~ chord on one cable: C, E, G as its three notes (\(String(describing: v1)), \(String(describing: v2)), \(String(describing: v3)))")
     // an old one-note-per-step patch converts to the grid
     var old = Patch(); old.version = 10
     old.nodes = [PatchNode(kind: "roll", x: 0, y: 0, data: ["notes": rollNotes])]
@@ -912,7 +935,7 @@ do {
     }
 }
 
-print("Chords: roll~ voices into a synth's voices")
+print("Chords: roll~ on one cable into a synth")
 do {
     /// how strongly `hz` is in x (Goertzel)
     func power(_ x: [Float], _ hz: Double) -> Double {
@@ -926,16 +949,11 @@ do {
         for r in [12, 16, 19] { g[r * 32 + 0] = 1 }               // C E G on every step 0
         var p = Patch()
         let roll = PatchNode(kind: "roll", x: 0, y: 0, params: ["len": 1, "low": -12, "gatelen": 1], data: ["grid": g])
-        let params: [String: Float] = kind == "wave" ? ["voices": 1] : (kind == "shapes" ? ["voices": 1, "shape": 3] : ["voices": 1, "engine": 8, "decay": 1])   // choice 1 = "2" voices
+        let params: [String: Float] = kind == "wave" ? [:] : (kind == "shapes" ? ["shape": 3] : ["engine": 8, "decay": 1])
         let syn = PatchNode(kind: kind, x: 0, y: 0, params: params)
         p.nodes = [roll, syn]
-        let base = kind == "macro" ? 1 : 0
-        for v in 0..<3 {
-            let po = v == 0 ? 0 : 3 + 2 * (v - 1), go = v == 0 ? 1 : 4 + 2 * (v - 1)
-            let pi = v == 0 ? 0 : base + 2 * v, ti = v == 0 ? 1 : base + 2 * v + 1
-            p.cables += [PatchCable(fromNode: roll.id, fromPort: po, toNode: syn.id, toPort: pi),
-                         PatchCable(fromNode: roll.id, fromPort: go, toNode: syn.id, toPort: ti)]
-        }
+        p.cables = [PatchCable(fromNode: roll.id, fromPort: 0, toNode: syn.id, toPort: 0),
+                    PatchCable(fromNode: roll.id, fromPort: 1, toNode: syn.id, toPort: 1)]
         let h = GraphHost(sampleRate: sr)
         h.load(p); h.prepareForStart()
         let ins = UnsafeMutablePointer<UnsafeMutablePointer<Float>>.allocate(capacity: 1); ins[0] = .allocate(capacity: kMaxBlock)
@@ -947,26 +965,29 @@ do {
             y.append(contentsOf: UnsafeBufferPointer(start: h.node(syn.id)!.outputs[0], count: kMaxBlock))
         }
         let tail = Array(y.suffix(12000))
-        let pc = power(tail, 261.63), pe = power(tail, 329.63), pg = power(tail, 392.0), off = power(tail, 300)
-        // voices 2: the third voice's inlets aren't shown, so G only sounds once voices is 3
-        check(pc > off * 20 && pe > off * 20, "\(kind)~ with 2 voices plays C and E together")
-        // now 3 voices: G joins
-        h.node(syn.id)!.base[ModuleRegistry.spec(kind)!.paramIndex("voices")!] = 2
-        var y3: [Float] = []
-        for _ in 0..<Int(0.5 * sr / Double(kMaxBlock)) {
-            h.process(frames: kMaxBlock, inputs: ins, inputCount: 0, outputs: outs, outputCount: 1)
-            y3.append(contentsOf: UnsafeBufferPointer(start: h.node(syn.id)!.outputs[0], count: kMaxBlock))
-        }
-        let t3 = Array(y3.suffix(12000))
-        check(power(t3, 392.0) > power(t3, 300) * 20 && power(t3, 392.0) > pg * 4, "\(kind)~ with 3 voices adds G (G \(power(t3, 392.0)) vs before \(pg), off \(power(t3, 300)))")
+        let off = power(tail, 300)
+        check(power(tail, 261.63) > off * 20 && power(tail, 329.63) > off * 20 && power(tail, 392.0) > off * 20,
+              "\(kind)~ plays C, E and G from one pitch / gate cable")
+        // unplugged: back to a single note
+        p.cables = []
+        h.load(p)
+        check(h.node(syn.id)!.inVoices[0] >= 1, "\(kind)~ unplugged keeps working")
     }
+    // patches saved with 0.3's separate voice outlets / inlets: those cables go, the rest stay
+    var old = Patch(); old.version = 11
+    let r = PatchNode(kind: "roll", x: 0, y: 0), w = PatchNode(kind: "wave", x: 0, y: 0, params: ["voices": 2])
+    old.nodes = [r, w]
+    old.cables = [PatchCable(fromNode: r.id, fromPort: 0, toNode: w.id, toPort: 0), PatchCable(fromNode: r.id, fromPort: 1, toNode: w.id, toPort: 1),
+                  PatchCable(fromNode: r.id, fromPort: 3, toNode: w.id, toPort: 2), PatchCable(fromNode: r.id, fromPort: 4, toNode: w.id, toPort: 3)]
+    let m = old.migrated()
+    check(m.cables.count == 2 && m.nodes[1].params["voices"] == nil, "0.3 patches lose the separate voice cables, keep pitch / gate")
 }
 
 print("chord~")
 do {
     func chord(_ params: [String: Float], seconds: Double = 0.2) -> [Int] {
-        let (_, o) = runSource("chord", params: params, seconds: seconds)
-        return (0..<4).map { Int((o[2 * $0].last! * 120).rounded()) }
+        let o = runNotes("chord", params: params, seconds: seconds)
+        return (0..<4).map { Int((o[0][$0].last! * 120).rounded()) }
     }
     check(Array(chord(["size": 0, "voices": 0, "lead": 0]).prefix(3)) == [0, 4, 7], "C major, degree I, triad: C E G")
     check(chord(["degree": 4, "voices": 1, "lead": 0]) == [7, 11, 14, 17], "degree V seventh: G B D F (G7)")
@@ -992,7 +1013,7 @@ do {
     var g: [[Float]] = [[], [], []]
     for _ in 0..<Int(0.4 * sr / Double(kMaxBlock)) {
         h.process(frames: kMaxBlock, inputs: ins, inputCount: 0, outputs: outs, outputCount: 1)
-        for k in 0..<3 { g[k].append(contentsOf: UnsafeBufferPointer(start: h.node(ch.id)!.outputs[2 * k + 1], count: kMaxBlock)) }
+        for k in 0..<3 { g[k].append(contentsOf: UnsafeBufferPointer(start: h.node(ch.id)!.outputs[1] + k * kMaxBlock, count: kMaxBlock)) }
     }
     let first = g.map { $0.firstIndex { $0 > 0.2 } ?? -1 }
     let gap = Int(0.05 * sr)

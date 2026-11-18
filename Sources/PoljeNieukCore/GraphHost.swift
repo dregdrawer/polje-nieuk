@@ -20,6 +20,10 @@ final class CompiledGraph {
         let sums: [Sum]
         let mods: [Mod]
         let connected: UInt64
+        /// inlets fed by one poly outlet: where that outlet's note count is
+        var polyIn: [(port: Int, count: UnsafeMutablePointer<Int>)] = []
+        /// whether any inlet takes notes from a poly outlet (else every inlet is one note)
+        var anyPoly = false
     }
 
     let entries: [Entry]
@@ -43,6 +47,9 @@ final class CompiledGraph {
                 }
             }
             let node = e.node
+            // notes per inlet this block: a chord cable's count, 1 everywhere else (also after one is unplugged)
+            for p in 0..<max(node.spec.inputs.count, 1) { node.inVoices[p] = 1 }
+            if e.anyPoly { for p in e.polyIn { node.inVoices[p.port] = min(max(p.count.pointee, 1), kMaxVoices) } }
             let target: Float = node.bypassed && node.spec.bypass != .none ? 1 : 0
             let start = node.bypassMix
             // Fully bypassed: the module is frozen (no CPU), outputs come straight from the routing.
@@ -80,14 +87,18 @@ final class CompiledGraph {
                     }
                 }
                 node.bypassMix = target
+                if target == 1 { for k in 0..<node.outputs.count { node.outVoices[k] = 1 } }   // bypassed: no stray notes
             }
             // Safety net: a module that blows up can't poison the rest of the patch (or crash the UI).
             let fall = expf(-Float(frames) / (0.25 * Float(ctx.sampleRate)))   // ~250 ms fall
             for (k, out) in node.outputs.enumerated() {
                 var pk: Float = 0
-                for i in 0..<frames {
-                    if !out[i].isFinite { out[i] = 0; node.nonFinite &+= 1 }
-                    pk = max(pk, abs(out[i]))
+                for v in 0..<node.outVoices[k] {
+                    let o = out + v * kMaxBlock
+                    for i in 0..<frames {
+                        if !o[i].isFinite { o[i] = 0; node.nonFinite &+= 1 }
+                        if v == 0 { pk = max(pk, abs(o[i])) }
+                    }
                 }
                 node.outLevel[k] = max(pk, node.outLevel[k] * fall)
             }
@@ -237,6 +248,7 @@ public final class GraphHost {
             ptrs.initialize(repeating: UnsafePointer(zero), count: max(1, nIn))
             owned.append(UnsafeMutableRawPointer(ptrs))
             var sums: [CompiledGraph.Sum] = []
+            var polyIn: [(port: Int, count: UnsafeMutablePointer<Int>)] = []
             var mask: UInt64 = 0
             for p in 0..<nIn {
                 let sources: [UnsafePointer<Float>] = cables
@@ -249,6 +261,11 @@ public final class GraphHost {
                 mask |= 1 << UInt64(p)
                 if sources.count == 1 {
                     ptrs[p] = sources[0]
+                    // one cable from a poly outlet: all its notes come through
+                    if let c = cables.first(where: { $0.toNode == id && $0.toPort == p }), let src = nodes[c.fromNode],
+                       src.spec.polyOutputs.contains(c.fromPort) {
+                        polyIn.append((p, src.outVoices + c.fromPort))
+                    }
                 } else {
                     let dest = UnsafeMutablePointer<Float>.allocate(capacity: kMaxBlock)
                     dest.initialize(repeating: 0, count: kMaxBlock)
@@ -279,7 +296,7 @@ public final class GraphHost {
                 }
                 if !sources.isEmpty || !absolute.isEmpty { mods.append(.init(index: i, sources: sources, absolute: absolute)) }
             }
-            entries.append(.init(node: node, inputs: ptrs, sums: sums, mods: mods, connected: mask))
+            entries.append(.init(node: node, inputs: ptrs, sums: sums, mods: mods, connected: mask, polyIn: polyIn, anyPoly: !polyIn.isEmpty))
         }
         let hasClock = entries.contains { $0.node is ClockNode }
         return CompiledGraph(entries: entries, hasClock: hasClock, owned: owned)
