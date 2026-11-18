@@ -14,6 +14,11 @@ private let panThreshold: CGFloat = 3
 private let deleteButtonSize: CGFloat = 24
 #endif
 struct PatchCanvasView: View {
+    #if os(macOS)
+    static let swiftUIPinch = true
+    #else
+    static let swiftUIPinch = false
+    #endif
     @ObservedObject var model: AppModel
     /// pan / zoom: the canvas re-renders on these, the boxes layer doesn't
     @ObservedObject private var viewport: Viewport
@@ -109,7 +114,8 @@ struct PatchCanvasView: View {
                     model.finderAt = model.toCanvas(p)
                 }))
             #endif
-            // pinch anywhere — over boxes too — to zoom around your fingers
+            // pinch anywhere — over boxes too — to zoom around your fingers. (On the iPad the boxes' layer does
+            // the pinching for the whole canvas — two pinch handlers fought each other.)
             .simultaneousGesture(
                 MagnifyGesture()
                     .updating($pinching) { _, state, _ in state = true }
@@ -123,7 +129,8 @@ struct PatchCanvasView: View {
                         model.viewScale = new
                         model.viewOffset = CGSize(width: anchor.x - cx * new, height: anchor.y - cy * new)
                     }
-                    .onEnded { _ in zoomStart = nil }
+                    .onEnded { _ in zoomStart = nil },
+                including: Self.swiftUIPinch || model.threeD ? .all : .subviews     // iPad 3D: the box layer isn't there
             )
             .onChange(of: pinching) { _, on in
                 model.isZooming = on

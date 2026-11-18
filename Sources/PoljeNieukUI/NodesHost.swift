@@ -342,13 +342,13 @@ private final class Layer {
                                       mover.insertSubview(h, belowSubview: cableHolder)
                                       #endif
                                       return h }()
-            if let f = model.groupFrame(g, drag: false), v.frame != f { v.frame = f }
+            if let f = model.groupFrame(g, drag: false) { place(v, f) }
             shift(v, !g.members.isEmpty && Set(g.members).isSubset(of: model.dragState.ids) ? model.dragState.delta : .zero)
         }
         for n in model.patch.nodes {
             let v = boxes[n.id] ?? { let h = boxView(n.id, AnyView(BoxRoot(model: model, feed: feed(n.id), zoom: model.hostedZoom, id: n.id, group: false)))
                                      boxes[n.id] = h; mover.addSubview(h); return h }()
-            if let f = model.boxFrame(n, drag: .zero), v.frame != f { v.frame = f }
+            if let f = model.boxFrame(n, drag: .zero) { place(v, f) }
             shift(v, model.dragState.offset(n.id))
         }
         if ids != order {
@@ -376,6 +376,28 @@ private final class Layer {
         }
         CATransaction.commit()
         layoutCables(fresh: false)
+    }
+
+    /// Set a box view's place. On the iPad a dragged box carries a transform, and a view's `frame` is
+    /// meaningless then (UIKit says so): setting it put the box somewhere else — boxes jumped away from the
+    /// finger mid-drag and when dropped. `center` + `bounds` aren't affected by the transform.
+    private func place(_ v: PView, _ f: CGRect) {
+        #if os(macOS)
+        if v.frame != f { v.frame = f }               // the Mac moves the layer, not the view: frame is fine
+        #else
+        let b = CGRect(origin: .zero, size: f.size), c = CGPoint(x: f.midX, y: f.midY)
+        if v.bounds != b { v.bounds = b }
+        if v.center != c { v.center = c }
+        #endif
+    }
+    /// A box view's place, ignoring any drag transform.
+    func baseFrame(_ v: PView) -> CGRect {
+        #if os(macOS)
+        return v.frame
+        #else
+        return CGRect(x: v.center.x - v.bounds.width / 2, y: v.center.y - v.bounds.height / 2,
+                      width: v.bounds.width, height: v.bounds.height)
+        #endif
     }
 
     /// Shift a view by a drag (canvas points) without touching its frame.
@@ -436,7 +458,7 @@ private final class Layer {
         let z = model.hostedZoom.scale, pad = NodesLayout.pad
         for n in model.patch.nodes.reversed() {
             guard let v = boxes[n.id] else { continue }
-            let box = v.frame.insetBy(dx: pad, dy: pad)
+            let box = baseFrame(v).insetBy(dx: pad, dy: pad)
             guard box.contains(p) else { continue }
             let local = CGPoint(x: (p.x - box.minX) / z, y: (p.y - box.minY) / z)
             return model.dragZones[n.id]?.values.contains { $0.contains(local) } == true ? n.id : nil
@@ -655,10 +677,12 @@ final class NodesContainer: UIView, UIGestureRecognizerDelegate {
         model.dragState.moved = { [weak self] in self?.layer2.layoutDragged() }
         layer2.layoutAll()
         // the canvas's own pinch and hover don't see touches that land on boxes: handled here
-        let pinch = UIPinchGestureRecognizer(target: self, action: #selector(pinched(_:)))
+        // the iPad's only pinch-zoom: on the window (see didMoveToWindow), so it sees both fingers wherever
+        // they land on the canvas — over boxes or not. (A second pinch on the canvas fought this one: the
+        // view jumped somewhere else mid-pinch.)
+        pinch.addTarget(self, action: #selector(pinched(_:)))
         pinch.delegate = self
         pinch.cancelsTouchesInView = false
-        addGestureRecognizer(pinch)
         addGestureRecognizer(UIHoverGestureRecognizer(target: self, action: #selector(hovered(_:))))
         // box drags straight from the finger (see DragZone)
         boxPan.addTarget(self, action: #selector(dragged(_:)))
@@ -677,17 +701,24 @@ final class NodesContainer: UIView, UIGestureRecognizerDelegate {
     }
     override func didMoveToWindow() {
         super.didMoveToWindow()
+        if let w = window, pinch.view !== w { pinch.view?.removeGestureRecognizer(pinch); w.addGestureRecognizer(pinch) }
         // the hosting controllers need a parent for menus, popovers and keyboard focus
         if window != nil, let parent = parentController {
             for h in hosts where h.parent == nil { parent.addChild(h); h.didMove(toParent: parent) }
         }
     }
 
+    private let pinch = UIPinchGestureRecognizer()
     @objc private func pinched(_ g: UIPinchGestureRecognizer) {
         switch g.state {
         case .began, .changed:
-            model.isZooming = true
-            model.zoom(by: g.scale, around: g.location(in: self))
+            if g.state == .began {
+                model.isZooming = true
+                // a box being dragged with the first finger lets go: the two fingers now zoom
+                if panID != nil { boxPan.isEnabled = false; boxPan.isEnabled = true }
+            }
+            guard g.numberOfTouches >= 2 else { return }
+            model.zoom(by: g.scale, around: g.location(in: self))     // keeps the point between the fingers still
             g.scale = 1
         default: model.isZooming = false
         }
@@ -704,6 +735,11 @@ final class NodesContainer: UIView, UIGestureRecognizerDelegate {
     private var panID: UUID?
     private var panStart = CGPoint.zero
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        if g === pinch {
+            // only fingers on the canvas (not the top bar, a browser, a sheet …)
+            let p = touch.location(in: self)
+            return bounds.contains(p) && window != nil && !model.threeD       // this view covers exactly the canvas
+        }
         guard g === boxPan else { return true }
         // decided at touch-down, so the box's own (later) gesture stands aside from the start
         let p = touch.location(in: self)
@@ -726,6 +762,7 @@ final class NodesContainer: UIView, UIGestureRecognizerDelegate {
             panID = nil
             DispatchQueue.main.async { [weak self] in self?.model.nativeDrag = false }
         }
+        if model.isZooming, g.state == .changed { return }
     }
 
     private var laidOut: (CGFloat, CGSize)?
