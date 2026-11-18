@@ -43,6 +43,8 @@ struct BoxKey: Equatable {
     var look = 0                      // colours / light-dark
     var help = false
     var groupRect: CGRect?
+    var padNames: [String] = []       // rack~: what each pad holds
+    var loading: Set<Int> = []        // rack~: pads still reading their file
 }
 
 /// Carries a box's key to its view (one per box).
@@ -240,6 +242,7 @@ private final class Layer {
             }
             k.selected = m.selectedNodes.contains(n.id)
             k.autoRec = m.autoRecording.contains(n.id)
+            if n.kind == "rack", let r = m.host.node(n.id) as? RackNode { k.padNames = r.padNames; k.loading = m.loadingPads[n.id] ?? [] }
             if n.kind != "text", let spec = ModuleRegistry.spec(n.kind) {
                 k.onScreen = ModuleBox.isOnScreen(m, n, BoxLayout.width(n), BoxLayout.height(n, spec, m.hw))
             }

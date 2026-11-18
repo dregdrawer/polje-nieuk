@@ -1534,28 +1534,49 @@ public final class AppModel: ObservableObject {
     private func padNameURL(_ id: UUID, _ k: Int) -> URL { Self.samplesDirectory.appendingPathComponent("\(id.uuidString)-pad\(k).txt") }
     private var restoredRacks: Set<ObjectIdentifier> = []
 
-    /// Load an audio file onto pad `k` of rack `id` (and keep it with the patch).
+    /// Load audio files into rack~ pads, from pad `k` on (several files fill the next pads). Reading, resampling
+    /// and saving the copy happen in the background; the drop returns at once (it used to freeze the app until the
+    /// file was decoded).
     @discardableResult
-    func loadPad(_ id: UUID, _ k: Int, from url: URL) -> Bool {
-        guard let rack = host.node(id) as? RackNode else { return false }
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        do {
-            let audio = try AudioFiles.read(url, sampleRate: host.sampleRate, maxSeconds: 20)
-            guard !audio.isEmpty else { audioError = "That file has no audio."; return false }
-            let name = url.deletingPathExtension().lastPathComponent
-            rack.load(pad: k, audio, name: name)
-            try? AudioFiles.write(audio, sampleRate: host.sampleRate, to: padURL(id, k))
-            try? name.write(to: padNameURL(id, k), atomically: true, encoding: .utf8)
-            if let spec = ModuleRegistry.spec("rack"), let i = spec.paramIndex("sel") { setParam(id, i, Float(k)) }
-            audioError = nil
-            objectWillChange.send()
-            return true
-        } catch {
-            audioError = "Couldn't read \(url.lastPathComponent): \(error.localizedDescription)"
-            return false
+    func loadPads(_ id: UUID, from k: Int, _ urls: [URL]) -> Bool {
+        guard host.node(id) is RackNode, !urls.isEmpty, k >= 0, k < RackLayout.pads else { return false }
+        let jobs = Array(urls.prefix(RackLayout.pads - k).enumerated().map { (k + $0.offset, $0.element) })
+        let sr = host.sampleRate
+        let padFiles = jobs.map { (padURL(id, $0.0), padNameURL(id, $0.0)) }
+        loadingPads[id, default: []].formUnion(jobs.map(\.0))
+        DispatchQueue.global(qos: .userInitiated).async {
+            for (n, (pad, url)) in jobs.enumerated() {
+                let scoped = url.startAccessingSecurityScopedResource()
+                let result = Result { try AudioFiles.read(url, sampleRate: sr, maxSeconds: 20) }
+                if scoped { url.stopAccessingSecurityScopedResource() }
+                let name = url.deletingPathExtension().lastPathComponent
+                if case .success(let audio) = result, !audio.isEmpty {
+                    try? AudioFiles.write(audio, sampleRate: sr, to: padFiles[n].0)
+                    try? name.write(to: padFiles[n].1, atomically: true, encoding: .utf8)
+                }
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    self.loadingPads[id]?.remove(pad)
+                    switch result {
+                    case .success(let audio) where !audio.isEmpty:
+                        (self.host.node(id) as? RackNode)?.load(pad: pad, audio, name: name)
+                        self.audioError = nil
+                        if n == 0, let spec = ModuleRegistry.spec("rack"), let i = spec.paramIndex("sel") { self.setParam(id, i, Float(pad)) }
+                    case .success:
+                        self.audioError = "\(url.lastPathComponent) has no audio."
+                    case .failure(let e):
+                        self.audioError = "Couldn't read \(url.lastPathComponent): \(e.localizedDescription)"
+                    }
+                    self.objectWillChange.send()
+                }
+            }
         }
+        return true
     }
+    @discardableResult
+    func loadPad(_ id: UUID, _ k: Int, from url: URL) -> Bool { loadPads(id, from: k, [url]) }
+    /// rack~ pads whose sample is being read (the pad shows "loading…").
+    @Published var loadingPads: [UUID: Set<Int>] = [:]
 
     /// Back to the built-in sound on pad `k`.
     func resetPad(_ id: UUID, _ k: Int) {

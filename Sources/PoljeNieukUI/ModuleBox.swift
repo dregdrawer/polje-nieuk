@@ -115,10 +115,14 @@ struct ModuleBox: View {
             }
         }
         .dropDestination(for: URL.self) { urls, _ in
+            // rack~: dropped outside its pads — into the selected pad (and the ones after it)
+            if node.kind == "rack" {
+                return model.loadPads(node.id, from: Int((node.params["sel"] ?? 0).rounded()), urls)
+            }
             guard model.node(node.id) is SampleBufferNode, let u = urls.first else { return false }
             return model.loadAudio(u, into: node.id)
         } isTargeted: { t in
-            dropTargeted = t && model.node(node.id) is SampleBufferNode
+            dropTargeted = t && (model.node(node.id) is SampleBufferNode || node.kind == "rack")
         }
     }
 

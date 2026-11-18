@@ -10,6 +10,8 @@ struct RackView: View {
     let patchNode: PatchNode
     private var clocked: Bool { clockPatched(model, patchNode.id) }
     @State private var paint: Float?
+    /// the pad a file is being dragged over (it lights up)
+    @State private var dropPad: Int?
 
     private var len: Int { Int((patchNode.params["len"] ?? 16).rounded()) }
     private var selected: Int { Int((patchNode.params["sel"] ?? 0).rounded()) }
@@ -112,8 +114,9 @@ struct RackView: View {
         let muted = (patchNode.params["m\(k + 1)"] ?? 0) > 0.5
         let solo = (patchNode.params["s\(k + 1)"] ?? 0) > 0.5
         return VStack(alignment: .leading, spacing: 2) {
-            Text(node.padNames[k]).font(.system(size: 8.5, design: .monospaced))
-                .foregroundStyle(muted ? Theme.faint : Theme.text)
+            let loading = model.loadingPads[patchNode.id]?.contains(k) == true
+            Text(dropPad == k ? "drop to load" : (loading ? "loading…" : node.padNames[k])).font(.system(size: 8.5, design: .monospaced))
+                .foregroundStyle(muted ? Theme.faint : (loading ? Theme.dim : Theme.text))
                 .lineLimit(2).frame(maxWidth: .infinity, alignment: .topLeading)
             Spacer(minLength: 0)
             HStack(spacing: 2) {
@@ -130,12 +133,16 @@ struct RackView: View {
             let lv = CGFloat(min(max(node.readouts[1 + k], 0), 1))
             if lv > 0.01 { ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.text.opacity(0.35 * lv))) }
         })
-        .overlay(Rectangle().stroke(k == selected ? Theme.text : Theme.border, lineWidth: k == selected ? 1.5 : 0.5))
+        .overlay(Rectangle().stroke(k == selected || dropPad == k ? Theme.text : Theme.border,
+                                    lineWidth: dropPad == k ? 2.5 : (k == selected ? 1.5 : 0.5)))
+        .overlay { if dropPad == k { Rectangle().fill(Theme.text.opacity(0.12)).allowsHitTesting(false) } }
         .contentShape(Rectangle())
         .onTapGesture { select(k); if !clocked { node.audition = k } }
         .dropDestination(for: URL.self) { urls, _ in
-            guard let u = urls.first else { return false }
-            return model.loadPad(patchNode.id, k, from: u)
+            dropPad = nil
+            return model.loadPads(patchNode.id, from: k, urls)          // several files: this pad and the next ones
+        } isTargeted: { on in
+            if on { dropPad = k } else if dropPad == k { dropPad = nil }
         }
         .contextMenu {
             Button("Back to the built-in \(RackLayout.kitNames[k])") { model.resetPad(patchNode.id, k) }
