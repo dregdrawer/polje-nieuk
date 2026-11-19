@@ -467,11 +467,27 @@ private final class Layer {
     }
 
     private func style(_ paths: (CGPath, CGPath, CGPath, CGFloat), _ p: CAShapeLayer, _ d: CAShapeLayer, _ s: CAShapeLayer) {
-        let cable = PColor(Theme.cable).cgColor, sel = PColor(Theme.selected).cgColor, w = paths.3
-        p.path = paths.0; p.strokeColor = cable; p.lineWidth = w
-        d.path = paths.1; d.strokeColor = cable; d.lineWidth = w
-        d.lineDashPattern = [4, 3]
-        s.path = paths.2; s.strokeColor = sel; s.lineWidth = w + 1
+        let cable = PColor(Theme.cable).cgColor, sel = PColor(Theme.selected).cgColor
+        p.path = paths.0; p.strokeColor = cable
+        d.path = paths.1; d.strokeColor = cable
+        s.path = paths.2; s.strokeColor = sel
+        widths(p, d, s)
+    }
+
+    /// While a pan / zoom stretches the boxes' layer, the cables' lines are thinned by the same amount, so on
+    /// screen they keep one width (the paths aren't redrawn — only the line width changes).
+    private var stretch: CGFloat = 1
+    func setCableStretch(_ k: CGFloat) {
+        guard k > 0, k.isFinite, k != stretch else { return }
+        stretch = k
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        widths(plain, dashed, selected); widths(movPlain, movDashed, movSelected)
+        CATransaction.commit()
+    }
+    private func widths(_ p: CAShapeLayer, _ d: CAShapeLayer, _ s: CAShapeLayer) {
+        let w = 1 / stretch
+        p.lineWidth = w; d.lineWidth = w; s.lineWidth = 2 * w
+        d.lineDashPattern = [NSNumber(value: Double(4 * w)), NSNumber(value: Double(3 * w))]
     }
 
     /// The box whose grab area (title, empty port space …) is under this point (mover coordinates), if any.
@@ -642,6 +658,7 @@ final class NodesContainer: NSView {
         layer.position = .zero
         layer.transform = t
         CATransaction.commit()
+        layer2.setCableStretch(p.isStill ? 1 : mv.a)
         // no redraw mid-zoom (every box re-rendering, again and again): the picture stretches, and is
         // redrawn sharp once, when the zoom settles
     }
@@ -816,6 +833,7 @@ final class NodesContainer: UIView, UIGestureRecognizerDelegate {
         mover.bounds = CGRect(origin: .zero, size: bounds.size)
         mover.layer.position = .zero
         mover.transform = p.move
+        layer2.setCableStretch(p.isStill ? 1 : p.move.a)
         // no redraw mid-zoom (every box re-rendering, again and again): the picture stretches, and is
         // redrawn sharp once, when the zoom settles
     }
