@@ -108,6 +108,18 @@ enum NodesLayout {
 }
 
 /// Where the layer goes: laid out at the drawn offset / zoom, then moved as a picture to the live ones.
+/// The stretched picture can't land exactly where the fresh drawing does (edges move up to a pixel): when a
+/// pan / zoom stops, the canvas fades from one to the other instead of switching in one frame (which looked
+/// like every box jumping). On the canvas's own layer, so the old picture fades out exactly as it was shown.
+extension NodesContainer {
+    static func settleFade() -> CATransition {
+        let t = CATransition()
+        t.type = .fade
+        t.duration = 0.15
+        return t
+    }
+}
+
 private struct Placement {
     var offset: CGSize, live: CGFloat
     var drawnOffset: CGSize, drawn: CGFloat
@@ -395,9 +407,15 @@ private final class Layer {
     /// meaningless then (UIKit says so): setting it put the box somewhere else — boxes jumped away from the
     /// finger mid-drag and when dropped. `center` + `bounds` aren't affected by the transform.
     private func place(_ v: PView, _ f: CGRect) {
+        // on whole screen pixels: a box at a fraction of a pixel was drawn smeared while a zoom stretched it,
+        // then snapped a pixel to one side when redrawn as the zoom stopped — every box seemed to jump
         #if os(macOS)
+        let f = mover.backingAlignedRect(f, options: [.alignMinXNearest, .alignMinYNearest, .alignWidthNearest, .alignHeightNearest])
         if v.frame != f { v.frame = f }               // the Mac moves the layer, not the view: frame is fine
         #else
+        let px = mover.window?.screen.scale ?? 2
+        let f = CGRect(x: (f.minX * px).rounded() / px, y: (f.minY * px).rounded() / px,
+                       width: (f.width * px).rounded() / px, height: (f.height * px).rounded() / px)
         let b = CGRect(origin: .zero, size: f.size), c = CGPoint(x: f.midX, y: f.midY)
         if v.bounds != b { v.bounds = b }
         if v.center != c { v.center = c }
@@ -636,6 +654,7 @@ final class NodesContainer: NSView {
         super.layout()
         guard pendingSwap else { return }
         pendingSwap = false
+        layer?.add(Self.settleFade(), forKey: "settle")
         CATransaction.begin(); CATransaction.setDisableActions(true)
         layer2.layoutAll()
         apply(model.placement)
@@ -842,6 +861,7 @@ final class NodesContainer: UIView, UIGestureRecognizerDelegate {
         super.layoutSubviews()
         if pendingSwap {
             pendingSwap = false
+            layer.add(Self.settleFade(), forKey: "settle")
             CATransaction.begin(); CATransaction.setDisableActions(true)
             layer2.layoutAll()
             apply(model.placement)
