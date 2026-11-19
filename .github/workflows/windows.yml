@@ -12,9 +12,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Configure (clang-cl, x64)
-        run: cmake -S windows -B windows/build -G "Visual Studio 17 2022" -A x64 -T ClangCL
+        run: cmake -S windows -B windows/build -A x64 -T ClangCL
       - name: Build
         run: cmake --build windows/build --config Release --parallel
+      - name: Engine matches the Mac app
+        shell: pwsh
+        run: |
+          $r = Get-ChildItem -Recurse windows/build/pnrender_artefacts/Release -Filter "pnrender.exe" | Select-Object -First 1
+          & $r.FullName windows/tests/every-device.json 6 > every.txt
+          python windows/tests/compare.py windows/tests/every-device.mac.txt every.txt
+          & $r.FullName windows/tests/stress-95.json 8 > stress.txt
+          python windows/tests/compare.py windows/tests/stress-95.mac.txt stress.txt
       - name: Package
         shell: pwsh
         run: |

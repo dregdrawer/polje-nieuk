@@ -40,6 +40,42 @@ if let i = CommandLine.arguments.firstIndex(of: "--dump-specs"), i + 1 < Command
     exit(0)
 }
 
+
+// `selftest --render <patch.json> <seconds>`: renders a patch offline (no input) and prints every outlet's
+// RMS — the Windows (JUCE) engine has the same mode, so the two can be compared number for number.
+if let i = CommandLine.arguments.firstIndex(of: "--render"), i + 2 < CommandLine.arguments.count {
+    let data = try! Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[i + 1]))
+    let p = try! JSONDecoder().decode(Patch.self, from: data).migrated()
+    let seconds = Double(CommandLine.arguments[i + 2]) ?? 4
+    let h = GraphHost(sampleRate: 48000)
+    h.load(p)
+    let block = 256, chans = 8
+    let ins = (0..<chans).map { _ in UnsafeMutablePointer<Float>.allocate(capacity: block) }
+    let outs = (0..<chans).map { _ in UnsafeMutablePointer<Float>.allocate(capacity: block) }
+    for b in ins { b.initialize(repeating: 0, count: block) }
+    var sums: [UUID: [Double]] = [:]
+    for n in p.nodes { sums[n.id] = [Double](repeating: 0, count: h.node(n.id)?.outputs.count ?? 0) }
+    let blocks = Int(seconds * 48000) / block
+    var total = 0
+    ins.withUnsafeBufferPointer { ip in
+        outs.withUnsafeBufferPointer { op in
+            for _ in 0..<blocks {
+                for b in outs { b.update(repeating: 0, count: block) }
+                h.process(frames: block, inputs: UnsafePointer(ip.baseAddress!), inputCount: chans,
+                          outputs: UnsafePointer(op.baseAddress!), outputCount: chans)
+                // outlets hold the last 64-sample chunk: sample them once per block
+                for n in p.nodes { if let d = h.node(n.id) { for k in 0..<d.outputs.count { for s in 0..<64 { let v = Double(d.outputs[k][s]); sums[n.id]![k] += v * v } } } }
+                total += 64
+            }
+        }
+    }
+    for (idx, n) in p.nodes.enumerated() {
+        let r = (sums[n.id] ?? []).map { String(format: "%.4f", sqrt($0 / Double(max(total, 1)))) }
+        print("\(idx) \(n.kind) \(r.joined(separator: " "))")
+    }
+    exit(0)
+}
+
 var failures = 0
 func check(_ ok: Bool, _ msg: String) {
     print(ok ? "  PASS  \(msg)" : "  FAIL  \(msg)")

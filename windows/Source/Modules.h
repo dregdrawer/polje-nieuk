@@ -23,5 +23,9 @@ template <class T> Factory make() {
 Factory factoryCore(const std::string& kind);
 Factory factoryMI(const std::string& kind);
 Factory factoryFX(const std::string& kind);
+Factory factoryFX2(const std::string& kind);
+Factory factoryBuffers(const std::string& kind);
+Factory factorySeq(const std::string& kind);
+Factory factoryInst(const std::string& kind);
 
 } // namespace pn

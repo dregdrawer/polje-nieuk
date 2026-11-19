@@ -58,37 +58,51 @@ private:
 
 class MacroNode : public DSPNode {
 public:
-    MacroNode(const ModuleSpec& s, double sr) : DSPNode(s, sr), dsp(mi_macro_create()),
-        bridge(sr, MI_MACRO_RATE, MI_MACRO_BLOCK, 1, 2) {}
-    ~MacroNode() override { mi_macro_destroy(dsp); }
+    MacroNode(const ModuleSpec& s, double sr) : DSPNode(s, sr) {
+        for (int v = 0; v < kMaxVoices; ++v) voices.push_back(std::make_unique<Voice>(sr));
+    }
     void process(int frames, const float* const* in, uint64_t con, ProcessContext&) override {
         bool hasPitch = isConnected(con, 0), hasTrig = isConnected(con, 1), hasLevel = isConnected(con, 2);
-        p.engine = clampIndex(params[0], int(Layouts::macroEngines.size()));
-        p.note = 60 + params[1];
-        p.harmonics = params[2]; p.timbre = params[3]; p.morph = params[4]; p.decay = params[5]; p.lpg_colour = params[6];
-        p.mod_note = hasPitch ? cvSemitones(in[0][frames - 1]) : 0;
-        p.trigger_patched = hasTrig ? 1 : 0; p.level_patched = hasLevel ? 1 : 0;
-        p.mod_level = hasLevel ? std::clamp(in[2][frames - 1], 0.0f, 1.0f) : 0;
+        const float* lv = in[2];
         float level = params[7], attackMs = params[8];
-        float rise = attackMs > 0.5f && hasTrig ? 1 / std::max(attackMs * 0.001f * float(sampleRate), 1.0f) : 1.0f;
-        if (rise >= 1) atk = 1;
         float* oL = out(0); float* oR = out(1);
-        const float* tr = in[1];
-        bridge.run(frames, [&](int, int i) { return hasTrig ? tr[i] : 0.0f; }, [&] {
-            float mx = 0; const float* t = bridge.inChannel(0);
-            for (int k = 0; k < bridge.block; ++k) mx = std::max(mx, t[k]);
-            p.trigger = mx > 0.2f ? 1.0f : 0.0f;
-            mi_macro_process(dsp, &p, bridge.outChannel(0), bridge.outChannel(1));
-        }, [&](int c, int i, float v) {
-            if (c == 0) {
-                if (rise < 1) { if (trigEdge.rising(tr[i])) atk = 0; atk = std::min(atk + rise, 1.0f); }
-                oL[i] = v * level * atk;
-            } else oR[i] = v * level * atk;
-        });
-        readouts[0] = float(mi_macro_active_engine(dsp));
+        std::fill(oL, oL + frames, 0.0f); std::fill(oR, oR + frames, 0.0f);
+        // one voice per note arriving (a chord); a mono cable is one note
+        int np = hasPitch ? inVoices[0] : 1, nt = hasTrig ? inVoices[1] : 1;
+        for (int v = 0; v < std::max(np, nt); ++v) {
+            const float* pitch = voice(in[0], std::min(v, np - 1));
+            const float* tr = voice(in[1], std::min(v, nt - 1));
+            auto& vc = *voices[size_t(v)];
+            vc.p.engine = clampIndex(params[0], int(Layouts::macroEngines.size()));
+            vc.p.note = 60 + params[1];
+            vc.p.harmonics = params[2]; vc.p.timbre = params[3]; vc.p.morph = params[4];
+            vc.p.decay = params[5]; vc.p.lpg_colour = params[6];
+            vc.p.mod_note = hasPitch ? cvSemitones(pitch[frames - 1]) : 0;
+            vc.p.trigger_patched = hasTrig ? 1 : 0; vc.p.level_patched = hasLevel ? 1 : 0;
+            vc.p.mod_level = hasLevel ? std::clamp(lv[frames - 1], 0.0f, 1.0f) : 0;
+            float rise = attackMs > 0.5f && hasTrig ? 1 / std::max(attackMs * 0.001f * float(sampleRate), 1.0f) : 1.0f;
+            if (rise >= 1) vc.atk = 1;
+            vc.bridge.run(frames, [&](int, int i) { return hasTrig ? tr[i] : 0.0f; }, [&] {
+                float mx = 0; const float* t = vc.bridge.inChannel(0);
+                for (int k = 0; k < vc.bridge.block; ++k) mx = std::max(mx, t[k]);
+                vc.p.trigger = mx > 0.2f ? 1.0f : 0.0f;
+                mi_macro_process(vc.dsp, &vc.p, vc.bridge.outChannel(0), vc.bridge.outChannel(1));
+            }, [&](int c, int i, float y) {
+                if (c == 0) {
+                    if (rise < 1) { if (vc.trigEdge.rising(tr[i])) vc.atk = 0; vc.atk = std::min(vc.atk + rise, 1.0f); }
+                    oL[i] += y * level * vc.atk;
+                } else oR[i] += y * level * vc.atk;
+            });
+            if (v == 0) readouts[0] = float(mi_macro_active_engine(vc.dsp));
+        }
     }
 private:
-    MIMacro* dsp; RateBridge bridge; MIMacroParams p {}; float atk = 1; EdgeDetector trigEdge;
+    struct Voice {
+        MIMacro* dsp; RateBridge bridge; MIMacroParams p {}; float atk = 1; EdgeDetector trigEdge;
+        explicit Voice(double sr) : dsp(mi_macro_create()), bridge(sr, MI_MACRO_RATE, MI_MACRO_BLOCK, 1, 2) {}
+        ~Voice() { mi_macro_destroy(dsp); }
+    };
+    std::vector<std::unique_ptr<Voice>> voices;
 };
 
 class ModalNode : public DSPNode {
@@ -221,33 +235,47 @@ private:
 
 class ShapesNode : public DSPNode {
 public:
-    ShapesNode(const ModuleSpec& s, double sr) : DSPNode(s, sr), dsp(mi_shapes_create()), bridge(sr, MI_SHAPES_RATE, MI_SHAPES_BLOCK, 1, 1) {}
-    ~ShapesNode() override { mi_shapes_destroy(dsp); }
+    ShapesNode(const ModuleSpec& s, double sr) : DSPNode(s, sr) {
+        for (int v = 0; v < kMaxVoices; ++v) voices.push_back(std::make_unique<Voice>(sr));
+    }
     void process(int frames, const float* const* in, uint64_t con, ProcessContext&) override {
-        bool hasPitch = isConnected(con, 0), hasTrig = isConnected(con, 1);
-        const float* tr = in[1];
-        q.shape = clampIndex(params[0], int(Layouts::shapesNames.size()));
-        q.note = 60 + params[1] + (hasPitch ? cvSemitones(in[0][frames - 1]) : 0);
-        q.timbre = params[2]; q.color = params[3];
+        int shape = clampIndex(params[0], int(Layouts::shapesNames.size()));
         float decayMs = params[4], level = params[5], attackMs = params[6];
-        bool decays = decayMs > 0.5f, useEnv = hasTrig && (decays || attackMs > 0.5f);
+        bool decays = decayMs > 0.5f;
         float mul = decays ? std::exp(std::log(1e-3f) / std::max(decayMs * 0.001f * float(sampleRate), 1.0f)) : 1.0f;
         float rise = attackMs > 0.5f ? 1 / std::max(attackMs * 0.001f * float(sampleRate), 1.0f) : 1.0f;
         float* o = out(0);
-        bridge.run(frames, [&](int, int i) { return hasTrig ? tr[i] : 0.0f; }, [&] {
-            float mx = 0; const float* t = bridge.inChannel(0);
-            for (int k = 0; k < bridge.block; ++k) mx = std::max(mx, t[k]);
-            q.strike = (mx > 0.2f && !strikeHeld) ? 1 : 0;
-            strikeHeld = mx > 0.2f;
-            mi_shapes_process(dsp, &q, bridge.outChannel(0));
-        }, [&](int, int i, float v) {
-            if (hasTrig && trigEdge.rising(tr[i])) { if (rise < 1) { env = 0; rising = true; } else { env = 1; rising = false; } }
-            o[i] = v * (useEnv ? env : 1.0f) * level;
-            if (useEnv) { if (rising) { env += rise; if (env >= 1) { env = 1; rising = false; } } else env *= mul; }
-        });
+        std::fill(o, o + frames, 0.0f);
+        bool hasPitch = isConnected(con, 0), hasTrig = isConnected(con, 1);
+        int np = hasPitch ? inVoices[0] : 1, nt = hasTrig ? inVoices[1] : 1;
+        for (int v = 0; v < std::max(np, nt); ++v) {
+            const float* pitch = voice(in[0], std::min(v, np - 1));
+            const float* tr = voice(in[1], std::min(v, nt - 1));
+            auto& vc = *voices[size_t(v)];
+            vc.q.shape = shape;
+            vc.q.note = 60 + params[1] + (hasPitch ? cvSemitones(pitch[frames - 1]) : 0);
+            vc.q.timbre = params[2]; vc.q.color = params[3];
+            bool useEnv = hasTrig && (decays || attackMs > 0.5f);
+            vc.bridge.run(frames, [&](int, int i) { return hasTrig ? tr[i] : 0.0f; }, [&] {
+                float mx = 0; const float* t = vc.bridge.inChannel(0);
+                for (int k = 0; k < vc.bridge.block; ++k) mx = std::max(mx, t[k]);
+                vc.q.strike = (mx > 0.2f && !vc.strikeHeld) ? 1 : 0;
+                vc.strikeHeld = mx > 0.2f;
+                mi_shapes_process(vc.dsp, &vc.q, vc.bridge.outChannel(0));
+            }, [&](int, int i, float y) {
+                if (hasTrig && vc.trigEdge.rising(tr[i])) { if (rise < 1) { vc.env = 0; vc.rising = true; } else { vc.env = 1; vc.rising = false; } }
+                o[i] += y * (useEnv ? vc.env : 1.0f) * level;
+                if (useEnv) { if (vc.rising) { vc.env += rise; if (vc.env >= 1) { vc.env = 1; vc.rising = false; } } else vc.env *= mul; }
+            });
+        }
     }
 private:
-    MIShapes* dsp; RateBridge bridge; MIShapesParams q {}; float env = 1; bool rising = false, strikeHeld = false; EdgeDetector trigEdge;
+    struct Voice {
+        MIShapes* dsp; RateBridge bridge; MIShapesParams q {}; float env = 1; bool rising = false, strikeHeld = false; EdgeDetector trigEdge;
+        explicit Voice(double sr) : dsp(mi_shapes_create()), bridge(sr, MI_SHAPES_RATE, MI_SHAPES_BLOCK, 1, 1) {}
+        ~Voice() { mi_shapes_destroy(dsp); }
+    };
+    std::vector<std::unique_ptr<Voice>> voices;
 };
 
 class HazeNode : public DSPNode {

@@ -34,7 +34,8 @@ public:
         for (int c = 0; c < n; ++c) {
             if (!isConnected(con, c)) { peaks[size_t(c)] = 0; readouts[size_t(c)] = 0; continue; }
             float* o = ctx.outputs[c]; float m = 0;
-            for (int i = 0; i < frames; ++i) { float v = in[c][i] * g; o[i] += v; m = std::max(m, std::abs(v)); }
+            float gc = (cvChannels >> c) & 1u ? 1.0f : g;   // control voltages keep 1 V/oct
+            for (int i = 0; i < frames; ++i) { float v = in[c][i] * gc; o[i] += v; m = std::max(m, std::abs(v)); }
             peaks[size_t(c)] = std::max(m, peaks[size_t(c)] * decay);
             readouts[size_t(c)] = peaks[size_t(c)];
         }
@@ -326,6 +327,10 @@ Factory factoryFor(const std::string& kind) {
     if (auto f = factoryCore(kind)) return f;
     if (auto f = factoryMI(kind)) return f;
     if (auto f = factoryFX(kind)) return f;
+    if (auto f = factoryFX2(kind)) return f;
+    if (auto f = factoryBuffers(kind)) return f;
+    if (auto f = factorySeq(kind)) return f;
+    if (auto f = factoryInst(kind)) return f;
     return nullptr;
 }
 
