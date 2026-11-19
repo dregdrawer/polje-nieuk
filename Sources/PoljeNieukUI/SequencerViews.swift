@@ -9,28 +9,28 @@ struct KeysView: View {
     let node: KeysNode
     let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let patchNode: PatchNode
-    @State private var lastKey = -1
+    @State var lastKey = -1
 
-    private static let whiteSemis = [0, 2, 4, 5, 7, 9, 11]
-    private static let blackSemis = [1, 3, 6, 8, 10]
+    static let whiteSemis = [0, 2, 4, 5, 7, 9, 11]
+    static let blackSemis = [1, 3, 6, 8, 10]
 
-    private var latch: Bool { (patchNode.params["latch"] ?? 0) > 0.5 }
+    var latch: Bool { (patchNode.params["latch"] ?? 0) > 0.5 }
 
     // Geometry on whole points: every key edge is snapped, so all the gaps (the outlines) are the same
     // 1 pt — fractional edges made some lines look thicker or blurrier than others.
-    private static func edge(_ i: Int, _ width: CGFloat) -> CGFloat { (CGFloat(i) * width / 15).rounded() }
-    private static func whiteRect(_ w: Int, _ size: CGSize) -> CGRect {
+    static func edge(_ i: Int, _ width: CGFloat) -> CGFloat { (CGFloat(i) * width / 15).rounded() }
+    static func whiteRect(_ w: Int, _ size: CGSize) -> CGRect {
         let x0 = edge(w, size.width), x1 = edge(w + 1, size.width)
         return CGRect(x: x0, y: 0, width: max(x1 - x0 - 1, 1), height: size.height.rounded())
     }
-    private static func blackRect(_ whiteIndex: Int, _ size: CGSize) -> CGRect {
+    static func blackRect(_ whiteIndex: Int, _ size: CGSize) -> CGRect {
         let bw = max((size.width / 15 * 0.6 / 2).rounded() * 2, 2)       // even, so it centres on the gap
         let centre = edge(whiteIndex + 1, size.width) - 0.5               // the middle of the 1 pt gap
         return CGRect(x: (centre - bw / 2).rounded(), y: 0, width: bw, height: (size.height * 0.6).rounded())
     }
 
     /// key index (0…24) under a point
-    private func key(at p: CGPoint, _ size: CGSize) -> Int? {
+    func key(at p: CGPoint, _ size: CGSize) -> Int? {
         // black keys first (upper part)
         for o in 0..<2 {
             for (j, s) in Self.blackSemis.enumerated() {
@@ -70,7 +70,7 @@ struct KeysView: View {
         }
     }
 
-    private func draw(_ ctx: LiveGC, _ size: CGSize) {
+    func draw(_ ctx: LiveGC, _ size: CGSize) {
         // the engine only reports the sounding note while audio runs (its readout starts at 0 = the lowest C)
         let sounding = model.isRunning ? Int(node.readouts[0]) : -1
         // a key lights up as a whole while it's pressed, latched or sounding
@@ -101,12 +101,12 @@ struct SeqView: View {
     let node: SeqNode
     let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let patchNode: PatchNode
-    @State private var paintGate: Float?
+    @State var paintGate: Float?
 
-    private let range: Float = 24
+    let range: Float = 24
     /// Columns shown: 16, or the whole pattern when it's 32 / 64 steps.
-    private var cols: Int { max(16, SeqNode.length(patchNode.params["len"] ?? 8)) }
-    private let gateRow: CGFloat = 16
+    var cols: Int { max(16, SeqNode.length(patchNode.params["len"] ?? 8)) }
+    let gateRow: CGFloat = 16
 
     var body: some View {
         GeometryReader { geo in
@@ -128,7 +128,7 @@ struct SeqView: View {
         }
     }
 
-    private func edit(_ p: CGPoint, start: CGPoint, _ size: CGSize) {
+    func edit(_ p: CGPoint, start: CGPoint, _ size: CGSize) {
         let colW = size.width / CGFloat(cols)
         let col = min(max(Int(p.x / colW), 0), cols - 1)
         let barH = size.height - gateRow - 2
@@ -142,12 +142,12 @@ struct SeqView: View {
         }
     }
 
-    private func commit() {
+    func commit() {
         model.setData(patchNode.id, ["pitch": (0..<SeqNode.steps).map { node.pitches[$0] },
                                      "gate": (0..<SeqNode.steps).map { node.gates[$0] }])
     }
 
-    private func draw(_ ctx: LiveGC, _ size: CGSize) {
+    func draw(_ ctx: LiveGC, _ size: CGSize) {
         let n = cols
         let colW = size.width / CGFloat(n)
         let barH = size.height - gateRow - 2
@@ -214,7 +214,7 @@ struct TuringView: View {
 
     /// Top: the shift register — only the bits in the loop, newest on the right. Middle: the loop as it will play (filled = plays, outline = silent).
     /// Bottom: the CV output right now.
-    private func draw(_ ctx: LiveGC, _ size: CGSize) {
+    func draw(_ ctx: LiveGC, _ size: CGSize) {
         guard model.isRunning else {
             ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
             ctx.draw(LiveText("audio off", size: 9, color: Theme.dim),
@@ -265,29 +265,29 @@ struct GridEditor: View {
     let kind: Kind
     let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let patchNode: PatchNode
-    @State private var paint: Float?
+    @State var paint: Float?
 
-    private var rows: Int { if case .roll = kind { return RollNode.rows } else { return DrumsNode.lanes } }
-    private var len: Int { Int((patchNode.params["len"] ?? 16).rounded()) }
-    private var playStep: Int {
+    var rows: Int { if case .roll = kind { return RollNode.rows } else { return DrumsNode.lanes } }
+    var len: Int { Int((patchNode.params["len"] ?? 16).rounded()) }
+    var playStep: Int {
         switch kind { case .roll(let n): return Int(n.readouts[0]); case .drums(let n): return Int(n.readouts[0]) }
     }
 
-    private func isOn(_ step: Int, _ row: Int) -> Bool {
+    func isOn(_ step: Int, _ row: Int) -> Bool {
         switch kind {
         case .roll(let n): return n.isOn(step, row)
         case .drums(let n): return n.hits[row * DrumsNode.steps + step] > 0.5
         }
     }
 
-    private func set(_ step: Int, _ row: Int, _ on: Bool) {
+    func set(_ step: Int, _ row: Int, _ on: Bool) {
         switch kind {
         case .roll(let n): n.grid[row * RollNode.steps + step] = on ? 1 : 0        // any number of notes per step
         case .drums(let n): n.hits[row * DrumsNode.steps + step] = on ? 1 : 0
         }
     }
 
-    private func commit() {
+    func commit() {
         switch kind {
         case .roll(let n): model.setData(patchNode.id, "grid", (0..<RollNode.steps * RollNode.rows).map { n.grid[$0] })
         case .drums(let n): model.setData(patchNode.id, "hits", (0..<DrumsNode.steps * DrumsNode.lanes).map { n.hits[$0] })
@@ -321,11 +321,11 @@ struct GridEditor: View {
     }
 
     /// drums~: lane 1 at the top, beside outlet 1. roll~: low notes at the bottom, like a piano roll.
-    private var topDown: Bool { if case .drums = kind { return true } else { return false } }
-    private func rowY(_ r: Int, _ rh: CGFloat, _ h: CGFloat) -> CGFloat { topDown ? CGFloat(r) * rh : h - CGFloat(r + 1) * rh }
-    private func rowAt(_ y: CGFloat, _ rh: CGFloat) -> Int { let i = Int(floor(y / rh)); return topDown ? i : rows - 1 - i }
+    var topDown: Bool { if case .drums = kind { return true } else { return false } }
+    func rowY(_ r: Int, _ rh: CGFloat, _ h: CGFloat) -> CGFloat { topDown ? CGFloat(r) * rh : h - CGFloat(r + 1) * rh }
+    func rowAt(_ y: CGFloat, _ rh: CGFloat) -> Int { let i = Int(floor(y / rh)); return topDown ? i : rows - 1 - i }
 
-    private func draw(_ ctx: LiveGC, _ size: CGSize) {
+    func draw(_ ctx: LiveGC, _ size: CGSize) {
         let cw = size.width / CGFloat(max(len, 1)), rh = size.height / CGFloat(rows)
         ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
         // piano roll: highlight C rows; drums: alternate lanes

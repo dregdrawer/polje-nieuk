@@ -8,10 +8,10 @@ struct WaveDrawView: View {
     let node: WavetableNode
     let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let patchNode: PatchNode
-    @State private var last: (index: Int, value: Float)?
+    @State var last: (index: Int, value: Float)?
 
-    private var editing: Int { min(max(Int((patchNode.params["edit"] ?? 0).rounded()), 0), WavetableNode.frames - 1) }
-    private let tabsH: CGFloat = 26, presetsH: CGFloat = 18
+    var editing: Int { min(max(Int((patchNode.params["edit"] ?? 0).rounded()), 0), WavetableNode.frames - 1) }
+    let tabsH: CGFloat = 26, presetsH: CGFloat = 18
 
     var body: some View {
         VStack(spacing: 4) {
@@ -36,7 +36,7 @@ struct WaveDrawView: View {
 
     // MARK: tabs
 
-    private var tabs: some View {
+    var tabs: some View {
         ZStack {
             LiveCanvas(signature: {
                 var h = node.version
@@ -54,7 +54,7 @@ struct WaveDrawView: View {
         .frame(height: tabsH)
     }
 
-    private func drawTabs(_ ctx: LiveGC, _ size: CGSize) {
+    func drawTabs(_ ctx: LiveGC, _ size: CGSize) {
         let n = WavetableNode.frames, gap: CGFloat = 4
         let w = (size.width - gap * CGFloat(n - 1)) / CGFloat(n), h = size.height - 5
         for f in 0..<n {
@@ -72,7 +72,7 @@ struct WaveDrawView: View {
 
     // MARK: drawing area
 
-    private func drawMain(_ ctx: LiveGC, _ size: CGSize) {
+    func drawMain(_ ctx: LiveGC, _ size: CGSize) {
         let r = CGRect(origin: .zero, size: size)
         ctx.fill(Path(r), with: .color(Theme.row))
         ctx.fill(Path(CGRect(x: 0, y: size.height / 2, width: size.width, height: 0.5)), with: .color(Theme.faint))
@@ -92,11 +92,11 @@ struct WaveDrawView: View {
         ctx.draw(LiveText("wave \(editing + 1) · draw here", size: 9, color: Theme.dim), at: CGPoint(x: 4, y: 8), anchor: .leading)
     }
 
-    private func wavePath(_ f: Int, in r: CGRect) -> Path {
+    func wavePath(_ f: Int, in r: CGRect) -> Path {
         path(in: r) { node.drawn[f * WavetableNode.points + $0] }
     }
 
-    private func path(in r: CGRect, _ value: (Int) -> Float) -> Path {
+    func path(in r: CGRect, _ value: (Int) -> Float) -> Path {
         let n = WavetableNode.points
         var p = Path()
         for i in 0...n {
@@ -108,7 +108,7 @@ struct WaveDrawView: View {
     }
 
     /// Draw at a point: the stroke is joined to the last point, so fast movements leave no gaps.
-    private func paint(_ p: CGPoint, _ size: CGSize) {
+    func paint(_ p: CGPoint, _ size: CGSize) {
         let n = WavetableNode.points
         guard size.width > 0, size.height > 6 else { return }
         let i = min(max(Int(p.x / size.width * CGFloat(n)), 0), n - 1)
@@ -128,14 +128,14 @@ struct WaveDrawView: View {
         node.rebuild(frame: editing)           // heard straight away
     }
 
-    private func commit() {
+    func commit() {
         model.setData(patchNode.id, "wave", node.waveData)
         model.scheduleAutosave()
     }
 
     // MARK: ready-made shapes
 
-    private var presets: some View {
+    var presets: some View {
         HStack(spacing: 3) {
             ForEach(WavetableNode.presets, id: \.self) { name in button(name) { set(WavetableNode.shape(name)) } }
             button("smooth") { set(smoothed()) }
@@ -144,7 +144,7 @@ struct WaveDrawView: View {
         .frame(height: presetsH)
     }
 
-    private func button(_ title: String, _ action: @escaping () -> Void) -> some View {
+    func button(_ title: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title).font(Theme.monoSmall).foregroundStyle(Theme.text)
                 .lineLimit(1).minimumScaleFactor(0.6)
@@ -155,7 +155,7 @@ struct WaveDrawView: View {
         .buttonStyle(.plain)
     }
 
-    private func set(_ values: [Float]) {
+    func set(_ values: [Float]) {
         let base = node.drawn + editing * WavetableNode.points
         for i in 0..<min(values.count, WavetableNode.points) { base[i] = min(max(values[i], -1), 1) }
         node.rebuild(frame: editing)
@@ -163,7 +163,7 @@ struct WaveDrawView: View {
     }
 
     /// A gentle smoothing of the wave being drawn (rounds off a scribble).
-    private func smoothed() -> [Float] {
+    func smoothed() -> [Float] {
         let n = WavetableNode.points, base = node.drawn + editing * n
         return (0..<n).map { i in
             var s: Float = 0
@@ -182,7 +182,7 @@ struct ChordView: View {
     let patchNode: PatchNode
     static let suffix = ["", "m", "7", "maj7", "m7", "sus2", "sus4", "dim", "aug", "6", "m6", "add9", "9", "m9", "m7♭5", "dim7"]
     static let intervals = ["R", "♭9", "9", "♭3", "3", "4", "♭5", "5", "♯5", "6", "♭7", "7"]
-    private let top: CGFloat = 18
+    let top: CGFloat = 18
 
     var body: some View {
         GeometryReader { geo in
@@ -196,7 +196,7 @@ struct ChordView: View {
 
     /// The chord shown: what's sounding while audio runs (voice leading may have picked another inversion),
     /// otherwise the chord the settings make.
-    private var chord: (notes: [Int], root: Int, quality: Int) {
+    var chord: (notes: [Int], root: Int, quality: Int) {
         let r = node.readouts
         let n = min(max(Int(fin(r[4])), 0), ChordNode.maxVoices)
         if model.isRunning && n > 0 {
@@ -214,14 +214,14 @@ struct ChordView: View {
     }
 
     /// the keyboard's layout: first note shown, and how many octaves
-    private func keyboard(_ notes: [Int]) -> (start: Int, span: Int) {
+    func keyboard(_ notes: [Int]) -> (start: Int, span: Int) {
         let lo = notes.min() ?? 0
         let start = Int(floor(Double(lo) / 12)) * 12
         return (start, 2 + ((notes.max() ?? 0) - start >= 24 ? 1 : 0))
     }
-    private static let whites = [0, 2, 4, 5, 7, 9, 11], blacks = [1, 3, 6, 8, 10]
+    static let whites = [0, 2, 4, 5, 7, 9, 11], blacks = [1, 3, 6, 8, 10]
 
-    private func draw(_ ctx: LiveGC, _ size: CGSize) {
+    func draw(_ ctx: LiveGC, _ size: CGSize) {
         let c = chord
         let notes = c.notes, root = c.root, q = c.quality
         let name = ChordNode.keys[root] + (q >= 0 && q < Self.suffix.count ? Self.suffix[q] : "")
@@ -251,7 +251,7 @@ struct ChordView: View {
     }
 
     /// Click a key: it becomes the root (the "key" setting).
-    private func tap(_ p: CGPoint, _ size: CGSize) {
+    func tap(_ p: CGPoint, _ size: CGSize) {
         guard p.y >= top, let spec = ModuleRegistry.spec("chord"), let ki = spec.paramIndex("key") else { return }
         let (start, span) = keyboard(chord.notes)
         let ww = size.width / CGFloat(7 * span)

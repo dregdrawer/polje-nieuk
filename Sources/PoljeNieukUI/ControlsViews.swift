@@ -12,10 +12,10 @@ struct ControlsView: View {
     let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let patchNode: PatchNode
 
-    private var count: Int { ControlsLayout.count(patchNode.params["count"] ?? 2) }
-    private var range: Int { clampRange(patchNode.params["range"] ?? 0) }
+    var count: Int { ControlsLayout.count(patchNode.params["count"] ?? 2) }
+    var range: Int { clampRange(patchNode.params["range"] ?? 0) }
 
-    private func clampRange(_ v: Float) -> Int { v.isFinite ? min(max(Int(v.rounded()), 0), ControlsLayout.ranges.count - 1) : 0 }
+    func clampRange(_ v: Float) -> Int { v.isFinite ? min(max(Int(v.rounded()), 0), ControlsLayout.ranges.count - 1) : 0 }
 
     var body: some View {
         GeometryReader { geo in
@@ -41,7 +41,7 @@ struct ControlsView: View {
         }
     }
 
-    private func control(_ k: Int, _ size: CGSize) -> some View {
+    func control(_ k: Int, _ size: CGSize) -> some View {
         let t = target(k)
         // every control in the box reserves the same label space, so they all line up
         let anyTarget = (0..<count).contains { target($0) != nil }
@@ -55,7 +55,7 @@ struct ControlsView: View {
     }
 
     /// What control k is patched into: the box's name and the parameter / inlet ("+n" when it drives several).
-    private func target(_ k: Int) -> (module: String, param: String, value: (() -> String)?)? {
+    func target(_ k: Int) -> (module: String, param: String, value: (() -> String)?)? {
         let cs = model.patch.cables.filter { $0.fromNode == patchNode.id && $0.fromPort == k }
         guard let c = cs.first, let n = model.patch.nodes.first(where: { $0.id == c.toNode }),
               let spec = ModuleRegistry.spec(n.kind) else { return nil }
@@ -74,7 +74,7 @@ struct ControlsView: View {
     }
 }
 
-private struct ControlCell: View {
+struct ControlCell: View {
     let style: ControlsView.Style
     let index: Int
     let node: DSPNode
@@ -86,10 +86,10 @@ private struct ControlCell: View {
     let targetParam: String?
     let targetValue: (() -> String)?
     let reserveLabel: Bool
-    @State private var start: Float?
+    @State var start: Float?
 
     /// Cut a label to the width available (monospaced small type ≈ 5.6 pt per character).
-    private func fit(_ s: String, _ width: CGFloat) -> String {
+    func fit(_ s: String, _ width: CGFloat) -> String {
         let n = max(Int(width / 5.6), 1)
         return s.count <= n ? s : String(s.prefix(max(n - 1, 1))) + "…"
     }
@@ -97,7 +97,7 @@ private struct ControlCell: View {
     /// Target names at the top of the cell; returns the height they take.
     /// Target names at the top of the cell. Returns the label band's height — the same for every
     /// control in the box (whether or not this one is patched), so knobs and faders stay level.
-    private func drawTarget(_ ctx: LiveGC, _ size: CGSize, twoLines: Bool) -> CGFloat {
+    func drawTarget(_ ctx: LiveGC, _ size: CGSize, twoLines: Bool) -> CGFloat {
         guard reserveLabel else { return 0 }
         if let p = targetParam {
             ctx.draw(LiveText(fit(p, size.width), size: 9, color: Theme.text),
@@ -110,7 +110,7 @@ private struct ControlCell: View {
         return twoLines ? 23 : 12
     }
 
-    private var param: Int { ControlsLayout.valueIndex(index) }
+    var param: Int { ControlsLayout.valueIndex(index) }
 
     var body: some View {
         GeometryReader { geo in
@@ -138,19 +138,19 @@ private struct ControlCell: View {
     }
 
     /// Position actually in effect (includes modulation patched into the control).
-    private var live: CGFloat {
+    var live: CGFloat {
         // audio off: the engine isn't running, so show the saved position
         let r = model.isRunning ? node.readouts[index] : value
         return CGFloat(r.isFinite ? min(max(r, 0), 1) : 0)
     }
 
-    private var label: String {
+    var label: String {
         if let tv = targetValue { return tv() }
         let v = ControlsLayout.map(Float(live), range: range) * 10      // volts
         return String(format: abs(v) < 9.95 ? "%.2f" : "%.1f", v)
     }
 
-    private func drawSlider(_ ctx: LiveGC, _ size: CGSize) {
+    func drawSlider(_ ctx: LiveGC, _ size: CGSize) {
         let labelH: CGFloat = 14
         let top = max(drawTarget(ctx, size, twoLines: size.height > 110), 0) + 6
         let track = CGRect(x: size.width / 2 - 2, y: top, width: 4, height: max(size.height - labelH - 6 - top, 10))
@@ -169,7 +169,7 @@ private struct ControlCell: View {
     /// Max-style dial: a 270° track with the gap centred at the bottom (both ends level), and the value
     /// as a white arc from the left end. Angles are measured from 12 o'clock, clockwise,
     /// and every point is computed directly, so the drawing is exactly symmetric.
-    private func drawKnob(_ ctx: LiveGC, _ size: CGSize) {
+    func drawKnob(_ ctx: LiveGC, _ size: CGSize) {
         let labelH: CGFloat = 14
         let top = drawTarget(ctx, size, twoLines: size.height > 120)
         let avail = size.height - labelH - top

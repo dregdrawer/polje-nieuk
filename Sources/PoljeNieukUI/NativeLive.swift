@@ -22,6 +22,8 @@ struct LiveGC {
     fileprivate let cg: CGContext?
     fileprivate let gc: GraphicsContext?
     init(cg: CGContext) { self.cg = cg; gc = nil }
+    /// the Core Graphics context, when drawing natively
+    var cgContext: CGContext? { cg }
     init(_ gc: GraphicsContext) { self.gc = gc; cg = nil }
 
     func fill(_ p: Path, with s: Shading, style: FillStyle = FillStyle()) {

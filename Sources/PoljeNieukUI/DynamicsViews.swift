@@ -6,8 +6,8 @@ final class Trace {
     let length: Int
     let rate: Double
     private(set) var rows: [[Float]]
-    private var head = 0
-    private var last: TimeInterval = 0
+    var head = 0
+    var last: TimeInterval = 0
     init(channels: Int, seconds: Double, rate: Double = 40) {
         self.rate = rate
         length = Int(seconds * rate)
@@ -32,8 +32,8 @@ final class Trace {
 
 struct CompView: View {
     let node: DSPNode
-    @State private var trace = Trace(channels: 3, seconds: 4)
-    private let floorDB: Float = -48
+    var trace = Trace(channels: 3, seconds: 4)
+    let floorDB: Float = -48
 
     var body: some View {
         HStack(spacing: 6) {
@@ -45,11 +45,11 @@ struct CompView: View {
         .padding(.vertical, 4)
     }
 
-    private func y(_ db: Float, _ h: CGFloat) -> CGFloat {
+    func y(_ db: Float, _ h: CGFloat) -> CGFloat {
         CGFloat(1 - (min(max(db, floorDB), 0) - floorDB) / -floorDB) * h
     }
 
-    private func drawHistory(_ ctx: LiveGC, _ size: CGSize) {
+    func drawHistory(_ ctx: LiveGC, _ size: CGSize) {
         let r = node.readouts
         trace.push([toDB(r[1]), toDB(r[2]), fin(r[0])], at: Date().timeIntervalSinceReferenceDate)
         let w = size.width, h = size.height - 12
@@ -83,7 +83,7 @@ struct CompView: View {
     }
 
     /// Static transfer curve (input dB → output dB) with the live operating point.
-    private func drawCurve(_ ctx: LiveGC, _ size: CGSize) {
+    func drawCurve(_ ctx: LiveGC, _ size: CGSize) {
         let r = node.readouts
         let thr = fin(r[3]), ratio = max(fin(r[4]), 1), knee = max(fin(r[5]), 0), makeup = fin(r[6])
         let s = min(size.width, size.height)
@@ -128,7 +128,7 @@ struct LFOView: View {
             .padding(.vertical, 4)
     }
 
-    private func draw(_ ctx: LiveGC, _ size: CGSize) {
+    func draw(_ ctx: LiveGC, _ size: CGSize) {
         let r = node.readouts
         let shape = Int((patchNode.params["shape"] ?? 0).rounded())
         let depth = patchNode.params["depth"] ?? 0.5, offset = patchNode.params["offset"] ?? 0

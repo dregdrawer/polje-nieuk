@@ -18,15 +18,15 @@ struct WaveformView: View {
     let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let patchNode: PatchNode
     let spec: ModuleSpec
-    @State private var cache = WaveCache()
-    @State private var dragFrom: CGFloat?
+    var cache = WaveCache()
+    @State var dragFrom: CGFloat?
 
-    private var startIndex: Int? { spec.paramIndex("start") }
-    private var endIndex: Int? { spec.paramIndex("end") }
-    private var gridIndex: Int? { spec.paramIndex("grid") }
+    var startIndex: Int? { spec.paramIndex("start") }
+    var endIndex: Int? { spec.paramIndex("end") }
+    var gridIndex: Int? { spec.paramIndex("grid") }
 
     /// Grid spacing as a fraction of the buffer (nil = grid off / unknown).
-    private func gridStep() -> Double? {
+    func gridStep() -> Double? {
         guard let gi = gridIndex else { return nil }
         let beats = SamplerNode.gridBeats[min(max(Int(node.params[gi].rounded()), 0), SamplerNode.gridBeats.count - 1)]
         let bs = Double(node.readouts[kBeatSamplesSlot])
@@ -36,7 +36,7 @@ struct WaveformView: View {
         return step > 0.002 ? step : nil
     }
 
-    private func snap(_ x: Double) -> Double {
+    func snap(_ x: Double) -> Double {
         guard let g = gridStep() else { return x }
         return min(max((x / g).rounded() * g, 0), 1)
     }
@@ -75,7 +75,7 @@ struct WaveformView: View {
         }
     }
 
-    private func peaks(width: Int) -> [Float] {
+    func peaks(width: Int) -> [Float] {
         let len = buffer.waveLength, ver = buffer.contentVersion
         if cache.version == ver && cache.length == len && cache.width == width { return cache.peaks }
         var p = [Float](repeating: 0, count: max(width, 1))
@@ -97,7 +97,7 @@ struct WaveformView: View {
         return p
     }
 
-    private func draw(_ ctx: LiveGC, _ size: CGSize) {
+    func draw(_ ctx: LiveGC, _ size: CGSize) {
         let w = size.width, h = size.height, mid = h / 2
         ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
         let rec = buffer.waveRecording && node.readouts[0] != 4   // looper overdub (4) keeps white
@@ -149,17 +149,17 @@ struct WaveformView: View {
 /// FFT spectrum of a SpectrumSource, smoothed like a hardware analyser (fast rise, slow fall).
 final class SpectrumAnalyzer {
     static let n = 4096
-    private let fft = vDSP_create_fftsetup(12, FFTRadix(kFFTRadix2))!
-    private var input = [Float](repeating: 0, count: n)
-    private var window = [Float](repeating: 0, count: n)
-    private var re = [Float](repeating: 0, count: n / 2), im = [Float](repeating: 0, count: n / 2)
-    private var mags = [Float](repeating: 0, count: n / 2)
+    let fft = vDSP_create_fftsetup(12, FFTRadix(kFFTRadix2))!
+    var input = [Float](repeating: 0, count: n)
+    var window = [Float](repeating: 0, count: n)
+    var re = [Float](repeating: 0, count: n / 2), im = [Float](repeating: 0, count: n / 2)
+    var mags = [Float](repeating: 0, count: n / 2)
     /// Smoothed level in dB per FFT bin.
     private(set) var db = [Float](repeating: -120, count: n / 2)
 
     init() { vDSP_hann_window(&window, vDSP_Length(Self.n), Int32(vDSP_HANN_NORM)) }
 
-    private var last: CFTimeInterval = 0
+    var last: CFTimeInterval = 0
     /// The display redraws at up to 120 Hz; the FFT only needs ~30.
     func updateIfDue(from src: SpectrumSource) {
         let now = CACurrentMediaTime()
@@ -203,20 +203,20 @@ struct EQCurveView: View {
     let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let patchNode: PatchNode
     let spec: ModuleSpec
-    @State private var analyzer = SpectrumAnalyzer()
-    @State private var dragBand: Int?
+    var analyzer = SpectrumAnalyzer()
+    @State var dragBand: Int?
 
-    private static let fLo = 20.0, fHi = 20000.0, range: Double = 18
+    static let fLo = 20.0, fHi = 20000.0, range: Double = 18
 
-    private func x(_ f: Double, _ w: CGFloat) -> CGFloat { CGFloat(log(max(f, Self.fLo) / Self.fLo) / log(Self.fHi / Self.fLo)) * w }
-    private func f(_ x: CGFloat, _ w: CGFloat) -> Double { Self.fLo * pow(Self.fHi / Self.fLo, Double(min(max(x / max(w, 1), 0), 1))) }
-    private func y(_ db: Double, _ h: CGFloat) -> CGFloat { h / 2 - CGFloat(max(min(db, Self.range), -Self.range) / Self.range) * (h / 2 - 4) }
-    private func gain(_ y: CGFloat, _ h: CGFloat) -> Double { Double((h / 2 - y) / (h / 2 - 4)) * Self.range }
+    func x(_ f: Double, _ w: CGFloat) -> CGFloat { CGFloat(log(max(f, Self.fLo) / Self.fLo) / log(Self.fHi / Self.fLo)) * w }
+    func f(_ x: CGFloat, _ w: CGFloat) -> Double { Self.fLo * pow(Self.fHi / Self.fLo, Double(min(max(x / max(w, 1), 0), 1))) }
+    func y(_ db: Double, _ h: CGFloat) -> CGFloat { h / 2 - CGFloat(max(min(db, Self.range), -Self.range) / Self.range) * (h / 2 - 4) }
+    func gain(_ y: CGFloat, _ h: CGFloat) -> Double { Double((h / 2 - y) / (h / 2 - 4)) * Self.range }
 
-    private var connected: Bool { model.isPortConnected(patchNode.id, port: 0, output: false) || model.isPortConnected(patchNode.id, port: 1, output: false) }
+    var connected: Bool { model.isPortConnected(patchNode.id, port: 0, output: false) || model.isPortConnected(patchNode.id, port: 1, output: false) }
 
     /// Band point positions (canvas-local) for hit-testing drags.
-    private func bandPoints(_ size: CGSize) -> [(Int, CGPoint)] {
+    func bandPoints(_ size: CGSize) -> [(Int, CGPoint)] {
         let p = node.base
         let n = ParametricEQ.bandCount(p[0])
         return (0..<n).map { b in
@@ -228,7 +228,7 @@ struct EQCurveView: View {
     var body: some View {
         GeometryReader { geo in
             // the spectrum analyser: 10 fps is plenty for the eye
-            LiveCanvas(every: 2) { ctx, size in draw(ctx, size) }
+            LiveCanvas(every: 2) { ctx, size in draw(ctx, size, band: dragBand) }
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -257,7 +257,7 @@ struct EQCurveView: View {
         }
     }
 
-    private func draw(_ ctx: LiveGC, _ size: CGSize) {
+    func draw(_ ctx: LiveGC, _ size: CGSize, band dragBand: Int?) {
         let w = size.width, h = size.height
         ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
         // grid: decades and ±12 dB

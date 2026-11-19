@@ -94,7 +94,7 @@ struct ReadoutView: View {
     }
 
     /// Audio off: the module isn't running, so describe the buffer itself.
-    private func idleStatus(_ b: SampleBufferNode) -> some View {
+    func idleStatus(_ b: SampleBufferNode) -> some View {
         let secs = Double(b.waveLength) / max(model.host.sampleRate, 1)
         return HStack(spacing: 6) {
             Text(b.waveLength > 0 ? "loaded — audio off" : "empty — REC or load").foregroundStyle(Theme.dim)
@@ -136,7 +136,7 @@ struct ReadoutView: View {
         }
     }
 
-    private var liveBody: some View {
+    var liveBody: some View {
         // the readout text and small displays: drawn natively, only when their numbers change
         let sig: () -> Int = { [node, patchNode, model] in
             LiveSig.readouts(node, 24, steps: 200) &+ LiveSig.patch(patchNode) &* 3 &+ (model.isRunning ? 1 : 0)
@@ -155,11 +155,11 @@ struct ReadoutView: View {
     }
 
     /// One line of text at the left / right of a readout.
-    private func text(_ ctx: LiveGC, _ s: String, _ x: CGFloat, _ y: CGFloat, _ c: Color, size: CGFloat = 11, right: Bool = false) {
+    func text(_ ctx: LiveGC, _ s: String, _ x: CGFloat, _ y: CGFloat, _ c: Color, size: CGFloat = 11, right: Bool = false) {
         ctx.draw(LiveText(s, size: size, color: c), at: CGPoint(x: x, y: y), anchor: right ? .trailing : .leading)
     }
 
-    private func drawLive(_ ctx: LiveGC, _ size: CGSize) {
+    func drawLive(_ ctx: LiveGC, _ size: CGSize) {
         guard let node else { text(ctx, "—", 0, size.height / 2, Theme.dim); return }
         let r = node.readouts, w = size.width, mid = size.height / 2
         switch kind {
@@ -196,7 +196,7 @@ struct ReadoutView: View {
         }
     }
 
-    private func timeString(_ s: Float) -> String {
+    func timeString(_ s: Float) -> String {
         let t = max(ri(s), 0)
         return String(format: "%02d:%02d.%d", t / 60, t % 60, max(ri((fin(s) - Float(t)) * 10), 0))
     }
@@ -277,7 +277,7 @@ struct TransportButtons: View {
             button("stop.fill", .stop, "Stop: hold and go back to the start")
         }
     }
-    private func button(_ icon: String, _ t: GraphHost.Transport, _ help: String) -> some View {
+    func button(_ icon: String, _ t: GraphHost.Transport, _ help: String) -> some View {
         let on = model.transport == t
         return Button { model.setTransport(t) } label: {
             Image(systemName: icon).font(.system(size: 8, weight: .bold))

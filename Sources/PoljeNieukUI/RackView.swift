@@ -8,13 +8,13 @@ struct RackView: View {
     let node: RackNode
     let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let patchNode: PatchNode
-    private var clocked: Bool { clockPatched(model, patchNode.id) }
-    @State private var paint: Float?
+    var clocked: Bool { clockPatched(model, patchNode.id) }
+    @State var paint: Float?
     /// the pad a file is being dragged over (it lights up)
-    @State private var dropPad: Int?
+    @State var dropPad: Int?
 
-    private var len: Int { Int((patchNode.params["len"] ?? 16).rounded()) }
-    private var selected: Int { Int((patchNode.params["sel"] ?? 0).rounded()) }
+    var len: Int { Int((patchNode.params["len"] ?? 16).rounded()) }
+    var selected: Int { Int((patchNode.params["sel"] ?? 0).rounded()) }
     static let rollHeight: CGFloat = 16 * 9
     static let label: CGFloat = 64
 
@@ -27,7 +27,7 @@ struct RackView: View {
 
     // MARK: drum roll
 
-    private var roll: some View {
+    var roll: some View {
         GeometryReader { geo in
             HStack(spacing: 0) {
                 // lane names = pad names (tap: select that pad)
@@ -67,7 +67,7 @@ struct RackView: View {
         }
     }
 
-    private func drawRoll(_ ctx: LiveGC, _ size: CGSize) {
+    func drawRoll(_ ctx: LiveGC, _ size: CGSize) {
         let cw = size.width / CGFloat(max(len, 1)), rh = size.height / 16
         ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
         for lane in 0..<RackLayout.pads where lane % 2 == 1 {
@@ -89,7 +89,7 @@ struct RackView: View {
 
     // MARK: pads (4 × 4, pad 1 bottom-left)
 
-    private var pads: some View {
+    var pads: some View {
         VStack(spacing: 4) {
             ForEach(0..<4, id: \.self) { row in
                 HStack(spacing: 4) {
@@ -101,16 +101,16 @@ struct RackView: View {
         }
     }
 
-    private func select(_ k: Int) {
+    func select(_ k: Int) {
         if let i = ModuleRegistry.spec("rack")?.paramIndex("sel") { model.setParam(patchNode.id, i, Float(k)) }
     }
 
-    private func toggle(_ key: String) {
+    func toggle(_ key: String) {
         guard let spec = ModuleRegistry.spec("rack"), let i = spec.paramIndex(key) else { return }
         model.setParam(patchNode.id, i, (patchNode.params[key] ?? 0) > 0.5 ? 0 : 1)
     }
 
-    private func pad(_ k: Int) -> some View {
+    func pad(_ k: Int) -> some View {
         let muted = (patchNode.params["m\(k + 1)"] ?? 0) > 0.5
         let solo = (patchNode.params["s\(k + 1)"] ?? 0) > 0.5
         return VStack(alignment: .leading, spacing: 2) {
@@ -150,7 +150,7 @@ struct RackView: View {
         .help("\(node.padNames[k]) — tap to play (when no clock is patched in; ▶ always plays) · drop an audio file to load · M mute · S solo")
     }
 
-    private func small(_ t: String, on: Bool, _ action: @escaping () -> Void) -> some View {
+    func small(_ t: String, on: Bool, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(t).font(.system(size: 8, weight: .bold, design: .monospaced))
                 .foregroundStyle(on ? Theme.inverse : Theme.dim)
@@ -167,14 +167,14 @@ struct DrumSynthView: View {
     let node: DrumSynthNode
     let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let patchNode: PatchNode
-    private var clocked: Bool { clockPatched(model, patchNode.id) }
-    @State private var paint: Float?
+    var clocked: Bool { clockPatched(model, patchNode.id) }
+    @State var paint: Float?
 
     static let laneHeight: CGFloat = 14
     static let label: CGFloat = 52
-    private var len: Int { Int((patchNode.params["len"] ?? 16).rounded()) }
-    private var selected: Int { Int((patchNode.params["sel"] ?? 0).rounded()) }
-    private let V = DrumSynthLayout.voices
+    var len: Int { Int((patchNode.params["len"] ?? 16).rounded()) }
+    var selected: Int { Int((patchNode.params["sel"] ?? 0).rounded()) }
+    let V = DrumSynthLayout.voices
 
     var body: some View {
         VStack(spacing: 8) {
@@ -218,7 +218,7 @@ struct DrumSynthView: View {
         }
     }
 
-    private func drawRoll(_ ctx: LiveGC, _ size: CGSize) {
+    func drawRoll(_ ctx: LiveGC, _ size: CGSize) {
         let cw = size.width / CGFloat(max(len, 1)), rh = Self.laneHeight
         ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
         for lane in 0..<V where lane % 2 == 1 {
@@ -238,22 +238,22 @@ struct DrumSynthView: View {
         }
     }
 
-    private func select(_ v: Int) {
+    func select(_ v: Int) {
         if let i = ModuleRegistry.spec("drumsynth")?.paramIndex("sel") { model.setParam(patchNode.id, i, Float(v)) }
     }
 
     /// The voice's name, or its engine's when it's been switched to another one.
-    private func name(_ v: Int) -> String {
+    func name(_ v: Int) -> String {
         let e = Int((patchNode.params["e\(v + 1)"] ?? Float(DrumSynthLayout.engines[v])).rounded())
         return DrumSynthLayout.label(v, engine: e)
     }
 
-    private func toggle(_ key: String) {
+    func toggle(_ key: String) {
         guard let spec = ModuleRegistry.spec("drumsynth"), let i = spec.paramIndex(key) else { return }
         model.setParam(patchNode.id, i, (patchNode.params[key] ?? 0) > 0.5 ? 0 : 1)
     }
 
-    private func pad(_ v: Int) -> some View {
+    func pad(_ v: Int) -> some View {
         let muted = (patchNode.params["m\(v + 1)"] ?? 0) > 0.5
         let solo = (patchNode.params["s\(v + 1)"] ?? 0) > 0.5
         return VStack(alignment: .leading, spacing: 2) {
@@ -282,7 +282,7 @@ struct DrumSynthView: View {
         .help("\(name(v)) — tap to play (when no clock is patched in; ▶ always plays) · M mute · S solo")
     }
 
-    private func small(_ t: String, on: Bool, _ action: @escaping () -> Void) -> some View {
+    func small(_ t: String, on: Bool, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(t).font(.system(size: 8, weight: .bold, design: .monospaced))
                 .foregroundStyle(on ? Theme.inverse : Theme.dim)

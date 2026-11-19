@@ -16,9 +16,9 @@ struct PoljeNieukDevApp: App {
     @NSApplicationDelegateAdaptor(DevAppDelegate.self) var delegate
     var body: some Scene {
         WindowGroup("polje nieuk") {
-            // the window's smallest size is fixed: the GeometryReader answers "how small can you be" without
-            // measuring what's inside (the window re-measured every box and the bar on each change to the patch)
-            GeometryReader { _ in PoljeNieukRootView() }.frame(minWidth: 800, minHeight: 500)
+            // (no GeometryReader around it: with the file browser's lazy list inside, SwiftUI's layout could loop
+            // for ever and freeze the app — and the boxes, now drawn natively, cost the window nothing to measure)
+            PoljeNieukRootView().frame(minWidth: 800, minHeight: 500)
         }
         .defaultSize(width: 1280, height: 860)
     }

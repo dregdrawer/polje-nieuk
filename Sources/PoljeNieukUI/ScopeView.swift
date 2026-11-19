@@ -35,7 +35,7 @@ struct ScopeView: View {
         f <= 0 ? "" : (f >= 1000 ? String(format: "%.2f kHz", f / 1000) : (f >= 10 ? String(format: "%.1f Hz", f) : String(format: "%.2f Hz", f)))
     }
 
-    private func draw(_ ctx: LiveGC, _ size: CGSize, hasA: Bool, hasB: Bool) {
+    func draw(_ ctx: LiveGC, _ size: CGSize, hasA: Bool, hasB: Bool) {
         let n = ScopeNode.points
         let r = node.readouts
         let w = size.width, top: CGFloat = hasA && hasB ? 34 : 20, h = max(size.height - top - 14, 10)
