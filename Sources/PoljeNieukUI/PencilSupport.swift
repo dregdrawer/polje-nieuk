@@ -16,9 +16,15 @@ struct PortHoverOverlay: View {
         Canvas { ctx, _ in
             guard let hp = hover.point, model.finderAt == nil else { return }
             var best: (CGPoint, String, Bool, CGFloat)?
+            let hw = model.hw, z = model.viewScale, o = model.viewOffset
             for n in model.patch.nodes {
                 guard let spec = ModuleRegistry.spec(n.kind) else { continue }
-                for p in BoxLayout.visiblePorts(n, spec, model.hw) {
+                // only the boxes near the pointer (working out every port of every box on each change made
+                // dragging a slider slow on a big patch)
+                let r = CGRect(x: n.x * z + o.width, y: n.y * z + o.height,
+                               width: BoxLayout.width(n) * z, height: BoxLayout.height(n, spec, hw) * z).insetBy(dx: -40, dy: -40)   // ports stick out past the edge
+                guard r.contains(hp) else { continue }
+                for p in BoxLayout.visiblePorts(n, spec, hw) {
                     let s = model.toScreen(p.point)
                     let d = hypot(s.x - hp.x, s.y - hp.y)
                     if d < 22 && d < (best?.3 ?? .infinity) { best = (s, p.name, p.output, d) }

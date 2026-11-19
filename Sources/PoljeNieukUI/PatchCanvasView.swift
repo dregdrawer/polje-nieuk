@@ -576,7 +576,7 @@ private struct PendingCableView: View {
             var p = Path()
             if pc.fromOutput { addCable(&p, start, pc.point, scale: model.viewScale) } else { addCable(&p, pc.point, start, scale: model.viewScale) }
             ctx.stroke(p, with: .color(Theme.text),
-                       style: StrokeStyle(lineWidth: max(1, 1.5 * model.viewScale), lineCap: .round, dash: [5, 4]))
+                       style: StrokeStyle(lineWidth: 1, lineCap: .round, dash: [5, 4]))
         }
     }
 }

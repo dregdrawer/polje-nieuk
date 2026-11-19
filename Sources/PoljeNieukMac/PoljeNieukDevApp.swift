@@ -16,7 +16,9 @@ struct PoljeNieukDevApp: App {
     @NSApplicationDelegateAdaptor(DevAppDelegate.self) var delegate
     var body: some Scene {
         WindowGroup("polje nieuk") {
-            PoljeNieukRootView().frame(minWidth: 800, minHeight: 500)
+            // the window's smallest size is fixed: the GeometryReader answers "how small can you be" without
+            // measuring what's inside (the window re-measured every box and the bar on each change to the patch)
+            GeometryReader { _ in PoljeNieukRootView() }.frame(minWidth: 800, minHeight: 500)
         }
         .defaultSize(width: 1280, height: 860)
     }

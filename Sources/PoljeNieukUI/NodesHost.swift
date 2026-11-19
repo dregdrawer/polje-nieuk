@@ -61,8 +61,13 @@ private struct BoxRoot: View {
     @ObservedObject var zoom: HostedZoom
     let id: UUID
     let group: Bool
+    @Environment(\.displayScale) private var screenScale
     var body: some View {
         content
+            // drawn at the pixels the zoom shows: text and shapes come straight from their outlines at that
+            // size and line up with real pixels (at 1×, then magnified, they were soft, and shifted a pixel
+            // or two when the zoom settled)
+            .environment(\.displayScale, screenScale * max(zoom.scale, 1))
             .coordinateSpace(name: NativeLive.space)          // live displays report their place in the box here
             .environment(\.liveBox, group ? nil : id)
             .environment(\.canvasZoom, zoom.scale <= 1 ? 1 : (zoom.scale * 4).rounded() / 4)
@@ -95,7 +100,7 @@ private struct BoxRoot: View {
     }
 }
 
-struct CableEnd { let from: UUID, to: UUID; let a: CGPoint, b: CGPoint; let style: Int }
+struct CableEnd: Equatable { let from: UUID, to: UUID; let a: CGPoint, b: CGPoint; let style: Int }
 
 enum NodesLayout {
     /// space around each box's view for the ports, which stick out over its edges
@@ -154,6 +159,7 @@ private extension AppModel {
     /// done once per change, not on every pointer move while dragging), and its style: 0 plain, 1 dashed, 2 selected.
     func cableEnds() -> [CableEnd] {
         guard !hideCables else { return [] }
+        let hw = self.hw            // read once: a published property's getter, ~800 times per call otherwise
         var out: [CableEnd] = []
         out.reserveCapacity(patch.cables.count)
         var index: [UUID: Int] = [:]
@@ -183,7 +189,7 @@ private extension AppModel {
             addCable(&path, map(e.a, e.from), map(e.b, e.to), scale: s)
             paths[e.style].addPath(path.cgPath)
         }
-        return (paths[0], paths[1], paths[2], max(1, 1.5 * s))
+        return (paths[0], paths[1], paths[2], 1)        // one thin width on screen at every zoom
     }
 }
 
@@ -233,6 +239,7 @@ private final class Layer {
         var index: [UUID: Int] = [:]
         for (k, n) in m.patch.nodes.enumerated() { index[n.id] = k }
         let look = CustomColours.version &* 2 &+ (Theme.light ? 1 : 0)
+        let hw = m.hw
         let base = BoxKey(nodeCount: m.patch.nodes.count, running: m.isRunning, threeD: m.threeD, hw: m.hw,
                           transport: m.transport, look: look, help: m.helpMode)
         for n in m.patch.nodes {
@@ -247,7 +254,7 @@ private final class Layer {
             k.autoRec = m.autoRecording.contains(n.id)
             if n.kind == "rack", let r = m.host.node(n.id) as? RackNode { k.padNames = r.padNames; k.loading = m.loadingPads[n.id] ?? [] }
             if n.kind != "text", let spec = ModuleRegistry.spec(n.kind) {
-                k.onScreen = ModuleBox.isOnScreen(m, n, BoxLayout.width(n), BoxLayout.height(n, spec, m.hw))
+                k.onScreen = ModuleBox.isOnScreen(m, n, BoxLayout.width(n), BoxLayout.height(n, spec, hw))
             }
             let f = feeds[n.id] ?? { let f = BoxFeed(); feeds[n.id] = f; return f }()
             if f.key != k { f.key = k }
@@ -432,10 +439,20 @@ private final class Layer {
     }
 
     private var ends: [CableEnd] = []
+    private struct CableLook: Equatable { var zoom: CGFloat; var offset: CGSize; var colours: Int }
+    private var drawnLook: CableLook?
     /// `fresh`: the boxes changed (work the cable ends out again); otherwise reuse them (a drag)
     func layoutCables(fresh: Bool = true) {
         if cableHolder.frame != mover.bounds { cableHolder.frame = mover.bounds }
-        if fresh { ends = model.cableEnds(); splitFor = [] }
+        if fresh {
+            // most changes (a value dragged, a box selected) move no cable: then nothing is redrawn. Redrawing
+            // every cable on each step of a slider made the whole canvas re-render.
+            let e = model.cableEnds()
+            let look = CableLook(zoom: model.hostedZoom.scale, offset: model.hostedZoom.offset,
+                                 colours: CustomColours.version &* 2 &+ (Theme.light ? 1 : 0))
+            if e == ends && splitFor.isEmpty && moving.isEmpty && look == drawnLook { return }
+            ends = e; splitFor = []; drawnLook = look
+        }
         let ids = fresh ? [] : model.dragState.ids
         CATransaction.begin(); CATransaction.setDisableActions(true)
         if fresh || ids != splitFor {
@@ -453,9 +470,8 @@ private final class Layer {
         let cable = PColor(Theme.cable).cgColor, sel = PColor(Theme.selected).cgColor, w = paths.3
         p.path = paths.0; p.strokeColor = cable; p.lineWidth = w
         d.path = paths.1; d.strokeColor = cable; d.lineWidth = w
-        let z = model.hostedZoom.scale
-        d.lineDashPattern = [NSNumber(value: Double(4 * z)), NSNumber(value: Double(3 * z))]
-        s.path = paths.2; s.strokeColor = sel; s.lineWidth = w + 1.5
+        d.lineDashPattern = [4, 3]
+        s.path = paths.2; s.strokeColor = sel; s.lineWidth = w + 1
     }
 
     /// The box whose grab area (title, empty port space …) is under this point (mover coordinates), if any.
@@ -484,6 +500,11 @@ private struct Platform: NSViewRepresentable {
     let hover: HoverState
     func makeNSView(context: Context) -> NodesContainer { NodesContainer(model: model, hover: hover) }
     func updateNSView(_ v: NodesContainer, context: Context) {}
+    /// It fills what it's given. (Left to AppKit, its size was worked out by loading every box view into the
+    /// constraint solver — on each change to the patch.)
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NodesContainer, context: Context) -> CGSize? {
+        proposal.replacingUnspecifiedDimensions(by: .zero)
+    }
 }
 
 /// A box's native view: clicks on its empty margin go through to the canvas.
@@ -644,6 +665,9 @@ private struct Platform: UIViewRepresentable {
     let model: AppModel
     let hover: HoverState
     func makeUIView(context: Context) -> NodesContainer { NodesContainer(model: model, hover: hover) }
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: NodesContainer, context: Context) -> CGSize? {
+        proposal.replacingUnspecifiedDimensions(by: .zero)
+    }
     func updateUIView(_ v: NodesContainer, context: Context) {}
 }
 

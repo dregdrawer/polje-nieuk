@@ -12,7 +12,12 @@ public struct PoljeNieukRootView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            topBar
+            // its own view, redrawn only when something it shows changes: as part of this one it was rebuilt
+            // (all four layouts, every module in the add menu) and the whole window re-measured on every
+            // change to the patch — ~30 ms per step of a slider on a big patch
+            TopBar(model: model, state: BarState(model), exporting: $exporting, importing: $importing,
+                   confirmNew: $confirmNew)
+                .equatable()
             if let err = model.audioError {
                 Text(err)
                     .font(Theme.mono)
@@ -45,7 +50,7 @@ public struct PoljeNieukRootView: View {
         .environment(\.helpModeOn, model.helpMode)
         .tint(Theme.selected)
         .onAppear { model.startAudio() }
-        .fileExporter(isPresented: $exporting, document: PatchFile(patch: model.patch),
+        .fileExporter(isPresented: $exporting, document: exporting ? PatchFile(patch: model.patch) : nil,   // only when saving: a new copy on every change re-measured the window
                       contentType: .json, defaultFilename: "My Patch") { _ in }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
             guard case .success(let url) = result else { return }
@@ -73,6 +78,110 @@ public struct PoljeNieukRootView: View {
             Button("Cancel", role: .cancel) {}
         }
     }
+
+}
+
+
+/// The tempo in the top bar. Following the modular it just shows the measured tempo ("EXT");
+/// on the internal clock, drag up / down on it to change it (1 BPM per step) or double-click to type one.
+struct TempoField: View {
+    @ObservedObject var model: AppModel
+    @State private var dragStart: Double?
+    @State private var typing = false
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        let editable = model.tempoEditable
+        Group {
+            if typing {
+                HStack(spacing: 3) {
+                    TextField("", text: $text)
+                        .textFieldStyle(.plain)
+                        .frame(width: 40)
+                        .focused($focused)
+                        .onSubmit(commit)
+                        .onAppear { focused = true }
+                    Text("bpm")
+                }
+            } else {
+                Text(String(format: "%@ %5.1f bpm", model.externalClock ? "EXT" : "INT",
+                            min(max(fin(Float(editable ? model.setTempo : model.bpm)), 0), 999)))
+                    .foregroundStyle(editable ? Theme.text : (model.externalClock ? Theme.text : Theme.dim))
+                    .underline(editable, color: Theme.faint)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            guard editable else { return }
+            text = String(format: "%.0f", model.setTempo)
+            typing = true
+        }
+        .gesture(DragGesture(minimumDistance: 2)
+            .onChanged { v in
+                guard editable, !typing else { return }
+                if dragStart == nil { dragStart = model.setTempo }
+                // up or right = faster; 1 BPM per 3 points
+                let d = (v.translation.width - v.translation.height) / 3
+                model.setTempo(((dragStart ?? 120) + Double(d)).rounded())
+            }
+            .onEnded { _ in dragStart = nil })
+        .onChange(of: focused) { _, f in if !f && typing { commit() } }
+        .help(editable ? "Tempo: drag up / down to change, double-click to type" : "Tempo from the modular's clock")
+        .helpTopic(model, "tb-tempo", "tempo",
+                   editable ? "The internal clock's tempo. Drag up or down on it to change it, or double-click and type a value (20–300 BPM)."
+                            : "The tempo measured from the modular's clock (clock~ on external). Switch clock~ to internal to set it here.")
+    }
+
+    private func commit() {
+        if let v = Double(text.replacingOccurrences(of: ",", with: ".")) { model.setTempo(v) }
+        typing = false
+    }
+}
+
+/// What the top bar shows. The bar redraws only when this changes (not on every change to the patch).
+struct BarState: Equatable {
+    var running, lightScheme, helpMode, selectMode, showFiles, hideCables, threeD, hasUserDefault: Bool
+    var canUndo, canRedo, allCollapsed, groupsSelected, cableSelected: Bool
+    var selected: Int
+    var inputUID, outputUID: String?
+    var inputName, outputName, audioStatus: String
+    var hwIn, hwOut: Int
+    var inputs, outputs: [DeviceChoice]
+    var sections: [String]
+    var lifted: [Bool]
+    @MainActor init(_ m: AppModel) {
+        running = m.isRunning; lightScheme = m.lightScheme; helpMode = m.helpMode; selectMode = m.selectMode
+        showFiles = m.showFiles; hideCables = m.hideCables; threeD = m.threeD; hasUserDefault = m.hasUserDefault
+        canUndo = m.canUndo; canRedo = m.canRedo; allCollapsed = m.allCollapsed
+        groupsSelected = !m.selectedGroups.isEmpty; cableSelected = m.selectedCable != nil
+        selected = m.selectedNodes.count
+        inputUID = m.inputUID; outputUID = m.outputUID
+        inputName = m.inputName; outputName = m.outputName; audioStatus = m.audioStatus
+        hwIn = m.hw.inputs; hwOut = m.hw.outputs
+        inputs = m.inputChoices; outputs = m.outputChoices
+        // one pass over the boxes: which sections are in the patch, and whether all of a section is lifted
+        var up: [String: Bool] = [:]
+        for n in m.patch.nodes {
+            guard let c = ModuleRegistry.spec(n.kind)?.category else { continue }
+            up[c] = (up[c] ?? true) && (n.z ?? 0) > 0.5
+        }
+        sections = ModuleRegistry.categories.filter { up[$0] != nil }
+        lifted = sections.map { up[$0] ?? false }
+    }
+}
+
+/// The bar along the top: audio, devices, tempo, cpu, edit buttons, menus.
+struct TopBar: View, Equatable {
+    let model: AppModel        // not observed: it redraws when `state` changes
+    let state: BarState
+    @Binding var exporting: Bool
+    @Binding var importing: Bool
+    @Binding var confirmNew: Bool
+
+    nonisolated static func == (a: TopBar, b: TopBar) -> Bool { a.state == b.state }
+
+    var body: some View { topBar }
 
     private func deviceMenu(label: String, current: String, choices: [DeviceChoice], selected: String,
                             pick: @escaping (String) -> Void) -> some View {
@@ -196,13 +305,13 @@ public struct PoljeNieukRootView: View {
             .lineLimit(1)
             .fixedSize()
 
-            Button { model.undo() } label: { icon("arrow.uturn.backward", on: model.canUndo).accessibilityLabel("undo") }
-                .disabled(!model.canUndo)
+            Button { model.undo() } label: { icon("arrow.uturn.backward", on: state.canUndo).accessibilityLabel("undo") }
+                .disabled(!state.canUndo)
                 .keyboardShortcut("z", modifiers: .command)
                 .help("Undo (⌘Z)")
                 .helpTopic(model, "tb-undo", "undo", "Steps back through your edits — moves, cables, knob turns, added or deleted boxes. ⌘Z on the Mac.")
-            Button { model.redo() } label: { icon("arrow.uturn.forward", on: model.canRedo).accessibilityLabel("redo") }
-                .disabled(!model.canRedo)
+            Button { model.redo() } label: { icon("arrow.uturn.forward", on: state.canRedo).accessibilityLabel("redo") }
+                .disabled(!state.canRedo)
                 .keyboardShortcut("z", modifiers: [.command, .shift])
                 .help("Redo (⇧⌘Z)")
                 .helpTopic(model, "tb-redo", "redo", "Steps forward again after an undo. ⇧⌘Z on the Mac.")
@@ -272,15 +381,15 @@ public struct PoljeNieukRootView: View {
 
             Menu {
                 // real toggles: the system draws the tick in its own column, so every label lines up
-                Toggle("Hide cables", isOn: $model.hideCables)
+                Toggle("Hide cables", isOn: Binding(get: { model.hideCables }, set: { model.hideCables = $0 }))
                 Button("Colours…") { model.showColours.toggle() }
                 Divider()
                 Button("Tidy") { model.tidy() }
-                Button(model.allCollapsed ? "Unfold all" : "Fold all") { model.toggleCollapseAll() }
+                Button(state.allCollapsed ? "Unfold all" : "Fold all") { model.toggleCollapseAll() }
                 Divider()
-                Toggle("3D", isOn: $model.threeD)
+                Toggle("3D", isOn: Binding(get: { model.threeD }, set: { model.threeD = $0 }))
                 Menu("Lift in 3D") {
-                    ForEach(ModuleRegistry.categories.filter { !model.sectionKinds($0).isEmpty }, id: \.self) { cat in
+                    ForEach(state.sections, id: \.self) { cat in
                         Toggle(cat, isOn: Binding(get: { model.sectionLifted(cat) }, set: { _ in model.toggleLift(cat) }))
                     }
                     Divider()
@@ -308,63 +417,5 @@ public struct PoljeNieukRootView: View {
             }
             .fixedSize()
         }
-    }
-}
-
-
-/// The tempo in the top bar. Following the modular it just shows the measured tempo ("EXT");
-/// on the internal clock, drag up / down on it to change it (1 BPM per step) or double-click to type one.
-struct TempoField: View {
-    @ObservedObject var model: AppModel
-    @State private var dragStart: Double?
-    @State private var typing = false
-    @State private var text = ""
-    @FocusState private var focused: Bool
-
-    var body: some View {
-        let editable = model.tempoEditable
-        Group {
-            if typing {
-                HStack(spacing: 3) {
-                    TextField("", text: $text)
-                        .textFieldStyle(.plain)
-                        .frame(width: 40)
-                        .focused($focused)
-                        .onSubmit(commit)
-                        .onAppear { focused = true }
-                    Text("bpm")
-                }
-            } else {
-                Text(String(format: "%@ %5.1f bpm", model.externalClock ? "EXT" : "INT",
-                            min(max(fin(Float(editable ? model.setTempo : model.bpm)), 0), 999)))
-                    .foregroundStyle(editable ? Theme.text : (model.externalClock ? Theme.text : Theme.dim))
-                    .underline(editable, color: Theme.faint)
-            }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture(count: 2) {
-            guard editable else { return }
-            text = String(format: "%.0f", model.setTempo)
-            typing = true
-        }
-        .gesture(DragGesture(minimumDistance: 2)
-            .onChanged { v in
-                guard editable, !typing else { return }
-                if dragStart == nil { dragStart = model.setTempo }
-                // up or right = faster; 1 BPM per 3 points
-                let d = (v.translation.width - v.translation.height) / 3
-                model.setTempo(((dragStart ?? 120) + Double(d)).rounded())
-            }
-            .onEnded { _ in dragStart = nil })
-        .onChange(of: focused) { _, f in if !f && typing { commit() } }
-        .help(editable ? "Tempo: drag up / down to change, double-click to type" : "Tempo from the modular's clock")
-        .helpTopic(model, "tb-tempo", "tempo",
-                   editable ? "The internal clock's tempo. Drag up or down on it to change it, or double-click and type a value (20–300 BPM)."
-                            : "The tempo measured from the modular's clock (clock~ on external). Switch clock~ to internal to set it here.")
-    }
-
-    private func commit() {
-        if let v = Double(text.replacingOccurrences(of: ",", with: ".")) { model.setTempo(v) }
-        typing = false
     }
 }

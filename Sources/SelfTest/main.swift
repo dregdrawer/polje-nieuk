@@ -567,7 +567,7 @@ func exercise(_ kind: String, params: [String: Float], seconds: Double, hostRate
 /// Sound sources and modulators keep producing output in silence; effects should settle.
 let selfSounding: Set<String> = ["clock", "keys", "seq", "turing", "roll", "drums", "lfo", "rand", "atten", "slider", "knob",
                                  "slopes", "chance", "segments", "macro", "shapes", "modal", "resonator", "looper",
-                                 "sampler", "grain", "stretch", "texture", "haze", "in", "env", "xmod", "wave", "chord", "tgate"]
+                                 "sampler", "grain", "stretch", "texture", "haze", "in", "env", "xmod", "wave", "chord"]
 var moduleProblems: [String] = []
 var sweepRuns = 0
 var sweepPeak: Float = 0
