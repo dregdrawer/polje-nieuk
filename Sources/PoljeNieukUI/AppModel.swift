@@ -1009,6 +1009,14 @@ public final class AppModel: ObservableObject {
         // (each change redraws the patch, so this matters on a big one)
         if !spec.params[index].isTrigger, (patch.nodes[i].params[key] ?? spec.params[index].def) == value { return }
         defer { if linked { syncLinked(id, spec, index, value) } }
+        if spec.kind == "chord", let mi = spec.paramIndex("mode") {
+            // picking a chord type means "free"; a degree / size / scale means "in key" — so the change is heard
+            let wants: Float? = key == "type" ? 1 : (["degree", "size", "scale"].contains(key) ? 0 : nil)
+            if let w = wants, (patch.nodes[i].params["mode"] ?? spec.params[mi].def) != w {
+                patch.nodes[i].params["mode"] = w
+                host.node(id)?.base[mi] = w
+            }
+        }
         if spec.kind == "seq", key == "len", let seq = host.node(id) as? SeqNode {
             // growing past the old length: the new steps start as copies of the pattern (16 → 32 plays it twice)
             let old = SeqNode.length(patch.nodes[i].params[key] ?? spec.params[index].def), new = SeqNode.length(value)
@@ -1254,6 +1262,14 @@ public final class AppModel: ObservableObject {
 
     /// A parameter shows the modulation marker only for real modulation — a slider~ / knob~ patched into it
     /// is the same control as its own row, so the row itself moves instead.
+    /// A fingerprint of what box `id` shows besides its own settings: its cables, selection, audio on / off.
+    func boxRev(_ id: UUID) -> Int {
+        var h = Hasher()
+        for c in patch.cables where c.fromNode == id || c.toNode == id { h.combine(c) }
+        h.combine(selectedNodes.contains(id)); h.combine(isRunning); h.combine(hw.inputs); h.combine(hw.outputs)
+        return h.finalize()
+    }
+
     func isModulated(_ id: UUID, _ param: Int) -> Bool {
         patch.cables.contains { c in
             c.toNode == id && c.toPort == kParamPortBase + param && !isControlNode(c.fromNode)

@@ -81,13 +81,15 @@ public struct BoardCamera: Equatable, Sendable {
 private struct StillBox: View, Equatable {
     let model: AppModel
     let node: PatchNode
-    static func == (a: StillBox, b: StillBox) -> Bool { a.node == b.node }
+    /// what the box shows besides its own settings (its cables, selection, audio on / off)
+    let rev: Int
+    static func == (a: StillBox, b: StillBox) -> Bool { a.node == b.node && a.rev == b.rev }
     var body: some View {
         Group {
             if node.kind == "text" {
-                FreeText(model: model, node: node)
+                FreeText(model: model, node: node, rev: rev)
             } else if let spec = ModuleRegistry.spec(node.kind) {
-                ModuleBox(model: model, node: node, spec: spec)
+                ModuleBox(model: model, node: node, rev: rev, spec: spec)
             }
         }
         // live displays hold still in 3D (redrawing a box in perspective is the expensive part)
@@ -148,7 +150,7 @@ struct Board3DView: View {
                 .onTapGesture { model.clearSelection() }
             // the boxes: live — rows, toggles and menus work through the perspective; drag a title to move
             ForEach(order) { n in
-                StillBox(model: model, node: n).equatable()
+                StillBox(model: model, node: n, rev: model.boxRev(n.id)).equatable()
                     .fixedSize()
                     .projectionEffect(cam.boxTransform(origin: board(CGPoint(x: n.x, y: n.y)), h: height(n), scale: s))
             }

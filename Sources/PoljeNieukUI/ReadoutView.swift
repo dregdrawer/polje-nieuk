@@ -50,7 +50,9 @@ struct ReadoutView: View {
         case "lfo":
             if let node { LFOView(node: node, patchNode: patchNode) }
         case "chord":
-            if let n = node { ChordView(node: n, patchNode: patchNode).padding(.vertical, 4) }
+            if let n = node { ChordView(node: n, model: model, patchNode: patchNode).padding(.vertical, 4) }
+        case "tgate":
+            if let g = node as? TranceGateNode { TranceGateView(node: g, model: model, patchNode: patchNode).padding(.vertical, 4) }
         case "wave":
             if let w = node as? WavetableNode { WaveDrawView(node: w, model: model, patchNode: patchNode).padding(.vertical, 4) }
         case "scope":

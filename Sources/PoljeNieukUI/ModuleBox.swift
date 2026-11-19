@@ -4,6 +4,8 @@ import PoljeNieukCore
 struct ModuleBox: View {
     let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let node: PatchNode
+    /// changes whenever anything this box shows changes (see BoxFeed) — so SwiftUI never skips a needed redraw
+    var rev: Int = 0
     let spec: ModuleSpec
     @State private var dragStart: CGPoint?
     @State private var groupDrag = false

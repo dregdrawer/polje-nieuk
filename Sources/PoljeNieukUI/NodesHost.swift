@@ -49,7 +49,10 @@ struct BoxKey: Equatable {
 
 /// Carries a box's key to its view (one per box).
 final class BoxFeed: ObservableObject {
-    @Published var key = BoxKey()
+    @Published var key = BoxKey() { didSet { rev &+= 1 } }
+    /// Bumped with every key change. Passed into the box view: its settings alone can stay the same while what
+    /// it shows changes (a cable plugged into one of its rows), and SwiftUI would then skip redrawing it.
+    private(set) var rev = 0
 }
 
 private struct BoxRoot: View {
@@ -86,8 +89,8 @@ private struct BoxRoot: View {
                 GroupBackdrop(model: model, group: g, rect: r)
             }
         } else if let n = feed.key.node {
-            if n.kind == "text" { FreeText(model: model, node: n) }
-            else if let spec = ModuleRegistry.spec(n.kind) { ModuleBox(model: model, node: n, spec: spec) }
+            if n.kind == "text" { FreeText(model: model, node: n, rev: feed.rev) }
+            else if let spec = ModuleRegistry.spec(n.kind) { ModuleBox(model: model, node: n, rev: feed.rev, spec: spec) }
         }
     }
 }

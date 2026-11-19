@@ -6,6 +6,8 @@ import PoljeNieukCore
 struct FreeText: View {
     let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let node: PatchNode
+    /// changes whenever anything this box shows changes (see BoxFeed) — so SwiftUI never skips a needed redraw
+    var rev: Int = 0
     @State private var editing = false
     @State private var draft = ""
     @State private var dragStart: CGPoint?
