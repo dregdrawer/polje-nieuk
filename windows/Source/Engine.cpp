@@ -21,8 +21,20 @@ int index(const std::string& n) {
 
 // ---------------------------------------------------------------- ParamSpec
 
+float ParamSpec::snapped(float v) const {
+    if (allowed.empty() || !std::isfinite(v)) return v;
+    float best = allowed[0];
+    for (float a : allowed) if (std::abs(a - v) < std::abs(best - v)) best = a;
+    return best;
+}
+
 float ParamSpec::normalized(float v) const {
     if (!std::isfinite(v)) return 0;
+    if (allowed.size() > 1) {
+        float s = snapped(v);
+        auto it = std::find(allowed.begin(), allowed.end(), s);
+        return float(it - allowed.begin()) / float(allowed.size() - 1);
+    }
     float n;
     switch (curve) {
         case ParamCurve::linear: n = (v - min) / (max - min); break;
@@ -37,6 +49,7 @@ float ParamSpec::normalized(float v) const {
 
 float ParamSpec::valueFromNormalized(float n) const {
     float c = std::isfinite(n) ? std::clamp(n, 0.0f, 1.0f) : 0.0f, v;
+    if (allowed.size() > 1) return allowed[std::min(size_t(std::round(c * float(allowed.size() - 1))), allowed.size() - 1)];
     switch (curve) {
         case ParamCurve::linear: v = min + (max - min) * c; break;
         case ParamCurve::exponential: v = min * std::pow(max / min, c); break;
@@ -93,9 +106,9 @@ int ModuleSpec::paramIndex(const std::string& key) const {
 }
 
 BypassMode ModuleSpec::bypass() const {
-    static const std::set<std::string> none { "in", "out", "clock", "rec", "mix", "text" };
-    static const std::set<std::string> silent { "macro", "modal", "shapes", "rack", "drumsynth",
-                                                "keys", "seq", "turing", "roll", "drums", "slider", "knob" };
+    static const std::set<std::string> none { "in", "out", "clock", "rec", "mix", "text", "scope" };
+    static const std::set<std::string> silent { "macro", "modal", "shapes", "rack", "drumsynth", "wave",
+                                                "keys", "seq", "turing", "roll", "drums", "slider", "knob", "chord" };
     if (none.count(kind)) return BypassMode::none;
     if (kind == "atten") return BypassMode::through;
     if (silent.count(kind)) return BypassMode::silent;
@@ -121,17 +134,23 @@ DSPNode::DSPNode(const ModuleSpec& s, double sr)
     : sampleRate(sr), spec(s), paramCount(int(s.params.size())) {
     size_t pc = size_t(std::max(1, paramCount));
     base.assign(pc, 0); params.assign(pc, 0); modPrev.assign(pc, 0);
-    rt.assign(pc, ParamRT { 0, 1, false, false, false, false });
+    rt.assign(pc, ParamRT { 0, 1, false, false, false, false, false });
     for (int i = 0; i < paramCount; ++i) {
         auto& p = s.params[size_t(i)];
         base[size_t(i)] = p.isTrigger() ? 0 : p.def;
         params[size_t(i)] = base[size_t(i)];
         rt[size_t(i)] = { p.min, p.max, p.curve == ParamCurve::exponential, p.curve == ParamCurve::cubic,
-                          p.kind != ParamKind::continuous, p.isTrigger() };
+                          p.kind != ParamKind::continuous, p.isTrigger(), p.unit == "st" };
     }
     autoLane.assign(pc * autoSlots, 0);
     autoOn.assign(pc, 0); autoHold.assign(pc, 0);
-    outputs.assign(s.outputs.size(), std::vector<float>(kMaxBlock, 0.0f));
+    outputs.clear();
+    for (size_t k = 0; k < s.outputs.size(); ++k) {
+        bool poly = std::find(s.polyOutputs.begin(), s.polyOutputs.end(), int(k)) != s.polyOutputs.end();
+        outputs.emplace_back(size_t(kMaxBlock * (poly ? kMaxVoices : 1)), 0.0f);
+    }
+    outVoices.assign(std::max<size_t>(s.outputs.size(), 1), 1);
+    inVoices.assign(std::max<size_t>(s.inputs.size(), 1), 1);
     outLevel.assign(std::max<size_t>(s.outputs.size(), 1), 0.0f);
     routing = s.bypassRouting();
 }
@@ -211,6 +230,12 @@ void DSPNode::applyMod(int i, float mod, float position) {
     }
     float src = autoOn[size_t(i)] && !autoHold[size_t(i)] ? params[size_t(i)] : base[size_t(i)];
     float b = std::isfinite(src) ? src : r.min;
+    if (r.semis && std::isnan(position)) {   // pitch CV into a semitone row: 1 V/oct
+        float v = std::clamp(b + m * 120, r.min, r.max);
+        if (r.round) v = std::round(v);
+        params[size_t(i)] = v;
+        return;
+    }
     float a = std::max(std::abs(r.min), std::abs(r.max));
     bool uni = r.min >= 0;
     float n = r.exp ? std::log(std::max(b, r.min) / r.min) / std::log(r.max / r.min)
@@ -361,6 +386,211 @@ juce::String Patch::toJSON() const {
     return juce::JSON::toString(juce::var(root));
 }
 
+
+// ---------------------------------------------------------------- migrations, replace, copy (Patch.swift)
+
+static int divRatioIndex(int r) {
+    static const int mult[] = { 16, 12, 8, 6, 4, 3, 2 };
+    if (r < 0) { for (int i = 0; i < 7; ++i) if (mult[i] == -r) return i; return 7; }
+    return 7 + std::max(r, 1) - 1;
+}
+
+Patch Patch::migrated() const {
+    if (version >= currentVersion) return *this;
+    Patch p = *this;
+    auto kindsOf = [&]() { std::map<juce::String, std::string> k; for (auto& n : p.nodes) k.emplace(n.id, n.kind); return k; };
+    auto rnd = [](float v, float d) { return std::isfinite(v) ? std::round(v) : d; };
+    if (version < 2) {
+        for (auto& n : p.nodes) {
+            if (n.kind == "in" && n.params.count("ch")) {
+                int port = std::max(int(std::round(n.params["ch"])) - 1, 0);
+                for (auto& c : p.cables) if (c.fromNode == n.id && c.fromPort == 0) c.fromPort = port;
+                n.params.clear();
+            } else if (n.kind == "out" && (n.params.count("chL") || n.params.count("chR"))) {
+                int l = std::max(int(std::round(n.params.count("chL") ? n.params["chL"] : 1.0f)) - 1, 0);
+                int r = std::max(int(std::round(n.params.count("chR") ? n.params["chR"] : 2.0f)) - 1, 0);
+                for (auto& c : p.cables) if (c.toNode == n.id) { if (c.toPort == 0) c.toPort = l; else if (c.toPort == 1) c.toPort = r; }
+                std::map<std::string, float> keep;
+                if (n.params.count("gain")) keep["gain"] = n.params["gain"];
+                n.params = keep;
+            }
+        }
+    }
+    if (version < 3) {
+        static const float oldSpeeds[] = { -2, -1, -0.5f, 0.5f, 1, 2 };
+        for (auto& n : p.nodes) {
+            if (n.kind != "looper") continue;
+            if (n.params.count("speed")) {
+                float v = oldSpeeds[std::clamp(int(rnd(n.params["speed"], 4)), 0, 5)];
+                n.params["rate"] = std::abs(v); n.params["rev"] = v < 0 ? 1.0f : 0.0f; n.params.erase("speed");
+            }
+            for (auto& c : p.cables) if (c.toNode == n.id && c.toPort >= kParamPortBase + 7) c.toPort += 1;
+        }
+    }
+    if (version < 4) {
+        for (auto& n : p.nodes) if (n.kind == "comp") {
+            n.params.clear();
+            auto id = n.id;
+            p.cables.erase(std::remove_if(p.cables.begin(), p.cables.end(), [&](auto& c) { return c.toNode == id && c.toPort >= kParamPortBase; }), p.cables.end());
+        }
+    }
+    if (version < 5) {
+        static const std::set<std::string> shifted { "looper", "sampler", "stretch", "grain", "filter" };
+        auto kinds = kindsOf();
+        for (auto& c : p.cables) {
+            auto k = kinds.count(c.toNode) ? kinds[c.toNode] : "";
+            if (shifted.count(k) && c.toPort >= 1 && c.toPort < kParamPortBase) c.toPort += 1;
+            if (kinds.count(c.fromNode) && kinds[c.fromNode] == "freqshift" && c.fromPort == 1) c.fromPort = 2;
+        }
+        static const std::set<std::string> nowStereo { "looper", "filter", "drive" };
+        for (auto& n : p.nodes) {
+            if (!nowStereo.count(n.kind)) continue;
+            std::vector<size_t> toOut;
+            for (size_t i = 0; i < p.cables.size(); ++i)
+                if (p.cables[i].fromNode == n.id && p.cables[i].fromPort == 0 && kinds.count(p.cables[i].toNode) && kinds[p.cables[i].toNode] == "out") toOut.push_back(i);
+            std::sort(toOut.begin(), toOut.end(), [&](size_t a, size_t b) { return p.cables[a].toPort < p.cables[b].toPort; });
+            if (toOut.size() >= 2) p.cables[toOut[1]].fromPort = 1;
+        }
+    }
+    if (version < 6) {
+        auto kinds = kindsOf();
+        for (auto& c : p.cables) {
+            if (!kinds.count(c.toNode) || kinds[c.toNode] != "mix" || c.toPort < kParamPortBase) continue;
+            int old = c.toPort - kParamPortBase;
+            c.toPort = kParamPortBase + (old < 4 ? 1 + 2 * old : 33);
+        }
+        for (auto& n : p.nodes) {
+            if (n.kind != "mix") continue;
+            std::vector<size_t> toOut;
+            for (size_t i = 0; i < p.cables.size(); ++i)
+                if (p.cables[i].fromNode == n.id && p.cables[i].fromPort == 0 && kinds.count(p.cables[i].toNode) && kinds[p.cables[i].toNode] == "out") toOut.push_back(i);
+            std::sort(toOut.begin(), toOut.end(), [&](size_t a, size_t b) { return p.cables[a].toPort < p.cables[b].toPort; });
+            if (toOut.size() >= 2) p.cables[toOut[1]].fromPort = 1;
+        }
+    }
+    p.version = currentVersion;
+    if (version < 7) {
+        std::map<std::string, std::map<int, int>> remap { { "modal", { { 0, 1 }, { 1, 0 } } }, { "macro", { { 0, 1 }, { 1, 0 } } },
+            { "shapes", { { 0, 1 }, { 1, 0 } } }, { "slopes", { { 0, 1 }, { 1, 0 } } }, { "resonator", { { 1, 2 }, { 2, 1 } } } };
+        auto kinds = kindsOf();
+        for (auto& c : p.cables) {
+            if (c.toPort >= kParamPortBase || !kinds.count(c.toNode)) continue;
+            auto it = remap.find(kinds[c.toNode]);
+            if (it == remap.end()) continue;
+            auto t = it->second.find(c.toPort);
+            if (t != it->second.end()) c.toPort = t->second;
+        }
+    }
+    if (version < 8)
+        for (auto& n : p.nodes) if (n.kind == "div" && n.params.count("base")) n.params["base"] += 1;
+    if (version < 10)
+        for (auto& n : p.nodes) if (n.kind == "clock" && !n.params.count("source"))
+            for (auto& c : p.cables) if (c.toNode == n.id && c.toPort == 0) { n.params["source"] = 0; break; }
+    if (version < 11)
+        for (auto& n : p.nodes) {
+            if (n.kind != "roll") continue;
+            if (n.data.count("notes") && !n.data.count("grid")) {
+                const int steps = 32, rows = 24;
+                std::vector<float> g(size_t(steps * rows), 0.0f);
+                auto& old = n.data["notes"];
+                for (int s = 0; s < std::min(int(old.size()), steps); ++s) {
+                    float r = old[size_t(s)];
+                    if (std::isfinite(r) && r >= 0 && int(r) < rows) g[size_t(int(r) * steps + s)] = 1;
+                }
+                n.data["grid"] = g;
+            }
+            n.data.erase("notes");
+        }
+    if (version < 12) {
+        auto kinds = kindsOf();
+        auto kind = [&](const juce::String& id) { return kinds.count(id) ? kinds[id] : std::string(); };
+        p.cables.erase(std::remove_if(p.cables.begin(), p.cables.end(), [&](const PatchCable& c) {
+            auto f = kind(c.fromNode);
+            if (f == "roll" && c.fromPort >= 3) return true;
+            if (f == "chord" && c.fromPort >= 2) return true;
+            auto t = kind(c.toNode);
+            if (t == "wave" || t == "shapes") return (c.toPort >= 2 && c.toPort < kParamPortBase) || c.toPort == kParamPortBase + 7;
+            if (t == "macro") return (c.toPort >= 3 && c.toPort < kParamPortBase) || c.toPort == kParamPortBase + 9;
+            return false;
+        }), p.cables.end());
+        for (auto& n : p.nodes) if (n.kind == "wave" || n.kind == "shapes" || n.kind == "macro") n.params.erase("voices");
+    }
+    if (version < 9)
+        for (auto& n : p.nodes) {
+            if (n.kind != "div") continue;
+            for (int k = 1; k <= 8; ++k) {
+                auto key = "d" + std::to_string(k);
+                float old = n.params.count(key) ? n.params[key] : float(k);
+                int v = std::isfinite(old) ? std::clamp(int(std::round(old)), 1, 64) : k;
+                n.params[key] = float(divRatioIndex(v));
+            }
+        }
+    return p;
+}
+
+std::optional<std::pair<Patch, juce::String>> Patch::replacing(const juce::String& id, const std::string& kind) const {
+    int i = index(id);
+    if (i < 0) return std::nullopt;
+    auto* oldSpec = Registry::spec(nodes[size_t(i)].kind);
+    auto* newSpec = Registry::spec(kind);
+    if (!oldSpec || !newSpec) return std::nullopt;
+    const PatchNode& old = nodes[size_t(i)];
+    PatchNode n; n.id = newID(); n.kind = kind; n.x = old.x; n.y = old.y; n.collapsed = old.collapsed;
+    for (auto& ps : newSpec->params) {
+        if (ps.isTrigger()) continue;
+        auto it = old.params.find(ps.key);
+        if (it != old.params.end()) n.params[ps.key] = std::clamp(it->second, ps.min, ps.max);
+    }
+    Patch p = *this;
+    p.nodes[size_t(i)] = n;
+    auto mapPort = [&](int port, bool input) -> int {
+        if (port >= kParamPortBase) {
+            int k = port - kParamPortBase;
+            if (k >= int(oldSpec->params.size())) return -1;
+            int j = newSpec->paramIndex(oldSpec->params[size_t(k)].key);
+            return j < 0 ? -1 : kParamPortBase + j;
+        }
+        auto& on = input ? oldSpec->inputs : oldSpec->outputs;
+        auto& nn = input ? newSpec->inputs : newSpec->outputs;
+        if (port < int(on.size())) {
+            auto it = std::find(nn.begin(), nn.end(), on[size_t(port)]);
+            if (it != nn.end()) return int(it - nn.begin());
+        }
+        return port < int(nn.size()) ? port : -1;
+    };
+    std::vector<PatchCable> cables;
+    for (auto c : p.cables) {
+        if (c.toNode == id) { int t = mapPort(c.toPort, true); if (t < 0) continue; c.toNode = n.id; c.toPort = t; }
+        if (c.fromNode == id) { int f = mapPort(c.fromPort, false); if (f < 0) continue; c.fromNode = n.id; c.fromPort = f; }
+        bool dup = false;
+        for (auto& d : cables) if (d.fromNode == c.fromNode && d.fromPort == c.fromPort && d.toNode == c.toNode && d.toPort == c.toPort) dup = true;
+        if (!dup) cables.push_back(c);
+    }
+    p.cables = cables;
+    for (auto& g : p.groups) for (auto& m : g.members) if (m == id) m = n.id;
+    return std::make_pair(p, n.id);
+}
+
+std::pair<Patch, std::map<juce::String, juce::String>> Patch::withFreshIDs() const {
+    Patch p = *this;
+    std::map<juce::String, juce::String> map;
+    for (auto& n : p.nodes) { auto nid = newID(); map[n.id] = nid; n.id = nid; }
+    std::vector<PatchCable> cs;
+    for (auto& c : p.cables) {
+        if (!map.count(c.fromNode) || !map.count(c.toNode)) continue;
+        PatchCable d = c; d.id = newID(); d.fromNode = map[c.fromNode]; d.toNode = map[c.toNode];
+        cs.push_back(d);
+    }
+    p.cables = cs;
+    for (auto& g : p.groups) {
+        g.id = newID();
+        std::vector<juce::String> ms;
+        for (auto& m : g.members) if (map.count(m)) ms.push_back(map[m]);
+        g.members = ms;
+    }
+    return { p, map };
+}
+
 // ---------------------------------------------------------------- the compiled graph
 
 class CompiledGraph {
@@ -373,6 +603,7 @@ public:
         std::vector<Sum> sums;
         std::vector<Mod> mods;
         uint64_t connected = 0;
+        std::vector<std::pair<int, const int*>> polyIn;
     };
     std::vector<Entry> entries;
     bool hasClock = false;
@@ -386,6 +617,8 @@ public:
                     for (int i = 0; i < frames; ++i) s.dest[i] += s.sources[k][i];
             }
             DSPNode& node = *e.node;
+            std::fill(node.inVoices.begin(), node.inVoices.end(), 1);
+            for (auto& [port, count] : e.polyIn) node.inVoices[size_t(port)] = std::clamp(*count, 1, kMaxVoices);
             float target = node.bypassed.load() && node.spec.bypass() != BypassMode::none ? 1.0f : 0.0f;
             float start = node.bypassMix;
             if (!(start == 1 && target == 1)) {
@@ -417,14 +650,18 @@ public:
                     }
                 }
                 node.bypassMix = target;
+                if (target == 1) std::fill(node.outVoices.begin(), node.outVoices.end(), 1);
             }
             float fall = std::exp(-float(frames) / (0.25f * float(ctx.sampleRate)));
             for (size_t k = 0; k < node.outputs.size(); ++k) {
-                float* out = node.out(int(k));
                 float pk = 0;
-                for (int i = 0; i < frames; ++i) {
-                    if (!std::isfinite(out[i])) { out[i] = 0; ++node.nonFinite; }
-                    pk = std::max(pk, std::abs(out[i]));
+                int nv = std::clamp(node.outVoices[k], 1, int(node.outputs[k].size()) / kMaxBlock);
+                for (int v = 0; v < nv; ++v) {
+                    float* out = node.outVoice(int(k), v);
+                    for (int i = 0; i < frames; ++i) {
+                        if (!std::isfinite(out[i])) { out[i] = 0; ++node.nonFinite; }
+                        if (v == 0) pk = std::max(pk, std::abs(out[i]));
+                    }
                 }
                 node.outLevel[k] = std::max(pk, node.outLevel[k] * fall);
             }
@@ -568,13 +805,32 @@ std::shared_ptr<CompiledGraph> GraphHost::compile(const Patch& patch) {
                 }
             if (sources.empty()) continue;
             e.connected |= uint64_t(1) << p;
-            if (sources.size() == 1) e.inputs[p] = sources[0];
+            if (sources.size() == 1) {
+                e.inputs[p] = sources[0];
+                for (auto& c : cables)
+                    if (c.toNode == id && c.toPort == int(p)) {
+                        auto* src = nodes[c.fromNode].get();
+                        auto& po = src->spec.polyOutputs;
+                        if (std::find(po.begin(), po.end(), c.fromPort) != po.end())
+                            e.polyIn.push_back({ int(p), &src->outVoices[size_t(c.fromPort)] });
+                        break;
+                    }
+            }
             else {
                 g->owned.emplace_back(kMaxBlock, 0.0f);
                 float* dest = g->owned.back().data();
                 e.sums.push_back({ dest, sources });
                 e.inputs[p] = dest;
             }
+        }
+        if (node->spec.kind == "out") {
+            uint64_t cv = 0;
+            for (size_t p = 0; p < std::min<size_t>(nIn, 64); ++p) {
+                bool any = false, all = true;
+                for (auto& c : cables) if (c.toNode == id && c.toPort == int(p)) { any = true; all = all && isCV(c.fromNode, c.fromPort, cables, 0); }
+                if (any && all) cv |= uint64_t(1) << p;
+            }
+            node->cvChannels = cv;
         }
         for (int i = 0; i < node->paramCount; ++i) {
             CompiledGraph::Mod m { i, {}, {} };
@@ -591,6 +847,32 @@ std::shared_ptr<CompiledGraph> GraphHost::compile(const Patch& patch) {
         g->entries.push_back(std::move(e));
     }
     return g;
+}
+
+bool GraphHost::isCV(const juce::String& id, int port, const std::vector<PatchCable>& cables, int depth) {
+    auto* n = node(id);
+    if (!n || depth >= 8) return false;
+    if (n->spec.kind == "scope") {
+        bool any = false;
+        for (auto& c : cables) if (c.toNode == id && c.toPort == port) { any = true; if (!isCV(c.fromNode, c.fromPort, cables, depth + 1)) return false; }
+        return any;
+    }
+    return n->spec.outputsAreCV;
+}
+
+void GraphHost::renew(const juce::String& id, const Patch& patch) {
+    auto it = nodes.find(id);
+    if (it == nodes.end()) return;
+    retiredOwned.emplace_back(std::move(it->second), juce::Time::getMillisecondCounter());
+    nodes.erase(it);
+    load(patch);
+    if (auto* n = node(id)) n->bypassMix = 1;
+}
+
+void GraphHost::clearReadouts() {
+    for (auto& [id, n] : nodes) n->readouts.fill(0);
+    ctx.samplesPerBeat = sampleRate * 0.5;
+    ctx.externalClock = false;
 }
 
 void GraphHost::process(int frames, const float* const* inputs, int inputCount, float* const* outputs, int outputCount) {

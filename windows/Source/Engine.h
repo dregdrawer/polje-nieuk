@@ -19,6 +19,7 @@ constexpr int kMaxBlock = 64;          // largest block a node processes (also t
 constexpr int kParamPortBase = 1000;   // cable toPort ≥ this = a parameter (toPort - base)
 constexpr int kMaxHardwareChannels = 32;
 constexpr int kReadoutCount = 32;
+constexpr int kMaxVoices = 4;           // notes one cable can carry (a chord)
 
 // ---------------------------------------------------------------- small DSP helpers (DSPUtil.swift)
 
@@ -131,6 +132,7 @@ struct ParamSpec {
     ParamKind kind = ParamKind::continuous;
     ParamCurve curve = ParamCurve::linear;
     std::vector<std::string> options;   // choice
+    std::vector<float> allowed;         // only these values (ascending), e.g. seq~ length 1…16, 32, 64
 
     static ParamSpec cont(std::string k, std::string n, float lo, float hi, float d, std::string unit = "",
                           ParamCurve c = ParamCurve::linear) {
@@ -151,6 +153,7 @@ struct ParamSpec {
         p.kind = ParamKind::integer; return p;
     }
     bool isTrigger() const { return kind == ParamKind::trigger; }
+    float snapped(float v) const;
     float normalized(float v) const;
     float valueFromNormalized(float n) const;
     std::string display(float v) const;
@@ -166,6 +169,8 @@ struct ModuleSpec {
     std::string kind, name, category, summary;
     std::vector<std::string> aliases, inputs, outputs;
     std::vector<ParamSpec> params;
+    std::vector<int> polyOutputs;   // outlets that can carry a chord
+    bool outputsAreCV = false;
     Factory factory;          // null: not ported to Windows yet (box shows, stays silent)
     int paramIndex(const std::string& key) const;
     BypassMode bypass() const;
@@ -196,7 +201,7 @@ struct ProcessContext {
     double bpm() const { return 60 * sampleRate / samplesPerBeat; }
 };
 
-struct ParamRT { float min, max; bool exp, cubic, round, trigger; };
+struct ParamRT { float min, max; bool exp, cubic, round, trigger, semis; };
 
 struct PatchNode;
 
@@ -242,6 +247,11 @@ public:
     double autoPosition = 0;
     int nonFinite = 0;
     float* out(int k) { return outputs[size_t(k)].data(); }
+    std::vector<int> outVoices, inVoices;      // notes per outlet / inlet this block
+    static const float* voice(const float* input, int v) { return input + v * kMaxBlock; }
+    float* outVoice(int k, int v) { return outputs[size_t(k)].data() + v * kMaxBlock; }
+    uint64_t cvChannels = 0;                   // out~: channels fed only by control voltages
+    virtual void clearState() {}
 
 private:
     std::vector<ParamRT> rt;
@@ -337,7 +347,7 @@ struct PatchGroup {
     std::vector<juce::String> members;
 };
 struct Patch {
-    static constexpr int currentVersion = 10;
+    static constexpr int currentVersion = 12;
     int version = currentVersion;
     std::vector<PatchNode> nodes;
     std::vector<PatchCable> cables;
@@ -347,6 +357,11 @@ struct Patch {
     static juce::String newID();
 
     static std::optional<Patch> fromJSON(const juce::String& json);
+    Patch migrated() const;
+    std::optional<std::pair<Patch, juce::String>> replacing(const juce::String& id, const std::string& kind) const;
+    std::pair<Patch, std::map<juce::String, juce::String>> withFreshIDs() const;
+    bool operator==(const Patch& o) const { return toJSON() == o.toJSON(); }
+    bool operator!=(const Patch& o) const { return !(*this == o); }
     juce::String toJSON() const;
 };
 
@@ -363,6 +378,9 @@ public:
     void setSampleRate(double sr);
     DSPNode* node(const juce::String& id);
     void transport(int t);        // 0 play, 1 pause, 2 stop
+    void renew(const juce::String& id, const Patch& patch);
+    void clearReadouts();
+    double currentBeat() const { return ctx.lastBeat; }
     bool isPlaying() const { return ctx.running; }
     double clockBPM() const { return ctx.bpm(); }
     bool externalClock() const { return ctx.externalClock; }
@@ -382,6 +400,31 @@ private:
     std::vector<float> zero;
     Patch lastPatch;
     void purge();
+    bool isCV(const juce::String& id, int port, const std::vector<PatchCable>& cables, int depth);
+};
+
+/// Undo / redo: whole-patch snapshots (UndoHistory.swift)
+struct UndoHistory {
+    Patch committed;
+    std::vector<Patch> undoStack, redoStack;
+    size_t limit = 200;
+    bool canUndo() const { return !undoStack.empty(); }
+    bool canRedo() const { return !redoStack.empty(); }
+    void commit(const Patch& cur) {
+        if (cur == committed) return;
+        undoStack.push_back(committed);
+        if (undoStack.size() > limit) undoStack.erase(undoStack.begin(), undoStack.begin() + long(undoStack.size() - limit));
+        redoStack.clear(); committed = cur;
+    }
+    std::optional<Patch> undo() {
+        if (undoStack.empty()) return std::nullopt;
+        redoStack.push_back(committed); committed = undoStack.back(); undoStack.pop_back(); return committed;
+    }
+    std::optional<Patch> redo() {
+        if (redoStack.empty()) return std::nullopt;
+        undoStack.push_back(committed); committed = redoStack.back(); redoStack.pop_back(); return committed;
+    }
+    void reset(const Patch& p, bool keep) { committed = p; if (!keep) { undoStack.clear(); redoStack.clear(); } }
 };
 
 } // namespace pn

@@ -4,6 +4,42 @@ import PoljeNieukUI
 
 // Offline test: renders a patch with a synthetic modular clock and audio input, no hardware needed.
 
+// `selftest --dump-specs <file>`: every module's definition as JSON — the Windows (JUCE) version embeds it,
+// so both apps always offer exactly the same modules, rows and ranges.
+if let i = CommandLine.arguments.firstIndex(of: "--dump-specs"), i + 1 < CommandLine.arguments.count {
+    func kindInfo(_ k: ParamKind) -> (String, [String]) {
+        switch k {
+        case .continuous: return ("continuous", [])
+        case .integer: return ("integer", [])
+        case .toggle: return ("toggle", [])
+        case .trigger: return ("trigger", [])
+        case .choice(let o): return ("choice", o)
+        }
+    }
+    func curveName(_ c: ParamCurve) -> String { c == .linear ? "linear" : (c == .exponential ? "exponential" : "cubic") }
+    let modules: [[String: Any]] = ModuleRegistry.all.map { s in
+        [
+            "kind": s.kind, "name": s.name, "category": s.category, "summary": s.summary,
+            "aliases": s.aliases, "inputs": s.inputs, "outputs": s.outputs, "polyOutputs": s.polyOutputs,
+            "bypass": s.bypass == .through ? "through" : (s.bypass == .silent ? "silent" : "none"),
+            "outputsAreCV": s.outputsAreCV,
+            "params": s.params.map { p -> [String: Any] in
+                let (k, o) = kindInfo(p.kind)
+                var d: [String: Any] = ["key": p.key, "name": p.name, "min": p.min, "max": p.max, "def": p.def,
+                                        "unit": p.unit, "kind": k, "curve": curveName(p.curve)]
+                if !o.isEmpty { d["options"] = o }
+                if let a = p.allowed { d["allowed"] = a }
+                return d
+            },
+        ]
+    }
+    let doc: [String: Any] = ["categories": ModuleRegistry.categories, "modules": modules]
+    let data = try! JSONSerialization.data(withJSONObject: doc, options: [.prettyPrinted, .sortedKeys])
+    try! data.write(to: URL(fileURLWithPath: CommandLine.arguments[i + 1]))
+    print("wrote \(ModuleRegistry.all.count) module specs")
+    exit(0)
+}
+
 var failures = 0
 func check(_ ok: Bool, _ msg: String) {
     print(ok ? "  PASS  \(msg)" : "  FAIL  \(msg)")
