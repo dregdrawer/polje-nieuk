@@ -718,6 +718,48 @@ void AppModel::toggleBypass(const juce::String& id) {
     patchChanged(); scheduleAutosave();
 }
 
+// ---------------------------------------------------------------- 3D
+
+std::vector<int> AppModel::sectionIndices(const std::string& category) const {
+    std::vector<int> r;
+    for (int i = 0; i < int(patch.nodes.size()); ++i) if (auto* s = Registry::spec(patch.nodes[size_t(i)].kind); s && s->category == category) r.push_back(i);
+    return r;
+}
+bool AppModel::sectionLifted(const std::string& category) const {
+    auto ix = sectionIndices(category);
+    if (ix.empty()) return false;
+    for (int i : ix) if (patch.nodes[size_t(i)].z.value_or(0) <= 0.5) return false;
+    return true;
+}
+void AppModel::toggleLift(const std::string& category) {
+    bool up = !sectionLifted(category);
+    for (int i : sectionIndices(category)) patch.nodes[size_t(i)].z = up ? std::optional<double>(liftHeight) : std::nullopt;
+    threeD = true;
+    patchChanged(); scheduleAutosave();
+}
+void AppModel::layerBySection() {
+    int level = 0;
+    for (auto& cat : Registry::categories) {
+        auto ix = sectionIndices(cat);
+        if (ix.empty()) continue;
+        for (int i : ix) patch.nodes[size_t(i)].z = level == 0 ? std::nullopt : std::optional<double>(double(level) * 110);
+        ++level;
+    }
+    threeD = true;
+    patchChanged(); scheduleAutosave();
+}
+void AppModel::putEverythingDown() {
+    for (auto& n : patch.nodes) n.z.reset();
+    patchChanged(); scheduleAutosave();
+}
+void AppModel::setHeight(const juce::String& id, double z) {
+    int i = index(id);
+    if (i < 0) return;
+    double v = std::clamp(z, 0.0, 900.0);
+    patch.nodes[size_t(i)].z = v < 0.5 ? std::nullopt : std::optional<double>(v);
+    patchChanged();
+}
+
 // ---------------------------------------------------------------- drop a box onto a cable
 
 static Pt bezier(Pt a, Pt b, float t, float scale) {

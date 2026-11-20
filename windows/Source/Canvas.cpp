@@ -37,6 +37,7 @@ int64_t Canvas::keyFor(const PatchNode& n, const std::vector<const PatchCable*>&
     int64_t h = LiveSig::patch(n);
     LiveSig::mix(h, int64_t(n.x * 8)); LiveSig::mix(h, int64_t(n.y * 8));
     LiveSig::mix(h, n.bypassed ? 1 : 0); LiveSig::mix(h, n.text ? n.text->hashCode64() : 7);
+    LiveSig::mix(h, int64_t(n.z.value_or(-1) * 8));
     for (auto* c : cables) { LiveSig::mix(h, c->id.hashCode64()); LiveSig::mix(h, c->fromPort * 7919 + c->toPort); }
     for (auto* r : related) { LiveSig::mix(h, LiveSig::patch(*r)); LiveSig::mix(h, r->id.hashCode64()); }
     LiveSig::mix(h, int64_t(model.patch.nodes.size()));
@@ -328,6 +329,7 @@ std::optional<std::pair<Pt, Pt>> Canvas::cableEnds(const PatchCable& c) {
 }
 
 void Canvas::paint(juce::Graphics& g) {
+    if (model.threeD) { paint3D(g); return; }
     float s = model.viewScale, px = pixelScale();
     Pt o = model.viewOffset;
     auto clip = g.getClipBounds().toFloat();
@@ -498,7 +500,8 @@ void Canvas::timerCallback() {
         longPressAt = 0;
         if (!press->dragging && !press->info.moved && press->item->kind == Item::module) { press->longFired = true; model.beginReplace(press->item->id); }
     }
-    // live parts: gliding ones at 30 fps, the rest at 20 fps (slower still with audio off)
+    // live parts: gliding ones at 30 fps, the rest at 20 fps (slower still with audio off). In 3D they hold still.
+    if (model.threeD) return;
     bool running = model.isRunning;
     auto view = getLocalBounds().toFloat();
     for (auto& id : order) {
@@ -855,6 +858,7 @@ void Canvas::mouseDown(const juce::MouseEvent& e) {
         // the help panel's ×
         if (p.x > 300 && p.y > float(getHeight()) - 200) { }
     }
+    if (model.threeD) { down3D(e); return; }
     if (!deleteButton.isEmpty() && deleteButton.toFloat().contains(p)) { model.removeCable(model.selectedCable); return; }
     if (began(p, e)) return;
     bgPressed = true; panning = false; marquee.reset();
@@ -863,6 +867,7 @@ void Canvas::mouseDown(const juce::MouseEvent& e) {
 }
 
 void Canvas::mouseDrag(const juce::MouseEvent& e) {
+    if (model.threeD) { drag3D(e); return; }
     Pt p = e.position;
     if (press) { moved(p); return; }
     if (!bgPressed) return;
@@ -877,6 +882,7 @@ void Canvas::mouseDrag(const juce::MouseEvent& e) {
 }
 
 void Canvas::mouseUp(const juce::MouseEvent& e) {
+    if (model.threeD) { up3D(e); return; }
     Pt p = e.position;
     if (press) { ended(p); return; }
     if (!bgPressed) return;
@@ -917,10 +923,10 @@ void Canvas::mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDet
     float raw = w.deltaY != 0 ? w.deltaY : w.deltaX;
     float dy = w.isReversed ? -raw : raw;
     float factor = w.isSmooth ? std::exp(std::clamp(dy * 256, -40.0f, 40.0f) * 0.005f) : (dy > 0 ? 1.1f : (dy < 0 ? 1 / 1.1f : 1.0f));
-    if (factor != 1) model.zoomBy(factor, e.position);
+    if (factor != 1) model.zoomBy(factor, model.threeD ? camera().unproject(e.position) : e.position);
 }
 
-void Canvas::mouseMagnify(const juce::MouseEvent& e, float scale) { model.zoomBy(scale, e.position); }
+void Canvas::mouseMagnify(const juce::MouseEvent& e, float scale) { model.zoomBy(scale, model.threeD ? camera().unproject(e.position) : e.position); }
 
 bool Canvas::keyPressed(const juce::KeyPress& k) {
     if (editor) return false;

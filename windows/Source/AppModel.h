@@ -49,6 +49,17 @@ public:
     Pt viewSize;
     bool selectMode = false, helpMode = false, showFiles = false, showColours = false, hideCables = false, lightScheme = false;
     std::vector<HelpTopic> helpTopics;
+    // 3D mode: the board tilted in perspective, boxes floating at their heights (PatchNode.z)
+    bool threeD = false;
+    double orbitPitch = 52, orbitYaw = 0;
+    void orbit(double pitch, double yaw) { orbitPitch = std::clamp(pitch, 8.0, 78.0); orbitYaw = std::fmod(yaw, 360.0); changed(); }
+    static constexpr double liftHeight = 170;
+    std::vector<int> sectionIndices(const std::string& category) const;
+    bool sectionLifted(const std::string& category) const;
+    void toggleLift(const std::string& category);
+    void layerBySection();
+    void putEverythingDown();
+    void setHeight(const juce::String& id, double z);
     bool isRunning = false;
     int transport = 0;                        // 0 play, 1 pause, 2 stop
     juce::String audioStatus = "audio off";

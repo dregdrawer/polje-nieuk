@@ -54,7 +54,7 @@ target_sources(PoljeNieuk PRIVATE
   Source/Main.cpp Source/Engine.cpp Source/Registry.cpp
   Source/ModulesCore.cpp Source/ModulesFX.cpp Source/ModulesMI.cpp Source/ModulesFX2.cpp
   Source/ModulesBuffers.cpp Source/ModulesSeq.cpp Source/ModulesInst.cpp
-  Source/UIBase.cpp Source/AppModel.cpp Source/Displays.cpp Source/Boxes.cpp Source/Canvas.cpp Source/Window.cpp)
+  Source/UIBase.cpp Source/AppModel.cpp Source/Displays.cpp Source/Boxes.cpp Source/Canvas.cpp Source/Board3D.cpp Source/Window.cpp)
 
 target_compile_definitions(PoljeNieuk PRIVATE
   JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_APPLICATION_NAME_STRING="polje nieuk" JUCE_APPLICATION_VERSION_STRING="0.7.0"
