@@ -11,6 +11,11 @@ if (APPLE)
   set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "")
 endif()
 
+if (MSVC)
+  # M_PI etc. for the Eurorack code; no min/max macros from windows.h
+  add_compile_definitions(_USE_MATH_DEFINES NOMINMAX)
+endif()
+
 include(FetchContent)
 FetchContent_Declare(JUCE
   URL https://github.com/juce-framework/JUCE/archive/refs/tags/8.0.4.tar.gz
