@@ -2,7 +2,7 @@
 #   cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --config Release
 # On Windows use clang-cl for the Mutable Instruments code:  cmake -B build -T ClangCL
 cmake_minimum_required(VERSION 3.22)
-project(PoljeNieuk VERSION 0.7.0 LANGUAGES C CXX)
+project(PoljeNieuk VERSION 0.6.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -57,7 +57,7 @@ target_sources(PoljeNieuk PRIVATE
   Source/UIBase.cpp Source/AppModel.cpp Source/Displays.cpp Source/Boxes.cpp Source/Canvas.cpp Source/Board3D.cpp Source/Window.cpp)
 
 target_compile_definitions(PoljeNieuk PRIVATE
-  JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_APPLICATION_NAME_STRING="polje nieuk" JUCE_APPLICATION_VERSION_STRING="0.7.0"
+  JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_APPLICATION_NAME_STRING="polje nieuk" JUCE_APPLICATION_VERSION_STRING="0.6.0"
   JUCE_DISPLAY_SPLASH_SCREEN=0)
 
 target_link_libraries(PoljeNieuk PRIVATE
