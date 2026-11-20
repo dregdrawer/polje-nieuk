@@ -15,6 +15,7 @@ private:
     public:
         Window() : DocumentWindow("polje nieuk", juce::Colours::black, DocumentWindow::allButtons) {
             setUsingNativeTitleBar(true);
+            setTitleBarHeight(0);      // else JUCE treats the top of our own top bar as the window's caption (drag / double-click zoom)
             setContentOwned(new pn::MainComponent(), false);   // the window sets the content's size, never the other way
             setResizable(true, true);
             centreWithSize(1280, 800);

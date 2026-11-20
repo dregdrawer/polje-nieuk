@@ -284,13 +284,13 @@ std::map<juce::String, Pt> layout(const Patch& patch, const HardwareCounts& hw) 
     };
     for (auto* t : texts) {
         Pt tp { float(t->x), float(t->y) };
-        const PatchNode* near = nullptr; float best = INFINITY;
+        const PatchNode* nearest = nullptr; float best = INFINITY;
         for (auto* b : boxes) {
             auto s = size(b);
             float d = dist(tp, Rect(float(b->x), float(b->y), s.x, s.y));
-            if (d < best) { best = d; near = b; }
+            if (d < best) { best = d; nearest = b; }
         }
-        if (near && pos.count(near->id)) { auto np = pos[near->id]; pos[t->id] = { np.x + (tp.x - float(near->x)), np.y + (tp.y - float(near->y)) }; }
+        if (nearest && pos.count(nearest->id)) { auto np = pos[nearest->id]; pos[t->id] = { np.x + (tp.x - float(nearest->x)), np.y + (tp.y - float(nearest->y)) }; }
         else pos[t->id] = tp;
     }
     return pos;

@@ -1,6 +1,6 @@
 # polje nieuk
 
-A Max/Pd-style patcher for iPad and Mac that processes your Eurorack through the **disting NT** over USB:
+A Max/Pd-style patcher for iPad, Mac and Windows that processes your Eurorack through the **disting NT** over USB:
 loopers, granulators, delays, reverb, filters, drive, LFOs and recording, all locked to your modular's clock.
 
 ## Using it
@@ -173,12 +173,32 @@ microphone permission across rebuilds (ad-hoc signed builds ask again every time
 off the main thread: if macOS audio is busy — a permission prompt waiting, an interface being plugged in —
 the window keeps working and the top bar says "waiting for the system audio…".
 
+### Windows
+
+Download `polje-nieuk-windows-x64.zip` from the Releases page, unzip it and run `polje nieuk.exe` (Windows 10 / 11,
+64-bit). It is the same app: the same modules with the same sound, the same boxes, rows, cables and displays,
+and the same patch files, so a patch saved on the Mac or iPad opens on Windows and back. Audio goes through
+Windows Audio (WASAPI); pick the disting NT (or any interface) under IN / OUT in the top bar.
+
+The Windows version is written with JUCE (C++) in `windows/`. It builds on any platform with CMake:
+
+```bash
+cmake -S windows -B windows/build -DCMAKE_BUILD_TYPE=Release
+cmake --build windows/build --config Release
+```
+
+On Windows use Visual Studio 2022 or newer with the clang-cl toolset (`-T ClangCL`). Every push builds it on
+GitHub Actions, which also renders two test patches through the Windows engine and checks every module's output
+against the Mac engine's (`windows/tests`). The module list itself comes from the Mac app
+(`selftest --dump-specs windows/Source/specs.json`), so both always offer the same modules and settings.
+
 ## Layout
 
 - `Sources/PoljeNieukCore` — audio engine: RemoteIO/AUHAL duplex I/O, lock-free graph swapping (modules keep their loops when you re-patch), DSP modules, clock follower.
 - `Sources/PoljeNieukUI` — SwiftUI patcher shared by iPad and Mac.
 - `Sources/SelfTest` — renders a patch with a synthetic modular clock and checks clock lock, tempo changes, looper sync, grains, NaN safety.
 - `App` — app entry point for the Xcode target.
+- `windows` — the Windows version (JUCE / C++): `Engine`, `Modules*` (the DSP), `Canvas`, `Boxes`, `Displays`, `Window` (the interface).
 
 To add a module: subclass `DSPNode` (no allocation or locks in `process`), then add a `ModuleSpec` to `ModuleRegistry.all`. The UI is generated from the spec.
 
