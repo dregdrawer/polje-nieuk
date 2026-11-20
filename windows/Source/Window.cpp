@@ -119,7 +119,7 @@ void TopBar::layoutItems(juce::Graphics* g) {
         float right = tw(tempoText) + (stats ? 10 + 54 : 0) + spacing;
         right += 30 * 6 + spacing * 6;               // undo redo scheme help + select
         if (sel > 0) right += word("duplicate") + (sel >= 2 ? word("group") + spacing : 0) + (!model.selectedGroups().empty() ? word("ungroup") + spacing : 0) + word("bypass") + tw(juce::String(sel)) + spacing * 3;
-        right += 30 + spacing + word("browser") + spacing + word("view") + spacing + word("file") + 12;
+        right += 30 + spacing + word("browser") + spacing + word("view") + 9 + spacing + word("file") + 9 + 12;
         if (left + right + 8 > float(getWidth()) && mode < 2) continue;
         // lay out
         float x = 12;
@@ -140,8 +140,8 @@ void TopBar::layoutItems(juce::Graphics* g) {
         auto addR = [&](const juce::String& id, float w, std::function<void(Pt)> a, const juce::String& tip = {}) {
             rx -= w; rightItems.push_back({ id, { rx, 0, w, h }, std::move(a), tip }); rx -= spacing;
         };
-        addR("file", word("file"), [this](Pt p) { fileMenu(p); });
-        addR("view", word("view"), [this](Pt p) { viewMenu(p); });
+        addR("file", word("file") + 9, [this](Pt p) { fileMenu(p); });
+        addR("view", word("view") + 9, [this](Pt p) { viewMenu(p); });
         addR("browser", word("browser"), [this](Pt) { model.showFiles = !model.showFiles; model.changed(); }, "Show / hide the browser");
         addR("delete", 30, [this](Pt) { model.removeSelection(); }, "Delete selection");
         if (sel > 0) {
@@ -188,7 +188,13 @@ void TopBar::layoutItems(juce::Graphics* g) {
                 else if (it.id == "delete") BarIcons::trash(*g, c, on(!(model.selectedNodes.empty() && model.selectedCable.isEmpty())));
                 else if (it.id == "browser") gc.text("browser", c, font, on(model.showFiles));
                 else if (it.id == "count") gc.text(juce::String(sel), c, font, Theme::dim());
-                else if (it.id == "duplicate" || it.id == "group" || it.id == "ungroup" || it.id == "bypassSel" || it.id == "view" || it.id == "file")
+                else if (it.id == "view" || it.id == "file") {
+                    gc.textLeft(it.id, { it.r.getX() + 3, cy }, font, Theme::dim());
+                    float xx = it.r.getRight() - 9;
+                    juce::Path ch; ch.startNewSubPath(xx, cy - 1.5f); ch.lineTo(xx + 3, cy + 1.5f); ch.lineTo(xx + 6, cy - 1.5f);
+                    BarIcons::stroke(*g, ch, Theme::text(), 1.6f);
+                }
+                else if (it.id == "duplicate" || it.id == "group" || it.id == "ungroup" || it.id == "bypassSel")
                     gc.text(it.id == "bypassSel" ? juce::String("bypass") : it.id, c, font, Theme::dim());
             }
         }
@@ -615,13 +621,9 @@ void FileBrowser::timerCallback() {
 
 class ColourPanel : public juce::Component, private juce::ChangeListener {
 public:
-    explicit ColourPanel(AppModel& m) : model(m) {
-        for (int s = 0; s < 3; ++s) {
-            auto* sel = new juce::ColourSelector(juce::ColourSelector::showColourspace | juce::ColourSelector::showSliders);
-            sel->setCurrentColour(current(CustomColours::Slot(s)), juce::dontSendNotification);
-            sel->addChangeListener(this);
-            selectors.add(sel);
-        }
+    explicit ColourPanel(AppModel& m) : model(m), selector(juce::ColourSelector::showColourspace | juce::ColourSelector::showSliders) {
+        selector.addChangeListener(this);
+        addChildComponent(selector);
         setSize(250, 130);
     }
     juce::Colour current(CustomColours::Slot s) { return s == CustomColours::background ? Theme::bg() : s == CustomColours::windows ? Theme::box() : Theme::cable(); }
@@ -631,9 +633,9 @@ public:
         gc.textLeft(juce::String("colours ") + u8("\xc2\xb7 ") + (model.lightScheme ? "light" : "dark") + " scheme", { 14, 16 }, 11, Theme::text(), true);
         for (int s = 0; s < 3; ++s) {
             float y = 40 + float(s) * 24;
-            gc.textLeft(CustomColours::title(CustomColours::Slot(s)), { 14, y }, 11, Theme::text());
+            gc.textLeft(CustomColours::title(CustomColours::Slot(s)), { 14, y }, 11, s == active ? Theme::text() : Theme::text());
             g.setColour(current(CustomColours::Slot(s))); g.fillRoundedRectangle(170, y - 8, 30, 16, 3);
-            g.setColour(Theme::border()); g.drawRoundedRectangle(170, y - 8, 30, 16, 3, 1);
+            g.setColour(s == active ? Theme::text() : Theme::border()); g.drawRoundedRectangle(170, y - 8, 30, 16, 3, s == active ? 2.0f : 1.0f);
             gc.text(u8("\xe2\x86\xba"), { 222, y }, 12, CustomColours::colour(CustomColours::Slot(s)) ? Theme::dim() : Theme::faint());
         }
         gc.textLeft("Reset all to the scheme", { 14, 114 }, 9, CustomColours::anyCustom() ? Theme::text() : Theme::faint());
@@ -642,28 +644,29 @@ public:
         for (int s = 0; s < 3; ++s) {
             float y = 40 + float(s) * 24;
             if (Rect(166, y - 10, 38, 20).contains(e.position)) {
-                auto* sel = selectors[s];
-                active = s;
-                sel->setSize(260, 240);
-                juce::CallOutBox::launchAsynchronously(std::unique_ptr<juce::Component>(new Holder(sel)), localAreaToGlobal(juce::Rectangle<int>(170, int(y - 8), 30, 16)), nullptr);
+                active = active == s ? -1 : s;
+                if (active >= 0) {
+                    selector.setCurrentColour(current(CustomColours::Slot(s)), juce::dontSendNotification);
+                    selector.setBounds(10, 130, 230, 220);
+                    selector.setVisible(true);
+                    setSize(250, 360);
+                } else { selector.setVisible(false); setSize(250, 130); }
+                repaint();
                 return;
             }
             if (Rect(212, y - 10, 20, 20).contains(e.position)) { CustomColours::set(CustomColours::Slot(s), std::nullopt); model.coloursChanged(); repaint(); return; }
         }
-        if (e.position.y > 104) { CustomColours::resetAll(); model.coloursChanged(); repaint(); }
+        if (e.position.y > 104 && e.position.y < 124) { CustomColours::resetAll(); model.coloursChanged(); repaint(); }
     }
 private:
-    struct Holder : juce::Component {
-        explicit Holder(juce::ColourSelector* s) : sel(s) { addAndMakeVisible(sel); setSize(260, 240); }
-        ~Holder() override { removeChildComponent(sel); }
-        void resized() override { sel->setBounds(getLocalBounds()); }
-        juce::ColourSelector* sel;
-    };
-    void changeListenerCallback(juce::ChangeBroadcaster* b) override {
-        for (int s = 0; s < 3; ++s) if (selectors[s] == b) { CustomColours::set(CustomColours::Slot(s), selectors[s]->getCurrentColour()); model.coloursChanged(); repaint(); }
+    void changeListenerCallback(juce::ChangeBroadcaster*) override {
+        if (active < 0) return;
+        CustomColours::set(CustomColours::Slot(active), selector.getCurrentColour());
+        model.coloursChanged();
+        repaint();
     }
     AppModel& model;
-    juce::OwnedArray<juce::ColourSelector> selectors;
+    juce::ColourSelector selector;
     int active = -1;
 };
 
@@ -686,6 +689,11 @@ struct Look : juce::LookAndFeel_V4 {
         setColour(juce::TextButton::textColourOffId, Theme::text());
         setColour(juce::ResizableWindow::backgroundColourId, Theme::box());
         setColour(juce::CaretComponent::caretColourId, Theme::text());
+        setColour(juce::ColourSelector::backgroundColourId, Theme::box());
+        setColour(juce::ColourSelector::labelTextColourId, Theme::text());
+        setColour(juce::TextEditor::backgroundColourId, Theme::row());
+        setColour(juce::TextEditor::textColourId, Theme::text());
+        setColour(juce::TextEditor::highlightColourId, Theme::fill());
     }
     juce::Font getPopupMenuFont() override { return Theme::mono(11); }
     juce::Font getAlertWindowTitleFont() override { return Theme::mono(12, true); }
@@ -756,8 +764,9 @@ void MainComponent::modelChanged() {
         model.viewOffset.x -= after - before;
         layout = true;
     }
-    if (model.lightScheme != lastLight) {
+    if (model.lightScheme != lastLight || CustomColours::version != lastColours) {
         lastLight = model.lightScheme;
+        lastColours = CustomColours::version;
         static_cast<Look*>(look.get())->apply();
         if (browser) { browser = std::make_unique<FileBrowser>(model); addAndMakeVisible(*browser); }
         repaint();

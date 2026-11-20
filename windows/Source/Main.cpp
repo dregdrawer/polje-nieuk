@@ -24,6 +24,7 @@ private:
             setVisible(true);
         }
         ~Window() override { pn::settings().setValue("window", getWindowStateAsString()); pn::settings().saveIfNeeded(); }
+        void mouseDoubleClick(const juce::MouseEvent&) override {}
         void closeButtonPressed() override { juce::JUCEApplication::getInstance()->systemRequestedQuit(); }
     };
     std::unique_ptr<Window> window;

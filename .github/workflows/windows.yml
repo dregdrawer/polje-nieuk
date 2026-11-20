@@ -30,7 +30,30 @@ jobs:
           New-Item -ItemType Directory -Force out/polje-nieuk | Out-Null
           Copy-Item $exe.FullName "out/polje-nieuk/polje nieuk.exe"
           Compress-Archive -Path out/polje-nieuk -DestinationPath polje-nieuk-windows-x64.zip
+      - name: Run it and take a screenshot
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "$env:APPDATA/polje nieuk" | Out-Null
+          Copy-Item windows/tests/every-device.json "$env:APPDATA/polje nieuk/autosave.json"
+          $p = Start-Process -FilePath "out/polje-nieuk/polje nieuk.exe" -PassThru
+          Start-Sleep -Seconds 15
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          $g = [System.Drawing.Graphics]::FromImage($bmp)
+          $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          $bmp.Save("windows-screenshot.png")
+          "running: $(-not $p.HasExited)  cpu seconds: $($p.TotalProcessorTime.TotalSeconds)" | Tee-Object windows-run.txt
+          if ($p.HasExited) { "exit code $($p.ExitCode)" | Tee-Object -Append windows-run.txt; exit 1 }
+          Stop-Process -Id $p.Id
       - uses: actions/upload-artifact@v4
         with:
           name: polje-nieuk-windows-x64
           path: polje-nieuk-windows-x64.zip
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-screenshot
+          path: |
+            windows-screenshot.png
+            windows-run.txt

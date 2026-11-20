@@ -91,6 +91,7 @@ private:
     std::unique_ptr<juce::FileChooser> chooser;
     juce::String lastError;
     bool lastLight = false, lastShowFiles = false;
+    int lastColours = 0;
     juce::String importTarget;
     juce::TooltipWindow tooltips { this, 600 };
     std::unique_ptr<juce::LookAndFeel_V4> look;
