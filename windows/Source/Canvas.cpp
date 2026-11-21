@@ -39,6 +39,7 @@ int64_t Canvas::keyFor(const PatchNode& n, const std::vector<const PatchCable*>&
     LiveSig::mix(h, n.bypassed ? 1 : 0); LiveSig::mix(h, n.text ? n.text->hashCode64() : 7);
     LiveSig::mix(h, int64_t(n.z.value_or(-1) * 8));
     LiveSig::mix(h, n.highlight ? n.highlight->hashCode64() : 3);
+    { auto tc = model.typeColour(n); LiveSig::mix(h, tc ? tc->hashCode64() : 5); }
     for (auto* c : cables) { LiveSig::mix(h, c->id.hashCode64()); LiveSig::mix(h, c->fromPort * 7919 + c->toPort); }
     for (auto* r : related) { LiveSig::mix(h, LiveSig::patch(*r)); LiveSig::mix(h, r->id.hashCode64()); }
     LiveSig::mix(h, int64_t(model.patch.nodes.size()));
@@ -330,7 +331,6 @@ std::optional<std::pair<Pt, Pt>> Canvas::cableEnds(const PatchCable& c) {
 }
 
 void Canvas::paint(juce::Graphics& g) {
-    if (model.threeD) { paint3D(g); return; }
     float s = model.viewScale, px = pixelScale();
     Pt o = model.viewOffset;
     auto clip = g.getClipBounds().toFloat();
@@ -518,10 +518,9 @@ void Canvas::timerCallback() {
     if (press && longPressAt > 0 && t >= longPressAt) {
         longPressAt = 0;
         // a long press = a right-click: duplicate, replace, highlight
-        if (!press->dragging && !press->info.moved && press->item->kind == Item::module) { press->longFired = true; showMenu(titleMenu(press->item->id), press->startScreen); }
+        if (!press->dragging && !press->info.moved && press->item->kind == Item::module) { press->longFired = true; showBoxMenu(press->item->id, press->startScreen); }
     }
-    // live parts: gliding ones at 30 fps, the rest at 20 fps (slower still with audio off). In 3D they hold still.
-    if (model.threeD) return;
+    // live parts: gliding ones at 30 fps, the rest at 20 fps (slower still with audio off)
     bool running = model.isRunning;
     auto view = getLocalBounds().toFloat();
     for (auto& id : order) {
@@ -677,7 +676,7 @@ bool Canvas::began(Pt screen, const juce::MouseEvent& e) {
         case Region::title: case Region::text:
             if (info.right && it->kind == Item::module) {
                 press.reset();
-                showMenu(titleMenu(id), screen);
+                showBoxMenu(id, screen);
                 return true;
             }
             if (!info.right) longPressAt = now() + 0.5;
@@ -853,22 +852,52 @@ void Canvas::ended(Pt screen, bool cancelled) {
     }
 }
 
-std::vector<MenuItem> Canvas::titleMenu(const juce::String& id) {
-    int i = model.patch.index(id);
-    std::optional<juce::String> cur = i >= 0 ? model.patch.nodes[size_t(i)].highlight : std::nullopt;
-    std::vector<MenuItem> list;
-    auto item = [](juce::String t, bool checked, std::function<void()> f) { MenuItem m; m.title = t; m.checked = checked; m.action = f; return m; };
-    list.push_back(item("Duplicate", false, [this, id] { model.duplicate(id); }));
-    list.push_back(item(juce::String::fromUTF8("Replace\xe2\x80\xa6"), false, [this, id] { model.beginReplace(id); }));
-    list.push_back(MenuItem::divider()); list.push_back(MenuItem::section("Highlight"));
-    list.push_back(item("none", !cur, [this, id] { model.setHighlight(id, std::nullopt); }));
-    for (auto& c : AppModel::highlightColours) {
-        juce::String hex(c.hex);
-        auto mi = item(c.name, cur && *cur == hex, [this, id, hex] { model.setHighlight(id, hex); });
-        mi.swatch = hex;
-        list.push_back(mi);
+/// The box menu's colour row: circles (the first, with a slash, = no highlight); the current one has a ring.
+class SwatchRow : public juce::PopupMenu::CustomComponent {
+public:
+    SwatchRow(std::optional<juce::String> cur, std::function<void(std::optional<juce::String>)> pick)
+        : juce::PopupMenu::CustomComponent(false), current(std::move(cur)), onPick(std::move(pick)) {}
+    void getIdealSize(int& w, int& h) override { w = 10 + 7 * 24 + 6; h = 28; }
+    void paint(juce::Graphics& g) override {
+        for (int k = 0; k <= int(AppModel::highlightColours.size()); ++k) {
+            auto r = cell(k);
+            std::optional<juce::String> hex = k == 0 ? std::nullopt : std::optional<juce::String>(AppModel::highlightColours[size_t(k - 1)]);
+            auto c = r.reduced(2);
+            if (hex) { g.setColour(juce::Colour::fromString("ff" + hex->substring(1))); g.fillEllipse(c); }
+            else {
+                g.setColour(Theme::dim()); g.drawEllipse(c.reduced(0.5f), 1);
+                g.drawLine(c.getX() + 4, c.getBottom() - 4, c.getRight() - 4, c.getY() + 4, 1);
+            }
+            if (hex == current) { g.setColour(Theme::text()); g.drawEllipse(r.reduced(0.75f), 1.5f); }
+        }
     }
-    return list;
+    void mouseUp(const juce::MouseEvent& e) override {
+        for (int k = 0; k <= int(AppModel::highlightColours.size()); ++k)
+            if (cell(k).contains(e.position)) {
+                onPick(k == 0 ? std::nullopt : std::optional<juce::String>(AppModel::highlightColours[size_t(k - 1)]));
+                triggerMenuItem();
+                return;
+            }
+    }
+private:
+    juce::Rectangle<float> cell(int k) const { return { 10.0f + float(k) * 24, 3, 22, 22 }; }
+    std::optional<juce::String> current;
+    std::function<void(std::optional<juce::String>)> onPick;
+};
+
+void Canvas::showBoxMenu(const juce::String& id, Pt screen) {
+    int i = model.patch.index(id);
+    if (i < 0) return;
+    juce::PopupMenu menu;
+    menu.setLookAndFeel(&getLookAndFeel());
+    menu.addItem("duplicate", [this, id] { model.duplicate(id); });
+    menu.addItem(juce::String::fromUTF8("replace\xe2\x80\xa6"), [this, id] { model.beginReplace(id); });
+    menu.addSeparator();
+    menu.addSectionHeader("highlight");
+    menu.addCustomItem(1000, std::make_unique<SwatchRow>(model.patch.nodes[size_t(i)].highlight,
+                                                         [this, id](std::optional<juce::String> h) { model.setHighlight(id, h); }), nullptr);
+    auto p = localPointToGlobal(screen.toInt());
+    menu.showMenuAsync(juce::PopupMenu::Options().withTargetScreenArea({ p.x, p.y, 1, 1 }));
 }
 
 void Canvas::showMenu(const std::vector<MenuItem>& list, Pt screen) {
@@ -880,12 +909,7 @@ void Canvas::showMenu(const std::vector<MenuItem>& list, Pt screen) {
         if (it.separator) { menu.addSeparator(); continue; }
         if (it.header) { menu.addSectionHeader(it.title); continue; }
         actions[idn] = it.action;
-        if (it.swatch.isNotEmpty()) {
-            juce::PopupMenu::Item mi(it.title);
-            mi.itemID = idn++; mi.isEnabled = it.enabled; mi.isTicked = it.checked;
-            mi.colour = juce::Colour::fromString("ff" + it.swatch.substring(1));
-            menu.addItem(mi);
-        } else menu.addItem(idn++, it.title, it.enabled, it.checked);
+        menu.addItem(idn++, it.title, it.enabled, it.checked);
     }
     auto p = localPointToGlobal(screen.toInt());
     menu.showMenuAsync(juce::PopupMenu::Options().withTargetScreenArea({ p.x, p.y, 1, 1 }), [actions](int r) {
@@ -906,7 +930,6 @@ void Canvas::mouseDown(const juce::MouseEvent& e) {
         // the help panel's ×
         if (p.x > 300 && p.y > float(getHeight()) - 200) { }
     }
-    if (model.threeD) { down3D(e); return; }
     if (!deleteButton.isEmpty() && deleteButton.toFloat().contains(p)) { model.removeCable(model.selectedCable); return; }
     if (began(p, e)) return;
     bgPressed = true; panning = false; marquee.reset();
@@ -916,7 +939,6 @@ void Canvas::mouseDown(const juce::MouseEvent& e) {
 }
 
 void Canvas::mouseDrag(const juce::MouseEvent& e) {
-    if (model.threeD) { drag3D(e); return; }
     Pt p = e.position;
     if (press) { moved(p); return; }
     if (!bgPressed) return;
@@ -931,7 +953,6 @@ void Canvas::mouseDrag(const juce::MouseEvent& e) {
 }
 
 void Canvas::mouseUp(const juce::MouseEvent& e) {
-    if (model.threeD) { up3D(e); return; }
     Pt p = e.position;
     if (press) { ended(p); return; }
     if (!bgPressed) return;
@@ -973,10 +994,10 @@ void Canvas::mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDet
     float raw = w.deltaY != 0 ? w.deltaY : w.deltaX;
     float dy = w.isReversed ? -raw : raw;
     float factor = w.isSmooth ? std::exp(std::clamp(dy * 256, -40.0f, 40.0f) * 0.005f) : (dy > 0 ? 1.1f : (dy < 0 ? 1 / 1.1f : 1.0f));
-    if (factor != 1) model.zoomBy(factor, model.threeD ? camera().unproject(e.position) : e.position);
+    if (factor != 1) model.zoomBy(factor, e.position);
 }
 
-void Canvas::mouseMagnify(const juce::MouseEvent& e, float scale) { model.zoomBy(scale, model.threeD ? camera().unproject(e.position) : e.position); }
+void Canvas::mouseMagnify(const juce::MouseEvent& e, float scale) { model.zoomBy(scale, e.position); }
 
 bool Canvas::keyPressed(const juce::KeyPress& k) {
     if (editor) return false;

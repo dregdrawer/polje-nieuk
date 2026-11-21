@@ -124,73 +124,21 @@ public final class AppModel: ObservableObject {
     var isZooming = false
     @Published var viewSize: CGSize = .zero
 
-    /// 3D mode (the cube in the top bar): the patch board tilts away in perspective and boxes can float
-    /// at their own heights (PatchNode.z). Drag a box to move it on the board, its ↕ handle to raise it.
-    @Published var threeD = false
-
-    /// 3D mode: the camera — how steeply you look down at the board (degrees from flat) and its spin.
-    @Published private(set) var orbitPitch: Double = 52
-    @Published private(set) var orbitYaw: Double = 0
-    func orbit(pitch: Double, yaw: Double) {
-        orbitPitch = min(max(pitch, 8), 78)
-        orbitYaw = yaw.truncatingRemainder(dividingBy: 360)
+    /// view ▸ Select type: every box of the ticked sections (instruments, utilities …) gets a frame in that
+    /// section's colour. Independent of a box's own highlight (both frames show). Remembered between launches.
+    @Published var typeHighlights: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "typeHighlights") ?? []) {
+        didSet { UserDefaults.standard.set(Array(typeHighlights), forKey: "typeHighlights") }
     }
-
-    /// 3D menu: lift every box of one section (as in the device menu) — or put them down if they're all up.
-    static let liftHeight = 170.0
-    func sectionKinds(_ category: String) -> [Int] {
-        patch.nodes.indices.filter { ModuleRegistry.spec(patch.nodes[$0].kind)?.category == category }
+    func toggleTypeHighlight(_ category: String) {
+        if typeHighlights.contains(category) { typeHighlights.remove(category) } else { typeHighlights.insert(category) }
     }
-    func sectionLifted(_ category: String) -> Bool {
-        let ix = sectionKinds(category)
-        return !ix.isEmpty && ix.allSatisfy { (patch.nodes[$0].z ?? 0) > 0.5 }
-    }
-    func toggleLift(_ category: String) {
-        let up = !sectionLifted(category)
-        for i in sectionKinds(category) { patch.nodes[i].z = up ? Self.liftHeight : nil }
-        threeD = true
-        scheduleAutosave()
-    }
-    /// Every section on its own level (in the device menu's order), the first one on the board.
-    func layerBySection() {
-        let order = ModuleRegistry.categories.filter { !sectionKinds($0).isEmpty }
-        for (level, cat) in order.enumerated() {
-            for i in sectionKinds(cat) { patch.nodes[i].z = level == 0 ? nil : Double(level) * 110 }
-        }
-        threeD = true
-        scheduleAutosave()
-    }
-    func putEverythingDown() {
-        for i in patch.nodes.indices where patch.nodes[i].z != nil { patch.nodes[i].z = nil }
-        scheduleAutosave()
-    }
-
-    /// 3D mode: the camera as the 3D view draws it.
-    var camera3D: BoardCamera {
-        BoardCamera(viewSize: viewSize, tilt: orbitPitch * .pi / 180, yaw: orbitYaw * .pi / 180)
-    }
-    private var move3DGrab: (id: UUID, grab: CGSize)?
-    /// 3D mode: drag a box by its title — `from` / `to` are screen points in the canvas.
-    func move3D(_ id: UUID, from start: CGPoint, to now: CGPoint) {
-        guard let i = patch.index(of: id) else { return }
-        let cam = camera3D, s = Double(viewScale), o = viewOffset
-        let n = patch.nodes[i], h = (n.z ?? 0) * s
-        if move3DGrab?.id != id {
-            let p = cam.unproject(start, h: h)
-            move3DGrab = (id, CGSize(width: p.x - (n.x * s + o.width), height: p.y - (n.y * s + o.height)))
-            select(id)
-        }
-        guard let g = move3DGrab?.grab else { return }
-        let p = cam.unproject(now, h: h)
-        moveNode(id, to: CGPoint(x: (p.x - g.width - o.width) / s, y: (p.y - g.height - o.height) / s))
-    }
-    func end3DMove() { move3DGrab = nil }
-
-    /// 3D mode: set a box's height above the board.
-    func setHeight(_ id: UUID, _ z: Double) {
-        guard let i = patch.index(of: id) else { return }
-        let v = min(max(z, 0), 900)
-        patch.nodes[i].z = v < 0.5 ? nil : v
+    static let categoryColours: [String: String] = [
+        "I/O": "#8d8d8d", "Clock": "#ffc53d", "Sequencing": "#0090ff", "Loop & Grain": "#12a594", "Instruments": "#e5484d",
+        "Effects": "#8e4ec6", "Dynamics": "#f76b15", "Modulation": "#30a46c", "Utility": "#e93d82"]
+    /// The section frame a box gets right now ("#rrggbb"), if its section is ticked.
+    func typeColour(_ n: PatchNode) -> String? {
+        guard !typeHighlights.isEmpty, let c = ModuleRegistry.spec(n.kind)?.category, typeHighlights.contains(c) else { return nil }
+        return Self.categoryColours[c]
     }
 
     @Published var isRunning = false {
@@ -1215,9 +1163,10 @@ public final class AppModel: ObservableObject {
     }
 
     /// The coloured frame around a box (nil = none). One undo step.
-    static let highlightColours: [(name: String, hex: String)] = [
-        ("red", "#e5484d"), ("orange", "#f76b15"), ("yellow", "#ffc53d"), ("green", "#30a46c"),
-        ("teal", "#12a594"), ("blue", "#0090ff"), ("purple", "#8e4ec6"), ("pink", "#e93d82")]
+    static let highlightColours: [String] = ["#5aa9ff", "#6cc76c", "#ff5f5f", "#ffc030", "#b77be8", "#ff92d6"]
+    /// The box menu (right-click / long-press a title bar): which box, and where (canvas-view point).
+    struct BoxMenu: Equatable { var id: UUID; var at: CGPoint }
+    @Published var boxMenu: BoxMenu?
     func setHighlight(_ id: UUID, _ hex: String?) {
         guard let i = patch.index(of: id), patch.nodes[i].highlight != hex else { return }
         checkpoint()

@@ -59,8 +59,6 @@ public:
         Pt fracPx;
         float marginPx = 0;
         bool dirty = true;
-        juce::Image cache3D;            // 3D mode: the whole box, displays included (they hold still in 3D)
-        int64_t key3D = 0; float scale3D = 0;
         float margin() const { return kind == module ? BoxLayout::pad : 0.0f; }
     };
 
@@ -96,7 +94,7 @@ private:
     void moved(Pt screen);
     void ended(Pt screen, bool cancelled = false);
     void showMenu(const std::vector<MenuItem>& items, Pt screen);
-    std::vector<MenuItem> titleMenu(const juce::String& id);   // right-click / long-press a box's title bar
+    void showBoxMenu(const juce::String& id, Pt screen);      // right-click / long-press a box's title bar
     std::optional<juce::String> hitCable(Pt screen);
     std::optional<std::pair<Pt, Pt>> cableEnds(const PatchCable& c);
     void hovered(std::optional<Pt> screen);
@@ -129,26 +127,6 @@ private:
     bool editingGroup = false;
     std::unique_ptr<ObjectFinder> finder;
     juce::Rectangle<int> deleteButton;
-    // ---- 3D mode (Board3DView.swift)
-    struct Cam {
-        double tilt, yaw, distance = 1500; Pt centre;
-        std::pair<double, double> spun(Pt p) const;
-        double w(double v, double h) const { return (distance - v * std::sin(tilt) - h * std::cos(tilt)) / distance; }
-        double nearness(Pt p, double h = 0) const { return w(spun(p).second, h); }
-        Pt project(Pt p, double h = 0) const;
-        Pt unproject(Pt q, double h = 0) const;
-    };
-    Cam camera() const;
-    Pt board(Pt canvasPoint) const { return model.toScreen(canvasPoint); }
-    double heightOf(const PatchNode& n) const { return n.z.value_or(0) * model.viewScale; }
-    std::vector<const PatchNode*> drawOrder3D(const Cam& cam) const;
-    void paint3D(juce::Graphics& g);
-    void drawBox3D(juce::Graphics& g, Item& it, const Cam& cam, float px);
-    bool down3D(const juce::MouseEvent& e);
-    void drag3D(const juce::MouseEvent& e);
-    void up3D(const juce::MouseEvent& e);
-    enum class Mode3D { none, pan, lift, orbit, box } mode3D = Mode3D::none;
-    Pt start3D, startOffset3D, startBoard3D; double startZ3D = 0, pitch3D = 0, yaw3D = 0, pressH3D = 0; juce::String lift3D;
     juce::Image gridImage;
     bool bgRight = false;
     juce::Image bgImage; int bgW = 0, bgH = 0, bgVersion = -1; float bgPx = 0;   // the background picture, scaled to fill the window

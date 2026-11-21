@@ -31,7 +31,6 @@ struct ModuleBox: View {
     /// Whether any of this box is on screen (with a margin): off-screen boxes don't redraw their displays.
     private func onScreen(_ h: CGFloat) -> Bool { Self.isOnScreen(model, node, width, h) }
     static func isOnScreen(_ model: AppModel, _ node: PatchNode, _ width: CGFloat, _ h: CGFloat) -> Bool {
-        if model.threeD { return false }           // 3D: displays hold still (a box in perspective is costly to redraw)
         _ = model.viewportSettled                  // re-checked once panning / zooming pauses
         let v = model.viewSize
         guard v.width > 0 else { return true }
@@ -98,14 +97,13 @@ struct ModuleBox: View {
                 Spacer(minLength: 0)
             }
             ports
-                .allowsHitTesting(!model.threeD)       // patching cables needs the flat view
         }
         .frame(width: width, height: h)
         .environment(\.liveDisplaysOn, onScreen(h))
         .environment(\.liveOpacity, node.bypassed ? 0.35 : 1)
         .helpTopic(model, "box-\(node.id)", PortHelp.module(spec).0, PortHelp.module(spec).1)
         .overlay(alignment: .bottomTrailing) {
-            if !model.threeD && !node.collapsed && (BoxLayout.resizable(node.kind).width || BoxLayout.resizable(node.kind).height) {
+            if !node.collapsed && (BoxLayout.resizable(node.kind).width || BoxLayout.resizable(node.kind).height) {
                 resizeGrip
             }
         }
@@ -220,7 +218,6 @@ struct ModuleBox: View {
                 .onChanged { v in
                     if model.isZooming || model.nativeDrag { return }      // the canvas is moving it directly
                     // 3D: the finger's place on the tilted board decides where the box goes
-                    if model.threeD { model.move3D(node.id, from: v.startLocation, to: v.location); return }
                     if dragStart == nil {
                         dragStart = CGPoint(x: node.x, y: node.y)
                         groupDrag = model.selectedNodes.contains(node.id) && model.selectedNodes.count > 1
@@ -236,7 +233,6 @@ struct ModuleBox: View {
                     }
                 }
                 .onEnded { _ in
-                    if model.threeD { model.end3DMove(); model.scheduleAutosave(); return }
                     guard dragStart != nil else { return }
                     dragStart = nil
                     if groupDrag { model.endGroupDrag() } else { model.endDragMove(); model.finishInsert(node.id) }

@@ -505,21 +505,8 @@ void trash(GC& g, Pt c) {
     p.addRectangle(c.x - 2.5f, c.y - 2.5f, 5, 6);
     g.stroke(p, Theme::dim(), 1, true);
 }
-void resetArrow(GC& g, Pt c) {
-    // reset automation: an open circle running clockwise from the upper right round to the top, with an arrowhead there
-    const float r = 3.4f, pi = juce::MathConstants<float>::pi;
-    auto pt = [&](float deg) { float t = deg * pi / 180; return Pt { c.x + r * std::cos(t), c.y + r * std::sin(t) }; };
-    juce::Path p;
-    p.startNewSubPath(pt(-40));
-    for (int k = 1; k <= 20; ++k) p.lineTo(pt(-40 + float(k) * 15));
-    Pt tip = pt(260); float t = 260 * pi / 180;
-    Pt dir { -std::sin(t), std::cos(t) }, nrm { std::cos(t), std::sin(t) };
-    juce::Path h;
-    h.startNewSubPath(tip.x - dir.x * 2.2f + nrm.x * 1.8f, tip.y - dir.y * 2.2f + nrm.y * 1.8f);
-    h.lineTo(tip);
-    h.lineTo(tip.x - dir.x * 2.2f - nrm.x * 1.8f, tip.y - dir.y * 2.2f - nrm.y * 1.8f);
-    g.stroke(p, Theme::dim(), 1.3f, true);
-    g.stroke(h, Theme::dim(), 1.3f, true);
+void resetArrow(GC& g, Pt c) {   // reset automation: the same ↺ as the colours panel's reset buttons
+    g.text(juce::String::fromUTF8("\xe2\x86\xba"), c, 12, Theme::dim());
 }
 void play(GC& g, Pt c, juce::Colour col) {
     juce::Path p; p.addTriangle(c.x - 2.5f, c.y - 3.5f, c.x + 3.5f, c.y, c.x - 2.5f, c.y + 3.5f);

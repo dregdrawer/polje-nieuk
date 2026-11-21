@@ -47,19 +47,14 @@ struct PatchCanvasView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
-                if model.threeD {
-                    // 3D mode: the board in perspective, boxes at their heights, drag / lift to edit
-                    Board3DView(model: model, viewport: viewport, size: geo.size)
-                } else {
-                    background
-                    // the boxes live in their own native layer that pan / zoom slide around directly:
-                    // moving SwiftUI's own copy made it re-place every box, every port and every gesture
-                    // on each frame — panning a 26-box patch took a whole core
-                    NodesHost(model: model, hover: hover)
-                    // the cable you're dragging: a light layer on top, so following the pointer
-                    // doesn't redraw every box and cable
-                    if model.pendingCable != nil { PendingCableView(model: model).allowsHitTesting(false) }
-                }
+                background
+                // the boxes live in their own native layer that pan / zoom slide around directly:
+                // moving SwiftUI's own copy made it re-place every box, every port and every gesture
+                // on each frame — panning a 26-box patch took a whole core
+                NodesHost(model: model, hover: hover)
+                // the cable you're dragging: a light layer on top, so following the pointer
+                // doesn't redraw every box and cable
+                if model.pendingCable != nil { PendingCableView(model: model).allowsHitTesting(false) }
                 if let m = marquee ?? model.rightMarquee {
                     Rectangle().fill(Theme.text.opacity(0.06))
                         .overlay(Rectangle().stroke(Theme.text.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
@@ -67,17 +62,20 @@ struct PatchCanvasView: View {
                         .offset(x: m.minX, y: m.minY)
                         .allowsHitTesting(false)
                 }
-                if !model.threeD {
-                    cableDeleteButton
-                    PortHoverOverlay(model: model, hover: hover)
-                }
-                if model.finderAt != nil || model.showColours {
+                cableDeleteButton
+                PortHoverOverlay(model: model, hover: hover)
+                if model.finderAt != nil || model.showColours || model.boxMenu != nil {
                     // a menu is open: the first touch anywhere else closes it — straight away, without
                     // waiting to see whether it's a double-tap (that wait was the lag)
                     Color.clear
                         .contentShape(Rectangle())
-                        .onTapGesture { model.finderAt = nil; model.showColours = false }
-                        .gesture(DragGesture(minimumDistance: 0).onEnded { _ in model.finderAt = nil; model.showColours = false })
+                        .onTapGesture { model.finderAt = nil; model.showColours = false; model.boxMenu = nil }
+                        .gesture(DragGesture(minimumDistance: 0).onEnded { _ in model.finderAt = nil; model.showColours = false; model.boxMenu = nil })
+                }
+                if let bm = model.boxMenu {
+                    let x = min(max(bm.at.x, 8), max(geo.size.width - BoxMenuView.width - 8, 8))
+                    let y = min(max(bm.at.y, 8), max(geo.size.height - 110, 8))
+                    BoxMenuView(model: model, id: bm.id).offset(x: x, y: y)
                 }
                 if let at = model.finderAt {
                     // keep the whole list on screen: open it where you tapped, but shift it up/left
@@ -130,7 +128,7 @@ struct PatchCanvasView: View {
                         model.viewOffset = CGSize(width: anchor.x - cx * new, height: anchor.y - cy * new)
                     }
                     .onEnded { _ in zoomStart = nil },
-                including: Self.swiftUIPinch || model.threeD ? .all : .subviews     // iPad 3D: the box layer isn't there
+                including: Self.swiftUIPinch ? .all : .subviews
             )
             .onChange(of: pinching) { _, on in
                 model.isZooming = on
@@ -184,7 +182,7 @@ struct PatchCanvasView: View {
             let p = CGPoint(x: loc.x, y: content.isFlipped ? loc.y : content.bounds.height - loc.y)
             let consumed: Bool = MainActor.assumeIsolated {
                 let frame = frameBox.frame
-                guard !model.threeD, frame.width > 0, frame.contains(p) else { return false }
+                guard frame.width > 0, frame.contains(p) else { return false }
                 let anchor = CGPoint(x: p.x - frame.minX, y: p.y - frame.minY)
                 guard model.hasContent(at: model.toCanvas(anchor)) else { return false }
                 model.isZooming = event.phase != .ended && event.phase != .cancelled
@@ -410,6 +408,74 @@ struct ObjectFinder: View {
             model.addNode(kind: s.kind, at: canvasPoint)
         }
         model.finderAt = nil
+    }
+}
+
+/// Right-click (long-press on iPad) a box's title bar: duplicate, replace, and the highlight colours.
+/// Drawn like the module list.
+struct BoxMenuView: View {
+    @ObservedObject var model: AppModel
+    let id: UUID
+    static let width: CGFloat = 190
+
+    var body: some View {
+        let cur = model.patch.nodes.first { $0.id == id }?.highlight
+        VStack(alignment: .leading, spacing: 0) {
+            MenuRow(title: "duplicate") { model.duplicate(id); model.boxMenu = nil }
+            MenuRow(title: "replace…") { model.boxMenu = nil; model.beginReplace(id) }
+            Rectangle().fill(Theme.border.opacity(0.5)).frame(height: 1).padding(.vertical, 4)
+            Text("highlight").font(Theme.monoSmall).foregroundStyle(Theme.faint)
+                .padding(.horizontal, 10).padding(.bottom, 4)
+            HStack(spacing: 6) {
+                swatch(nil, on: cur == nil)
+                ForEach(AppModel.highlightColours, id: \.self) { hex in swatch(hex, on: cur == hex) }
+            }
+            .padding(.horizontal, 10).padding(.bottom, 8)
+        }
+        .padding(.top, 6)
+        .frame(width: Self.width, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 3).fill(Theme.box)
+            .shadow(color: .black.opacity(Theme.light ? 0.18 : 0.6), radius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 3).stroke(Theme.border, lineWidth: 1))
+    }
+
+    /// One colour circle (nil = no highlight: an empty circle with a slash). The current one has a ring.
+    private func swatch(_ hex: String?, on: Bool) -> some View {
+        Button { model.setHighlight(id, hex); model.boxMenu = nil } label: {
+            ZStack {
+                if let hex, let c = Color(hex: hex) {
+                    Circle().fill(c)
+                } else {
+                    Circle().stroke(Theme.dim, lineWidth: 1)
+                    Path { p in p.move(to: CGPoint(x: 4, y: 14)); p.addLine(to: CGPoint(x: 14, y: 4)) }
+                        .stroke(Theme.dim, lineWidth: 1)
+                }
+            }
+            .frame(width: 18, height: 18)
+            .padding(2)
+            .overlay(Circle().stroke(on ? Theme.text : Color.clear, lineWidth: 1.5))
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct MenuRow: View {
+    let title: String
+    let action: () -> Void
+    @State private var hover = false
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(Theme.mono)
+                .foregroundStyle(hover ? Theme.inverse : Theme.text)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10).padding(.vertical, 3)
+                .background(hover ? Theme.text : Color.clear)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hover = $0 }
     }
 }
 

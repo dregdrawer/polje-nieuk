@@ -30,7 +30,6 @@ struct MenuItem {
     var enabled = true
     var header = false          // a section title
     var separator = false
-    var swatch: String? = nil   // "#rrggbb": a colour dot beside the title
     var action: (() -> Void)?
     static let divider = MenuItem(title: "", separator: true)
     static func section(_ t: String) -> MenuItem { MenuItem(title: t, enabled: false, header: true) }
@@ -208,10 +207,15 @@ struct LivePart {
         let box = CGRect(x: 0, y: 0, width: w, height: h)
         g.fill(Path(roundedRect: box, cornerRadius: 3), with: .color(Theme.box))
         g.stroke(Path(roundedRect: box.insetBy(dx: 0.5, dy: 0.5), cornerRadius: 3), with: .color(selected ? Theme.selected : Theme.border), lineWidth: 1)
-        if let hex = node.highlight, let c = Color(hex: hex) {
-            // the highlight: a coloured frame just inside the edge
-            g.stroke(Path(roundedRect: box.insetBy(dx: 1.25, dy: 1.25), cornerRadius: 3), with: .color(c), lineWidth: 2.5)
-            if selected { g.stroke(Path(roundedRect: box.insetBy(dx: 3, dy: 3), cornerRadius: 2), with: .color(Theme.selected), lineWidth: 1) }
+        // frames, from the edge in: the section colour (view ▸ Select type), then the box's own highlight
+        var inset: CGFloat = 0
+        for hex in [model.typeColour(node), node.highlight] {
+            guard let hex, let c = Color(hex: hex) else { continue }
+            g.stroke(Path(roundedRect: box.insetBy(dx: inset + 1.25, dy: inset + 1.25), cornerRadius: 3), with: .color(c), lineWidth: 2.5)
+            inset += 2.5
+        }
+        if inset > 0 && selected {
+            g.stroke(Path(roundedRect: box.insetBy(dx: inset + 0.5, dy: inset + 0.5), cornerRadius: 2), with: .color(Theme.selected), lineWidth: 1)
         }
         header(g, geo, model: model)
         if !node.collapsed {
@@ -438,22 +442,9 @@ struct LivePart {
         p.addRect(CGRect(x: c.x - 2.5, y: c.y - 2.5, width: 5, height: 6))
         g.stroke(p, with: .color(Theme.dim), style: StrokeStyle(lineWidth: 1, lineCap: .round, lineJoin: .round))
     }
-    /// reset automation: an open circle running clockwise from the upper right round to the top, with an arrowhead there
+    /// reset automation: the same ↺ as the colours panel's reset buttons
     static func resetArrow(_ g: LiveGC, _ c: CGPoint) {
-        let r: CGFloat = 3.4
-        func pt(_ deg: CGFloat) -> CGPoint { let t = deg * .pi / 180; return CGPoint(x: c.x + r * cos(t), y: c.y + r * sin(t)) }
-        var p = Path()
-        p.move(to: pt(-40))
-        for k in 1...20 { p.addLine(to: pt(-40 + CGFloat(k) * 15)) }          // −40° … 260° (y-down: clockwise)
-        let tip = pt(260), t = CGFloat(260) * .pi / 180
-        let dir = CGPoint(x: -sin(t), y: cos(t)), nrm = CGPoint(x: cos(t), y: sin(t))   // travel direction, outward
-        var head = Path()
-        head.move(to: CGPoint(x: tip.x - dir.x * 2.2 + nrm.x * 1.8, y: tip.y - dir.y * 2.2 + nrm.y * 1.8))
-        head.addLine(to: tip)
-        head.addLine(to: CGPoint(x: tip.x - dir.x * 2.2 - nrm.x * 1.8, y: tip.y - dir.y * 2.2 - nrm.y * 1.8))
-        let style = StrokeStyle(lineWidth: 1.3, lineCap: .round, lineJoin: .round)
-        g.stroke(p, with: .color(Theme.dim), style: style)
-        g.stroke(head, with: .color(Theme.dim), style: style)
+        g.draw(LiveText("↺", size: 12, color: Theme.dim), at: c)
     }
     static func play(_ g: LiveGC, _ c: CGPoint, _ color: Color) {
         var p = Path()

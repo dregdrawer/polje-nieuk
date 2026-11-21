@@ -36,6 +36,7 @@ struct BoxKey: Equatable {
     var padNames: [String] = []       // rack: what each pad holds
     var loading: Set<Int> = []        // rack: pads still reading their file
     var automationFlags = 0           // which rows are automated / modulated
+    var typeColour: String?           // view ▸ Select type: this box's section frame
 }
 
 enum NodesLayout {
@@ -378,6 +379,7 @@ private enum Region: Equatable {
             }()
             var k = base
             k.node = n
+            k.typeColour = m.typeColour(n)
             let cs = byNode[n.id] ?? []
             k.cables = cs
             if n.kind == "slider" || n.kind == "knob" {
@@ -757,20 +759,6 @@ private enum Region: Equatable {
         return .nothing
     }
 
-    /// Right-click (or long-press) a box's title bar.
-    func titleMenu(_ id: UUID) -> [MenuItem] {
-        let m = model
-        let cur = m.patch.nodes.first { $0.id == id }?.highlight
-        var list = [MenuItem(title: "Duplicate", action: { m.duplicate(id) }),
-                    MenuItem(title: "Replace…", action: { m.beginReplace(id) }),
-                    .divider, .section("Highlight"),
-                    MenuItem(title: "none", checked: cur == nil, action: { m.setHighlight(id, nil) })]
-        for c in AppModel.highlightColours {
-            list.append(MenuItem(title: c.name, checked: cur == c.hex, swatch: c.hex, action: { m.setHighlight(id, c.hex) }))
-        }
-        return list
-    }
-
     // MARK: Pointer presses
 
     private var presses: [Int: Press] = [:]
@@ -798,7 +786,7 @@ private enum Region: Equatable {
             if info.right {
                 // right-click a box's title bar: duplicate, replace, highlight
                 if it.kind == .module {
-                    presentMenu(titleMenu(id), screen)
+                    m.boxMenu = .init(id: id, at: screen)          // duplicate, replace, highlight
                     presses[key] = nil
                     return true
                 }
@@ -809,7 +797,7 @@ private enum Region: Equatable {
                     guard let self, let press, !press.dragging, !press.info.moved else { return }
                     press.longFired = true
                     // a long press (iPad) = a right-click: duplicate, replace, highlight
-                    if press.item.kind == .module { self.presentMenu(self.titleMenu(press.item.id), press.startScreen) }
+                    if press.item.kind == .module { self.model.boxMenu = .init(id: press.item.id, at: press.startScreen) }
                 }
             }
         case .row(let i):
@@ -1138,7 +1126,7 @@ final class NodesContainer: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         let p = point(e)
         switch e.type {
         case .rightMouseDown:
-            guard !model.threeD, bounds.contains(p), canvas.item(at: p) == nil else { return e }
+            guard bounds.contains(p), canvas.item(at: p) == nil else { return e }
             rightStart = p
             return nil
         case .rightMouseDragged:
@@ -1166,7 +1154,7 @@ final class NodesContainer: NSView, NSTextViewDelegate, NSTextFieldDelegate {
 
     /// Only boxes catch the mouse; empty canvas lets it through to the canvas underneath.
     override func hitTest(_ point: NSPoint) -> NSView? {
-        guard let sv = superview, !model.threeD else { return nil }
+        guard let sv = superview else { return nil }
         let p = convert(point, from: sv)
         if let e = editor, e.frame.contains(p) { return e.hitTest(e.convert(p, from: self)) ?? e }
         return canvas.item(at: p) != nil ? self : nil
@@ -1234,11 +1222,6 @@ final class NodesContainer: NSView, NSTextViewDelegate, NSTextFieldDelegate {
             }
             mi.state = it.checked ? .on : .off
             mi.isEnabled = it.enabled
-            if let hex = it.swatch, let c = Color(hex: hex) {
-                mi.image = NSImage(size: NSSize(width: 12, height: 12), flipped: false) { r in
-                    NSColor(c).setFill(); NSBezierPath(ovalIn: r.insetBy(dx: 1, dy: 1)).fill(); return true
-                }
-            }
             menu.addItem(mi)
         }
         menu.popUp(positioning: nil, at: p, in: self)
@@ -1421,13 +1404,12 @@ final class NodesContainer: UIView, UIGestureRecognizerDelegate, UITextViewDeleg
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         if g === pinch {
             let p = touch.location(in: self)
-            return bounds.contains(p) && window != nil && !model.threeD
+            return bounds.contains(p) && window != nil
         }
         return true
     }
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        guard !model.threeD else { return nil }
         if let e = editor, e.frame.contains(point) { return e.hitTest(convert(point, to: e), with: event) ?? e }
         return canvas.item(at: point) != nil ? self : nil
     }

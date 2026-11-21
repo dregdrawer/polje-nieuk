@@ -141,7 +141,7 @@ struct TempoField: View {
 
 /// What the top bar shows. The bar redraws only when this changes (not on every change to the patch).
 struct BarState: Equatable {
-    var running, lightScheme, helpMode, selectMode, showFiles, hideCables, threeD, hasUserDefault: Bool
+    var running, lightScheme, helpMode, selectMode, showFiles, hideCables, hasUserDefault: Bool
     var canUndo, canRedo, allCollapsed, groupsSelected, cableSelected: Bool
     var selected: Int
     var inputUID, outputUID: String?
@@ -149,10 +149,10 @@ struct BarState: Equatable {
     var hwIn, hwOut: Int
     var inputs, outputs: [DeviceChoice]
     var sections: [String]
-    var lifted: [Bool]
+    var typeHighlights: Set<String>
     @MainActor init(_ m: AppModel) {
         running = m.isRunning; lightScheme = m.lightScheme; helpMode = m.helpMode; selectMode = m.selectMode
-        showFiles = m.showFiles; hideCables = m.hideCables; threeD = m.threeD; hasUserDefault = m.hasUserDefault
+        showFiles = m.showFiles; hideCables = m.hideCables; hasUserDefault = m.hasUserDefault
         canUndo = m.canUndo; canRedo = m.canRedo; allCollapsed = m.allCollapsed
         groupsSelected = !m.selectedGroups.isEmpty; cableSelected = m.selectedCable != nil
         selected = m.selectedNodes.count
@@ -160,14 +160,11 @@ struct BarState: Equatable {
         inputName = m.inputName; outputName = m.outputName; audioStatus = m.audioStatus
         hwIn = m.hw.inputs; hwOut = m.hw.outputs
         inputs = m.inputChoices; outputs = m.outputChoices
-        // one pass over the boxes: which sections are in the patch, and whether all of a section is lifted
-        var up: [String: Bool] = [:]
-        for n in m.patch.nodes {
-            guard let c = ModuleRegistry.spec(n.kind)?.category else { continue }
-            up[c] = (up[c] ?? true) && (n.z ?? 0) > 0.5
-        }
-        sections = ModuleRegistry.categories.filter { up[$0] != nil }
-        lifted = sections.map { up[$0] ?? false }
+        // which sections are in the patch
+        var present = Set<String>()
+        for n in m.patch.nodes { if let c = ModuleRegistry.spec(n.kind)?.category { present.insert(c) } }
+        sections = ModuleRegistry.categories.filter { present.contains($0) }
+        typeHighlights = m.typeHighlights
     }
 }
 
@@ -387,14 +384,16 @@ struct TopBar: View, Equatable {
                 Button("Tidy") { model.tidy() }
                 Button(state.allCollapsed ? "Unfold all" : "Fold all") { model.toggleCollapseAll() }
                 Divider()
-                Toggle("3D", isOn: Binding(get: { model.threeD }, set: { model.threeD = $0 }))
-                Menu("Lift in 3D") {
-                    ForEach(state.sections, id: \.self) { cat in
-                        Toggle(cat, isOn: Binding(get: { model.sectionLifted(cat) }, set: { _ in model.toggleLift(cat) }))
+                Menu("Select type") {
+                    // tick sections: their boxes get a frame in the section's colour (several at once)
+                    ForEach(ModuleRegistry.categories, id: \.self) { cat in
+                        Toggle(isOn: Binding(get: { state.typeHighlights.contains(cat) }, set: { _ in model.toggleTypeHighlight(cat) })) {
+                            Label { Text(cat) } icon: { TypeDot(hex: AppModel.categoryColours[cat] ?? "#888888") }
+                        }
+                        .disabled(!state.sections.contains(cat))
                     }
                     Divider()
-                    Button("Layers by section") { model.layerBySection() }
-                    Button("Put everything down") { model.putEverythingDown() }
+                    Button("None") { model.typeHighlights = [] }.disabled(state.typeHighlights.isEmpty)
                 }
                 Divider()
                 Button("Reset view") { model.viewScale = 1; model.viewOffset = CGSize(width: 30, height: 30) }
@@ -402,7 +401,7 @@ struct TopBar: View, Equatable {
                 word("view", on: false)
             }
             .fixedSize()
-            .helpTopic(model, "tb-view", "view", "How the patch is shown: hide the cables, colours, tidy, fold all boxes, 3D (and lifting sections in 3D), reset the zoom.")
+            .helpTopic(model, "tb-view", "view", "How the patch is shown: hide the cables, colours, tidy, fold all boxes, frame every box of a type (select type), reset the zoom.")
 
             Menu {
                 Button("New…") { confirmNew = true }
@@ -417,5 +416,20 @@ struct TopBar: View, Equatable {
             }
             .fixedSize()
         }
+    }
+}
+
+/// A coloured dot for a menu row (select type). Drawn as an image so the menu keeps its colour.
+struct TypeDot: View {
+    let hex: String
+    var body: some View {
+        #if os(macOS)
+        let c = Color(hex: hex) ?? .gray
+        Image(nsImage: NSImage(size: NSSize(width: 12, height: 12), flipped: false) { r in
+            NSColor(c).setFill(); NSBezierPath(ovalIn: r.insetBy(dx: 1, dy: 1)).fill(); return true
+        })
+        #else
+        Image(systemName: "circle.fill").foregroundStyle(Color(hex: hex) ?? .gray)
+        #endif
     }
 }

@@ -1517,64 +1517,6 @@ do {
     check(!k.keyLaneOn, "reset / undo clears them")
 }
 
-print("3D mode: the camera maths")
-do {
-    for (pitchDeg, yawDeg) in [(52.0, 0.0), (25.0, 40.0), (75.0, -130.0)] {
-        let c = BoardCamera(viewSize: CGSize(width: 1200, height: 900), tilt: pitchDeg * .pi / 180, yaw: yawDeg * .pi / 180)
-        var wst: CGFloat = 0, terr: CGFloat = 0
-        for x in stride(from: 0.0, through: 1200, by: 150) {
-            for y in stride(from: 100.0, through: 900, by: 150) {
-                for h in [0.0, 120] {
-                    let p = CGPoint(x: x, y: y)
-                    let back = c.unproject(c.project(p, h: h), h: h)
-                    wst = max(wst, hypot(back.x - p.x, back.y - p.y))
-                }
-            }
-        }
-        let t = c.boxTransform(origin: CGPoint(x: 420, y: 380), h: 90, scale: 0.9)
-        for q in [CGPoint.zero, CGPoint(x: 186, y: 0), CGPoint(x: 0, y: 220), CGPoint(x: 186, y: 220)] {
-            let w = q.x * t.m13 + q.y * t.m23 + t.m33
-            let got = CGPoint(x: (q.x * t.m11 + q.y * t.m21 + t.m31) / w, y: (q.x * t.m12 + q.y * t.m22 + t.m32) / w)
-            let want = c.project(CGPoint(x: 420 + q.x * 0.9, y: 380 + q.y * 0.9), h: 90)
-            terr = max(terr, hypot(got.x - want.x, got.y - want.y))
-        }
-        check(wst < 0.01 && terr < 0.01, String(format: "orbited (pitch %.0f°, spin %.0f°): round trip %.4f pt, box corners %.4f pt", pitchDeg, yawDeg, wst, terr))
-    }
-    let cam = BoardCamera(viewSize: CGSize(width: 1200, height: 900))
-    var worst: CGFloat = 0
-    for x in stride(from: -400.0, through: 1600, by: 200) {
-        for y in stride(from: -600.0, through: 1100, by: 170) {
-            for h in [0.0, 80, 300] {
-                let p = CGPoint(x: x, y: y)
-                let back = cam.unproject(cam.project(p, h: h), h: h)
-                worst = max(worst, hypot(back.x - p.x, back.y - p.y))
-            }
-        }
-    }
-    check(worst < 0.01, String(format: "screen ↔ board round trip is exact at any height (worst %.4f pt) — drags land under the finger", worst))
-    // a box's perspective transform puts its corners where the camera says they are
-    let origin = CGPoint(x: 300, y: 250), h = 120.0, sc = 0.8, sz = CGSize(width: 186, height: 240)
-    let t = cam.boxTransform(origin: origin, h: h, scale: sc)
-    func apply(_ q: CGPoint) -> CGPoint {
-        let w = q.x * t.m13 + q.y * t.m23 + t.m33
-        return CGPoint(x: (q.x * t.m11 + q.y * t.m21 + t.m31) / w, y: (q.x * t.m12 + q.y * t.m22 + t.m32) / w)
-    }
-    var err: CGFloat = 0
-    for c in [CGPoint.zero, CGPoint(x: sz.width, y: 0), CGPoint(x: 0, y: sz.height), CGPoint(x: sz.width, y: sz.height)] {
-        let want = cam.project(CGPoint(x: origin.x + c.x * sc, y: origin.y + c.y * sc), h: h)
-        let got = apply(c)
-        err = max(err, hypot(want.x - got.x, want.y - got.y))
-    }
-    check(err < 0.01, String(format: "boxes are drawn exactly where the camera puts them (corner error %.4f pt), so cables meet their ports", err))
-    let near = cam.project(CGPoint(x: 600, y: 800)), far = cam.project(CGPoint(x: 600, y: 0))
-    let nearW = cam.project(CGPoint(x: 700, y: 800)).x - near.x, farW = cam.project(CGPoint(x: 700, y: 0)).x - far.x
-    let raised = cam.project(CGPoint(x: 600, y: 400), h: 200).y, flat = cam.project(CGPoint(x: 600, y: 400)).y
-    check(nearW > farW && raised < flat, "nearer is bigger, farther smaller, and a raised box sits higher on screen")
-    var n = PatchNode(kind: "gain", x: 0, y: 0); n.z = 150
-    var pz = Patch(); pz.nodes = [n]
-    let dec = try! JSONDecoder().decode(Patch.self, from: try! JSONEncoder().encode(pz))
-    check(dec.nodes[0].z == 150, "a box's height is saved with the patch")
-}
 
 if let path = ProcessInfo.processInfo.environment["BENCH_PATCH"],
    let data = FileManager.default.contents(atPath: path),

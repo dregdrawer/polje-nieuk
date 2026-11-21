@@ -346,6 +346,7 @@ AppModel::AppModel() {
     auto& s = settings();
     lightScheme = Theme::light = s.getBoolValue("lightScheme", false);
     hideCables = s.getBoolValue("hideCables", false);
+    for (auto& c : juce::StringArray::fromLines(s.getValue("typeHighlights"))) if (c.isNotEmpty()) typeHighlights.insert(c.toStdString());
     hw.inputs = s.getIntValue("hwInputs", 12);
     hw.outputs = s.getIntValue("hwOutputs", 8);
     inputUID = s.getValue("inputUID", "");
@@ -718,46 +719,32 @@ void AppModel::toggleBypass(const juce::String& id) {
     patchChanged(); scheduleAutosave();
 }
 
-// ---------------------------------------------------------------- 3D
+// ---------------------------------------------------------------- view > Select type
 
-std::vector<int> AppModel::sectionIndices(const std::string& category) const {
-    std::vector<int> r;
-    for (int i = 0; i < int(patch.nodes.size()); ++i) if (auto* s = Registry::spec(patch.nodes[size_t(i)].kind); s && s->category == category) r.push_back(i);
-    return r;
+const std::map<std::string, juce::String> AppModel::categoryColours {
+    { "I/O", "#8d8d8d" }, { "Clock", "#ffc53d" }, { "Sequencing", "#0090ff" }, { "Loop & Grain", "#12a594" }, { "Instruments", "#e5484d" },
+    { "Effects", "#8e4ec6" }, { "Dynamics", "#f76b15" }, { "Modulation", "#30a46c" }, { "Utility", "#e93d82" } };
+void AppModel::setTypeHighlights(std::set<std::string> s) {
+    typeHighlights = std::move(s);
+    juce::StringArray a; for (auto& c : typeHighlights) a.add(juce::String(c));
+    settings().setValue("typeHighlights", a.joinIntoString("\n"));
+    changed();
 }
-bool AppModel::sectionLifted(const std::string& category) const {
-    auto ix = sectionIndices(category);
-    if (ix.empty()) return false;
-    for (int i : ix) if (patch.nodes[size_t(i)].z.value_or(0) <= 0.5) return false;
-    return true;
+void AppModel::toggleTypeHighlight(const std::string& category) {
+    auto s = typeHighlights;
+    if (s.count(category)) s.erase(category); else s.insert(category);
+    setTypeHighlights(s);
 }
-void AppModel::toggleLift(const std::string& category) {
-    bool up = !sectionLifted(category);
-    for (int i : sectionIndices(category)) patch.nodes[size_t(i)].z = up ? std::optional<double>(liftHeight) : std::nullopt;
-    threeD = true;
-    patchChanged(); scheduleAutosave();
+std::optional<juce::String> AppModel::typeColour(const PatchNode& n) const {
+    if (typeHighlights.empty()) return std::nullopt;
+    auto* sp = Registry::spec(n.kind);
+    if (!sp || !typeHighlights.count(sp->category)) return std::nullopt;
+    auto it = categoryColours.find(sp->category);
+    return it == categoryColours.end() ? std::nullopt : std::optional<juce::String>(it->second);
 }
-void AppModel::layerBySection() {
-    int level = 0;
-    for (auto& cat : Registry::categories) {
-        auto ix = sectionIndices(cat);
-        if (ix.empty()) continue;
-        for (int i : ix) patch.nodes[size_t(i)].z = level == 0 ? std::nullopt : std::optional<double>(double(level) * 110);
-        ++level;
-    }
-    threeD = true;
-    patchChanged(); scheduleAutosave();
-}
-void AppModel::putEverythingDown() {
-    for (auto& n : patch.nodes) n.z.reset();
-    patchChanged(); scheduleAutosave();
-}
-void AppModel::setHeight(const juce::String& id, double z) {
-    int i = index(id);
-    if (i < 0) return;
-    double v = std::clamp(z, 0.0, 900.0);
-    patch.nodes[size_t(i)].z = v < 0.5 ? std::nullopt : std::optional<double>(v);
-    patchChanged();
+bool AppModel::hasSection(const std::string& category) const {
+    for (auto& n : patch.nodes) if (auto* sp = Registry::spec(n.kind); sp && sp->category == category) return true;
+    return false;
 }
 
 // ---------------------------------------------------------------- drop a box onto a cable
@@ -1253,9 +1240,7 @@ bool set(const juce::File& f) {
 void remove() { file().deleteFile(); loaded = false; CustomColours::version++; }
 }
 
-const std::vector<AppModel::HighlightColour> AppModel::highlightColours {
-    { "red", "#e5484d" }, { "orange", "#f76b15" }, { "yellow", "#ffc53d" }, { "green", "#30a46c" },
-    { "teal", "#12a594" }, { "blue", "#0090ff" }, { "purple", "#8e4ec6" }, { "pink", "#e93d82" } };
+const std::vector<juce::String> AppModel::highlightColours { "#5aa9ff", "#6cc76c", "#ff5f5f", "#ffc030", "#b77be8", "#ff92d6" };
 void AppModel::setHighlight(const juce::String& id, std::optional<juce::String> hex) {
     int i = patch.index(id);
     if (i < 0 || patch.nodes[size_t(i)].highlight == hex) return;

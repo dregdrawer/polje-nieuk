@@ -57,17 +57,14 @@ public:
     Pt viewSize;
     bool selectMode = false, helpMode = false, showFiles = false, showColours = false, hideCables = false, lightScheme = false;
     std::vector<HelpTopic> helpTopics;
-    // 3D mode: the board tilted in perspective, boxes floating at their heights (PatchNode.z)
-    bool threeD = false;
-    double orbitPitch = 52, orbitYaw = 0;
-    void orbit(double pitch, double yaw) { orbitPitch = std::clamp(pitch, 8.0, 78.0); orbitYaw = std::fmod(yaw, 360.0); changed(); }
-    static constexpr double liftHeight = 170;
-    std::vector<int> sectionIndices(const std::string& category) const;
-    bool sectionLifted(const std::string& category) const;
-    void toggleLift(const std::string& category);
-    void layerBySection();
-    void putEverythingDown();
-    void setHeight(const juce::String& id, double z);
+    // view > Select type: every box of the ticked sections gets a frame in that section's colour (several at once).
+    // Independent of a box's own highlight (both frames show). Remembered between launches.
+    std::set<std::string> typeHighlights;
+    void toggleTypeHighlight(const std::string& category);
+    void setTypeHighlights(std::set<std::string> s);
+    static const std::map<std::string, juce::String> categoryColours;
+    std::optional<juce::String> typeColour(const PatchNode& n) const;
+    bool hasSection(const std::string& category) const;
     bool isRunning = false;
     int transport = 0;                        // 0 play, 1 pause, 2 stop
     juce::String audioStatus = "audio off";
@@ -146,8 +143,7 @@ public:
     bool isModulated(const juce::String& id, int param) const;
     bool isPortConnected(const juce::String& id, int port, bool output) const;
     void setText(const juce::String& id, const juce::String& text);
-    struct HighlightColour { const char* name; const char* hex; };
-    static const std::vector<HighlightColour> highlightColours;
+    static const std::vector<juce::String> highlightColours;
     void setHighlight(const juce::String& id, std::optional<juce::String> hex);
     void setData(const juce::String& id, const std::map<std::string, std::vector<float>>& entries, bool step = true);
     void setData(const juce::String& id, const std::string& key, const std::vector<float>& v, bool step = true) { setData(id, { { key, v } }, step); }

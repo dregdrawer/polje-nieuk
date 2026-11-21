@@ -327,17 +327,18 @@ void TopBar::viewMenu(Pt at) {
     m.addItem("Tidy", [this] { model.tidy(); });
     m.addItem(model.allCollapsed() ? "Unfold all" : "Fold all", [this] { model.toggleCollapseAll(); });
     m.addSeparator();
-    m.addItem("3D", true, model.threeD, [this] { model.threeD = !model.threeD; model.changed(); });
-    juce::PopupMenu lift;
+    juce::PopupMenu types;   // tick sections: their boxes get a frame in the section's colour
     for (auto& cat : Registry::categories) {
-        if (model.sectionIndices(cat).empty()) continue;
         auto c = cat;
-        lift.addItem(juce::String(cat), true, model.sectionLifted(cat), [this, c] { model.toggleLift(c); });
+        juce::PopupMenu::Item it { juce::String(cat) };
+        it.isEnabled = model.hasSection(cat); it.isTicked = model.typeHighlights.count(cat) > 0;
+        it.colour = juce::Colour::fromString("ff" + AppModel::categoryColours.at(cat).substring(1));
+        it.action = [this, c] { model.toggleTypeHighlight(c); };
+        types.addItem(it);
     }
-    lift.addSeparator();
-    lift.addItem("Layers by section", [this] { model.layerBySection(); });
-    lift.addItem("Put everything down", [this] { model.putEverythingDown(); });
-    m.addSubMenu("Lift in 3D", lift);
+    types.addSeparator();
+    types.addItem("None", !model.typeHighlights.empty(), false, [this] { model.setTypeHighlights({}); });
+    m.addSubMenu("Select type", types);
     m.addSeparator();
     m.addItem("Reset view", [this] { model.setView({ 30, 30 }, 1); });
     popup(m, at);

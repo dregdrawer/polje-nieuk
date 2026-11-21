@@ -228,10 +228,14 @@ void paint(GC& g, const BoxGeo& geo, AppModel& m, bool selected, bool dropTarget
     Rect box(0, 0, geo.w, geo.h);
     g.fillRounded(box, 3, Theme::box());
     g.strokeRounded(box.reduced(0.5f), 3, selected ? Theme::selected() : Theme::border(), 1);
-    if (node.highlight && node.highlight->length() == 7) {
-        // the highlight: a coloured frame just inside the edge
-        g.strokeRounded(box.reduced(1.25f), 3, juce::Colour::fromString("ff" + node.highlight->substring(1)), 2.5f);
-        if (selected) g.strokeRounded(box.reduced(3), 2, Theme::selected(), 1);
+    {   // frames, from the edge in: the section colour (view > Select type), then the box's own highlight
+        float inset = 0;
+        for (auto hex : { m.typeColour(node), node.highlight }) {
+            if (!hex || hex->length() != 7) continue;
+            g.strokeRounded(box.reduced(inset + 1.25f), 3, juce::Colour::fromString("ff" + hex->substring(1)), 2.5f);
+            inset += 2.5f;
+        }
+        if (inset > 0 && selected) g.strokeRounded(box.reduced(inset + 0.5f), 2, Theme::selected(), 1);
     }
     header(g, geo, m);
     if (!node.collapsed) g.fill(Rect(0, BoxLayout::header - 1, geo.w, 1), Theme::border().withMultipliedAlpha(0.6f));
