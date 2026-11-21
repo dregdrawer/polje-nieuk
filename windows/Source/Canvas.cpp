@@ -576,6 +576,7 @@ void Canvas::rebuildCables() {
         auto fa = byID.find(c.fromNode), fb = byID.find(c.toNode);
         if (fa == byID.end() || fb == byID.end()) continue;
         auto* a = fa->second; auto* b = fb->second;
+        if (a->hideOut || b->hideIn) continue;        // that box's cables are hidden
         auto* sa = Registry::spec(a->kind); auto* sb = Registry::spec(b->kind);
         if (!sa || !sb || c.fromPort >= int(BoxLayout::ports(*a, *sa, model.hw).outs.size())) continue;
         auto dest = BoxLayout::destination(*b, *sb, model.hw, c.toPort);
@@ -636,6 +637,8 @@ std::optional<juce::String> Canvas::hitCable(Pt p) {
     if (model.hideCables) return std::nullopt;
     std::optional<juce::String> best; float bd = INFINITY;
     for (auto& c : model.patch.cables) {
+        int ia = model.patch.index(c.fromNode), ib = model.patch.index(c.toNode);
+        if ((ia >= 0 && model.patch.nodes[size_t(ia)].hideOut) || (ib >= 0 && model.patch.nodes[size_t(ib)].hideIn)) continue;
         auto e = cableEnds(c);
         if (!e) continue;
         juce::Path path; addCable(path, e->first, e->second, model.viewScale);
@@ -896,6 +899,10 @@ void Canvas::showBoxMenu(const juce::String& id, Pt screen) {
     menu.setLookAndFeel(&getLookAndFeel());
     menu.addItem("duplicate", [this, id] { model.duplicate(id); });
     menu.addItem(juce::String::fromUTF8("replace\xe2\x80\xa6"), [this, id] { model.beginReplace(id); });
+    auto& nd = model.patch.nodes[size_t(i)];
+    menu.addItem("lock to screen", true, nd.pin.has_value(), [this, id] { model.toggleLock(id); });
+    menu.addItem("hide cables in", true, nd.hideIn, [this, id] { model.toggleHideIn(id); });
+    menu.addItem("hide cables out", true, nd.hideOut, [this, id] { model.toggleHideOut(id); });
     menu.addSeparator();
     menu.addSectionHeader("highlight");
     menu.addCustomItem(1000, std::make_unique<SwatchRow>(model.patch.nodes[size_t(i)].highlight,
@@ -937,7 +944,7 @@ void Canvas::mouseDown(const juce::MouseEvent& e) {
     if (!deleteButton.isEmpty() && deleteButton.toFloat().contains(p)) { model.removeCable(model.selectedCable); return; }
     if (began(p, e)) return;
     bgPressed = true; panning = false; marquee.reset();
-    bgRight = e.mods.isPopupMenu();          // right-drag moves the view; a left-drag draws a selection box
+    bgRight = e.mods.isPopupMenu();          // right-click and drag: a selection box
     bgStart = p; panStart = model.viewOffset;
     model.isZooming = false;
 }
@@ -947,7 +954,7 @@ void Canvas::mouseDrag(const juce::MouseEvent& e) {
     if (press) { moved(p); return; }
     if (!bgPressed) return;
     if (!panning && !marquee && p.getDistanceFrom(bgStart) < 3) return;
-    if (marquee || (!panning && !bgRight)) {
+    if (marquee || (!panning && (bgRight || model.selectMode || e.mods.isShiftDown()))) {
         marquee = Rect(std::min(bgStart.x, p.x), std::min(bgStart.y, p.y), std::abs(p.x - bgStart.x), std::abs(p.y - bgStart.y));
         repaint();
         return;

@@ -58,6 +58,7 @@ private extension AppModel {
         for c in patch.cables {
             guard let ai = index[c.fromNode], let bi = index[c.toNode] else { continue }
             let a = patch.nodes[ai], b = patch.nodes[bi]
+            if a.hideOut == true || b.hideIn == true { continue }        // that box's cables are hidden
             guard let sa = ModuleRegistry.spec(a.kind), let sb = ModuleRegistry.spec(b.kind),
                   c.fromPort < BoxLayout.ports(a, sa, hw).outs.count,
                   let dest = BoxLayout.destination(b, sb, hw, port: c.toPort) else { continue }
@@ -1111,31 +1112,48 @@ final class NodesContainer: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         canvas.setBackingScale(window?.backingScaleFactor ?? 2)
         needsLayout = true
         if let m = rightMonitor { NSEvent.removeMonitor(m); rightMonitor = nil }
+        if let m = menuMonitor { NSEvent.removeMonitor(m); menuMonitor = nil }
         if window != nil {
+            // a press, scroll or pinch outside the open menus closes them — and still does what it does
+            menuMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown, .scrollWheel, .magnify]) { [weak self] e in
+                guard let self, e.window === self.window, self.model.anyMenuOpen, let content = self.window?.contentView else { return e }
+                var p = content.convert(e.locationInWindow, from: nil)
+                if !content.isFlipped { p.y = content.bounds.height - p.y }
+                if !MenuFrames.shared.contains(p) { self.model.closeMenus() }
+                return e
+            }
             rightMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .rightMouseDragged, .rightMouseUp]) { [weak self] e in
                 self?.rightMarquee(e) ?? e
             }
         }
     }
 
-    // right-click and drag on empty canvas moves the view (a left-drag there draws a selection box)
+    // right-click and drag on empty canvas: a selection box (the empty canvas itself only sees the left button)
     private var rightMonitor: Any?
-    private var rightStart: (point: CGPoint, offset: CGSize)?
+    private var menuMonitor: Any?
+    private var rightStart: CGPoint?
     private func rightMarquee(_ e: NSEvent) -> NSEvent? {
         guard e.window === window else { return e }
         let p = point(e)
         switch e.type {
         case .rightMouseDown:
             guard bounds.contains(p), canvas.item(at: p) == nil else { return e }
-            rightStart = (p, model.viewOffset)
+            rightStart = p
             return nil
         case .rightMouseDragged:
             guard let s = rightStart else { return e }
-            model.viewOffset = CGSize(width: s.offset.width + p.x - s.point.x, height: s.offset.height + p.y - s.point.y)
+            if hypot(p.x - s.x, p.y - s.y) > 3 || model.rightMarquee != nil {
+                model.rightMarquee = CGRect(x: min(s.x, p.x), y: min(s.y, p.y), width: abs(p.x - s.x), height: abs(p.y - s.y))
+            }
             return nil
         default:
             guard rightStart != nil else { return e }
             rightStart = nil
+            if let r = model.rightMarquee {
+                let a = model.toCanvas(CGPoint(x: r.minX, y: r.minY)), b = model.toCanvas(CGPoint(x: r.maxX, y: r.maxY))
+                model.select(in: CGRect(x: a.x, y: a.y, width: b.x - a.x, height: b.y - a.y), adding: e.modifierFlags.contains(.shift))
+                model.rightMarquee = nil
+            }
             return nil
         }
     }

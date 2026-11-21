@@ -267,7 +267,13 @@ struct GridEditor: View {
     let patchNode: PatchNode
     @State var paint: Float?
 
-    var rows: Int { if case .roll = kind { return RollNode.rows } else { return DrumsNode.lanes } }
+    var rows: Int { if case .roll = kind { return RollNode.shown } else { return DrumsNode.lanes } }
+    /// roll: the first full-range row on screen (the view, set by the scrollbar)
+    var base: Int {
+        guard case .roll = kind else { return 0 }
+        let low = Int((patchNode.params["low"] ?? -12).rounded())
+        return min(max(low - RollNode.lowest, 0), RollNode.rows - RollNode.shown)
+    }
     var len: Int { Int((patchNode.params["len"] ?? 16).rounded()) }
     var playStep: Int {
         switch kind { case .roll(let n): return Int(n.readouts[0]); case .drums(let n): return Int(n.readouts[0]) }
@@ -275,14 +281,14 @@ struct GridEditor: View {
 
     func isOn(_ step: Int, _ row: Int) -> Bool {
         switch kind {
-        case .roll(let n): return n.isOn(step, row)
+        case .roll(let n): return n.isOn(step, row + base)
         case .drums(let n): return n.hits[row * DrumsNode.steps + step] > 0.5
         }
     }
 
     func set(_ step: Int, _ row: Int, _ on: Bool) {
         switch kind {
-        case .roll(let n): n.grid[row * RollNode.steps + step] = on ? 1 : 0        // any number of notes per step
+        case .roll(let n): n.grid[(row + base) * RollNode.steps + step] = on ? 1 : 0        // any number of notes per step
         case .drums(let n): n.hits[row * DrumsNode.steps + step] = on ? 1 : 0
         }
     }
@@ -332,9 +338,9 @@ struct GridEditor: View {
         for r in 0..<rows {
             let y = rowY(r, rh, size.height)
             let shade: Bool
-            if case .roll = kind { shade = [1, 3, 6, 8, 10].contains(r % 12) } else { shade = r % 2 == 1 }
+            if case .roll = kind { shade = [1, 3, 6, 8, 10].contains((r + base) % 12) } else { shade = r % 2 == 1 }
             if shade { ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: rh)), with: .color(Theme.shade)) }
-            if case .roll = kind, r % 12 == 0 {
+            if case .roll = kind, (r + base) % 12 == 0 {
                 ctx.fill(Path(CGRect(x: 0, y: y + rh - 0.5, width: size.width, height: 0.5)), with: .color(Theme.dim.opacity(0.6)))
             }
         }

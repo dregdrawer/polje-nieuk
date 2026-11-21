@@ -214,6 +214,16 @@ for n in chain {
 }
 
 print("Old patch migration")
+do {
+    // v14: a 2-octave roll grid (relative to its "lowest note") moves onto the full 7-octave range, same notes
+    var g = [Float](repeating: 0, count: 32 * 24); g[0 * 32 + 0] = 1; g[7 * 32 + 1] = 1
+    var o = Patch(); o.version = 13
+    o.nodes = [PatchNode(kind: "roll", x: 0, y: 0, params: ["low": -5], data: ["grid": g])]
+    let m = o.migrated().nodes[0].data["grid"] ?? []
+    let on = m.indices.filter { m[$0] > 0.5 }.map { ($0 / 32 + RollNode.lowest, $0 % 32) }
+    check(m.count == RollNode.steps * RollNode.rows && on.map(\.0) == [-5, 2] && on.map(\.1) == [0, 1],
+          "older roll: notes keep their pitch on the 7-octave grid (\(on))")
+}
 var old = Patch(); old.version = 1
 let oi = PatchNode(kind: "in", x: 0, y: 0, params: ["ch": 4])
 let oc = PatchNode(kind: "clock", x: 0, y: 0)
@@ -533,7 +543,7 @@ do {
     // a chord: C E G on step 0 → voice 1 = C, voice 2 = E, voice 3 = G; voice 4 stays silent
     var g = [Float](repeating: 0, count: 32 * 24)
     for r in [12, 16, 19] { g[r * 32 + 0] = 1 }
-    let c = runNotes("roll", params: ["len": 4, "low": -12], data: ["grid": g], seconds: 0.4)
+    let c = runNotes("roll", params: ["len": 4, "low": -12], data: ["grid": RollNode.grid(fromShown: g, low: -12)], seconds: 0.4)
     let v1 = notesAtGates(c[0][0], c[1][0]).first, v2 = notesAtGates(c[0][1], c[1][1]).first, v3 = notesAtGates(c[0][2], c[1][2]).first
     check(v1 == 0 && v2 == 4 && v3 == 7 && notesAtGates(c[0][3], c[1][3]).isEmpty,
           "roll~ chord on one cable: C, E, G as its three notes (\(String(describing: v1)), \(String(describing: v2)), \(String(describing: v3)))")
@@ -1008,7 +1018,7 @@ do {
         var g = [Float](repeating: 0, count: 32 * 24)
         for r in [12, 16, 19] { g[r * 32 + 0] = 1 }               // C E G on every step 0
         var p = Patch()
-        let roll = PatchNode(kind: "roll", x: 0, y: 0, params: ["len": 1, "low": -12, "gatelen": 1], data: ["grid": g])
+        let roll = PatchNode(kind: "roll", x: 0, y: 0, params: ["len": 1, "low": -12, "gatelen": 1], data: ["grid": RollNode.grid(fromShown: g, low: -12)])
         let params: [String: Float] = kind == "wave" ? [:] : (kind == "shapes" ? ["shape": 3] : ["engine": 8, "decay": 1])
         let syn = PatchNode(kind: kind, x: 0, y: 0, params: params)
         p.nodes = [roll, syn]
@@ -1312,7 +1322,7 @@ do {
             && d.base[si] == (p.nodes[1].params["swing"] ?? 0)
             && engine(sq.id, "pitch") == steps64(p.nodes[2].data["pitch"] ?? [Float](repeating: 0, count: 16))
             && engine(sq.id, "gate") == steps64(p.nodes[2].data["gate"] ?? [Float](repeating: 1, count: 16))
-            && engine(rl.id, "grid") == (p.nodes[3].data["grid"] ?? [Float](repeating: 0, count: 32 * 24))
+            && engine(rl.id, "grid") == (p.nodes[3].data["grid"] ?? [Float](repeating: 0, count: RollNode.steps * RollNode.rows))
             && engine(dr.id, "hits") == (p.nodes[4].data["hits"] ?? [Float](repeating: 0, count: 256))
     }
     check(matches(p3), "after three edits the engine plays what the patch says")

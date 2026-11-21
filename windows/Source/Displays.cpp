@@ -461,36 +461,48 @@ public:
     using NativeDisplay::NativeDisplay;
     bool isRoll() const { return spec.kind == "roll"; }
     Rect inner(Rect r) const { return r.reduced(0, isRoll() ? 4.0f : 3.0f); }
-    int rows() const { return isRoll() ? RollNode::rows : DrumsNode::lanes; }
+    // roll: the grid, with a scrollbar beside it (all 7 octaves, 2 on screen)
+    static constexpr float bar = 7;
+    Rect gridRect(Rect r) const { auto i = inner(r); return isRoll() ? i.withTrimmedRight(bar + 3) : i; }
+    Rect barRect(Rect r) const { auto i = inner(r); return Rect(i.getRight() - bar, i.getY(), bar, i.getHeight()); }
+    int rows() const { return isRoll() ? RollNode::shown : DrumsNode::lanes; }
+    int stored() const { return isRoll() ? RollNode::rows : DrumsNode::lanes; }
+    int maxBase() const { return RollNode::rows - RollNode::shown; }
+    int base() const { return isRoll() ? std::clamp(int(std::round(p("low", -12))) - RollNode::lowest, 0, maxBase()) : 0; }
     int len() const { return int(std::round(p("len", 16))); }
     float* cells() {
         if (auto* n = dynamic_cast<RollNode*>(dsp())) return n->grid.data();
         if (auto* n = dynamic_cast<DrumsNode*>(dsp())) return n->hits.data();
         return nullptr;
     }
-    bool isOn(int s, int r) { auto* c = cells(); return c && c[r * 32 + s] > 0.5f; }
+    bool isOn(int s, int r) { auto* c = cells(); return c && c[(r + base()) * 32 + s] > 0.5f; }
     float rowY(int r, float rh, float h) const { return !isRoll() ? float(r) * rh : h - float(r + 1) * rh; }
     int rowAt(float y, float rh) const { int i = int(std::floor(y / rh)); return !isRoll() ? i : rows() - 1 - i; }
+    Rect thumb(Pt size, int b) const {
+        float h = std::max(size.y * float(RollNode::shown) / float(RollNode::rows), 14.0f);
+        float t = maxBase() > 0 ? float(b) / float(maxBase()) : 0;
+        return Rect(0, (1 - t) * (size.y - h), size.x, h);      // high notes at the top
+    }
     std::vector<LivePart> parts(Rect r) override {
         auto* m = &model;
-        return { part("grid", inner(r), [this, m] {
+        std::vector<LivePart> list { part("grid", gridRect(r), [this, m] {
                 auto* d = dsp();
                 int64_t h = m->isRunning && d ? int64_t(d->readouts[0]) : -1;
-                if (auto* c = cells()) LiveSig::mix(h, LiveSig::floats(c, 32 * rows()));
+                if (auto* c = cells()) LiveSig::mix(h, LiveSig::floats(c, 32 * stored()));
                 LiveSig::mix(h, LiveSig::patch(node));
                 return h;
             }, [this, m](GC& g, Pt size) {
                 auto* d = dsp();
                 if (!d) return;
-                int L = len(), R = rows();
+                int L = len(), R = rows(), B = base();
                 float cw = size.x / float(std::max(L, 1)), rh = size.y / float(R);
                 g.fill(Rect(0, 0, size.x, size.y), Theme::row());
                 for (int r = 0; r < R; ++r) {
                     float y = rowY(r, rh, size.y);
-                    int pc = r % 12;
+                    int pc = (r + B) % 12;
                     bool shade = isRoll() ? (pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10) : r % 2 == 1;
                     if (shade) g.fill(Rect(0, y, size.x, rh), Theme::shade());
-                    if (isRoll() && r % 12 == 0) g.fill(Rect(0, y + rh - 0.5f, size.x, 0.5f), Theme::dim().withMultipliedAlpha(0.6f));
+                    if (isRoll() && pc == 0) g.fill(Rect(0, y + rh - 0.5f, size.x, 0.5f), Theme::dim().withMultipliedAlpha(0.6f));
                 }
                 drawStepGrid(g, size, L, divOf(node));
                 int ps = m->isRunning ? int(d->readouts[0]) : -1;
@@ -499,26 +511,46 @@ public:
                     for (int r = 0; r < R; ++r)
                         if (isOn(s, r)) g.fill(Rect(float(s) * cw + 1, rowY(r, rh, size.y) + 1, cw - 2, rh - 2), s == ps ? Theme::text() : Theme::text().withMultipliedAlpha(0.75f));
             }) };
+        if (isRoll())
+            list.push_back(part("scroll", barRect(r), [this] { return int64_t(base()); }, [this](GC& g, Pt size) {
+                g.fillRounded(Rect(0, 0, size.x, size.y), 2, Theme::row());
+                g.fillRounded(thumb(size, base()), 2, Theme::dim());
+            }));
+        return list;
+    }
+    void scrollTo(Pt pt, Rect r) {
+        auto b = barRect(r);
+        float th = thumb({ b.getWidth(), b.getHeight() }, 0).getHeight();
+        float t = 1 - std::clamp((pt.y - b.getY() - th / 2) / std::max(b.getHeight() - th, 1.0f), 0.0f, 1.0f);
+        int nb = int(std::round(t * float(maxBase())));
+        int li = spec.paramIndex("low");
+        if (li >= 0 && nb != base()) model.setParam(id, li, float(RollNode::lowest + nb));
     }
     void edit(Pt pt, Rect r) {
-        auto i = inner(r);
+        auto i = gridRect(r);
         int L = len();
         float cw = i.getWidth() / float(std::max(L, 1)), rh = i.getHeight() / float(rows());
         int step = int((pt.x - i.getX()) / cw), row = rowAt(pt.y - i.getY(), rh);
         if (step < 0 || step >= L || row < 0 || row >= rows()) return;
         if (!paint) paint = isOn(step, row) ? 0.0f : 1.0f;
-        if (auto* c = cells()) c[row * 32 + step] = *paint == 1 ? 1.0f : 0.0f;
+        if (auto* c = cells()) c[(row + base()) * 32 + step] = *paint == 1 ? 1.0f : 0.0f;
     }
-    bool press(Pt pt, Rect r, const PointerInfo&) override { if (!inner(r).contains(pt)) return false; paint.reset(); edit(pt, r); return true; }
-    void drag(Pt pt, Rect r, const PointerInfo&) override { edit(pt, r); }
+    bool press(Pt pt, Rect r, const PointerInfo&) override {
+        if (isRoll() && barRect(r).expanded(3, 0).contains(pt)) { scrolling = true; scrollTo(pt, r); return true; }
+        if (!gridRect(r).contains(pt)) return false;
+        paint.reset(); edit(pt, r); return true;
+    }
+    void drag(Pt pt, Rect r, const PointerInfo&) override { if (scrolling) scrollTo(pt, r); else edit(pt, r); }
     void release(Pt, Rect, const PointerInfo&) override {
+        if (scrolling) { scrolling = false; return; }
         paint.reset();
         auto* c = cells();
         if (!c) return;
-        model.setData(id, isRoll() ? "grid" : "hits", std::vector<float>(c, c + 32 * rows()));
+        model.setData(id, isRoll() ? "grid" : "hits", std::vector<float>(c, c + 32 * stored()));
     }
 private:
     std::optional<float> paint;
+    bool scrolling = false;
 };
 
 // ---------------------------------------------------------------- comp

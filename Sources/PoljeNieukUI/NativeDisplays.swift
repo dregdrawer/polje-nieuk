@@ -304,15 +304,31 @@ final class TuringDisplay: NativeDisplay {
 
 final class GridDisplay: NativeDisplay {
     private var paint: Float?
+    private var scrolling = false
+    private var isRoll: Bool { spec.kind == "roll" }
     private func inner(_ r: CGRect) -> CGRect { r.insetBy(dx: 0, dy: spec.kind == "drums" ? 3 : 4) }
+    /// roll: the grid, with a scrollbar beside it (all 7 octaves, 2 on screen)
+    private static let bar: CGFloat = 7
+    private func gridRect(_ r: CGRect) -> CGRect {
+        let i = inner(r)
+        return isRoll ? CGRect(x: i.minX, y: i.minY, width: i.width - Self.bar - 3, height: i.height) : i
+    }
+    private func barRect(_ r: CGRect) -> CGRect { let i = inner(r); return CGRect(x: i.maxX - Self.bar, y: i.minY, width: Self.bar, height: i.height) }
     private var view: GridEditor? {
         if let n = dsp as? RollNode { return GridEditor(kind: .roll(n), model: model, patchNode: node) }
         if let n = dsp as? DrumsNode { return GridEditor(kind: .drums(n), model: model, patchNode: node) }
         return nil
     }
+    private var maxBase: Int { RollNode.rows - RollNode.shown }
+    /// the scrollbar's thumb (bar-local): its size is the share of the range on screen
+    private func thumb(_ size: CGSize, base: Int) -> CGRect {
+        let h = max(size.height * CGFloat(RollNode.shown) / CGFloat(RollNode.rows), 14)
+        let t = maxBase > 0 ? CGFloat(base) / CGFloat(maxBase) : 0
+        return CGRect(x: 0, y: (1 - t) * (size.height - h), width: size.width, height: h)      // high notes at the top
+    }
     override func parts(_ r: CGRect) -> [LivePart] {
         let m = model, d = dsp
-        return [part("grid", inner(r), signature: { [weak self] in
+        var list = [part("grid", gridRect(r), signature: { [weak self] in
             var h = 0
             if let n = d as? RollNode {
                 h = m.isRunning ? Int(n.readouts[0]) : -1
@@ -324,25 +340,42 @@ final class GridDisplay: NativeDisplay {
             if let self { LiveSig.mix(&h, LiveSig.patch(self.node)) }
             return h
         }) { [weak self] g, size in self?.view?.draw(g, size) }]
+        if isRoll {
+            list.append(part("scroll", barRect(r), signature: { [weak self] in self?.view?.base ?? 0 }) { [weak self] g, size in
+                guard let self, let v = self.view else { return }
+                g.fill(Path(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: 2), with: .color(Theme.row))
+                g.fill(Path(roundedRect: self.thumb(size, base: v.base), cornerRadius: 2), with: .color(Theme.dim))
+            })
+        }
+        return list
+    }
+    private func scroll(to p: CGPoint, _ r: CGRect) {
+        let b = barRect(r)
+        let th = thumb(b.size, base: 0).height
+        let t = 1 - min(max((p.y - b.minY - th / 2) / max(b.height - th, 1), 0), 1)
+        let base = Int((t * CGFloat(maxBase)).rounded())
+        guard let li = spec.paramIndex("low"), base != view?.base else { return }
+        model.setParam(id, li, Float(RollNode.lowest + base))
     }
     private func edit(_ p: CGPoint, _ r: CGRect) {
         guard let v = view else { return }
-        let i = inner(r)
+        let i = gridRect(r)
         let cw = i.width / CGFloat(max(v.len, 1)), rh = i.height / CGFloat(v.rows)
         let step = Int((p.x - i.minX) / cw), row = v.rowAt(p.y - i.minY, rh)
         guard step >= 0 && step < v.len && row >= 0 && row < v.rows else { return }
         if paint == nil { paint = v.isOn(step, row) ? 0 : 1 }
-        if let n = dsp as? RollNode { n.grid[row * RollNode.steps + step] = paint == 1 ? 1 : 0 }
-        if let n = dsp as? DrumsNode { n.hits[row * DrumsNode.steps + step] = paint == 1 ? 1 : 0 }
+        v.set(step, row, paint == 1)
     }
     override func press(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) -> Bool {
-        guard inner(r).contains(p) else { return false }
+        if isRoll && barRect(r).insetBy(dx: -3, dy: 0).contains(p) { scrolling = true; scroll(to: p, r); return true }
+        guard gridRect(r).contains(p) else { return false }
         paint = nil
         edit(p, r)
         return true
     }
-    override func drag(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) { edit(p, r) }
+    override func drag(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) { if scrolling { scroll(to: p, r) } else { edit(p, r) } }
     override func release(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) {
+        if scrolling { scrolling = false; return }
         paint = nil
         view?.commit()
     }

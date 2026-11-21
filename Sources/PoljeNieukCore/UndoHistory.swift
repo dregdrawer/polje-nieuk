@@ -22,6 +22,9 @@ public struct UndoHistory: Sendable {
         committed = current
     }
 
+    /// Change the committed state in place, without making a step (boxes locked to the screen following the view).
+    public mutating func adjustCommitted(_ f: (inout Patch) -> Void) { f(&committed) }
+
     /// The patch to go back to (the caller commits `current` first).
     public mutating func undo() -> Patch? {
         guard let prev = undoStack.popLast() else { return nil }

@@ -149,7 +149,8 @@ private:
 
 class RollNode : public DSPNode {
 public:
-    static constexpr int steps = 32, rows = 24, voices = kMaxVoices;
+    // every note it can play: 7 octaves, row 0 = `lowest` (C-3); 2 octaves on screen, scroll for the rest
+    static constexpr int steps = 32, rows = 84, shown = 24, lowest = -36, voices = kMaxVoices;
     using DSPNode::DSPNode;
     void process(int frames, const float* const* in, uint64_t con, ProcessContext& ctx) override;
     std::map<std::string, std::vector<float>> defaultData() const override { return { { "grid", std::vector<float>(steps * rows, 0.0f) } }; }

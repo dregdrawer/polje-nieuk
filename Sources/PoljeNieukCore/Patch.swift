@@ -20,6 +20,12 @@ public struct PatchNode: Codable, Identifiable, Equatable, Sendable {
     public var z: Double?
     /// A coloured frame around the box ("#rrggbb"; nil = none).
     public var highlight: String?
+    /// Locked to the screen: where it sits in the canvas view ([x, y], view points); it stays there while you
+    /// pan and zoom (nil = moves with the canvas).
+    public var pin: [Double]?
+    /// Don't draw the cables going into / coming out of this box (they still work).
+    public var hideIn: Bool?
+    public var hideOut: Bool?
 
     public init(id: UUID = UUID(), kind: String, x: Double, y: Double,
                 params: [String: Float] = [:], collapsed: Bool = false, bypassed: Bool = false,
@@ -43,6 +49,9 @@ public struct PatchNode: Codable, Identifiable, Equatable, Sendable {
         text = try c.decodeIfPresent(String.self, forKey: .text)
         z = try c.decodeIfPresent(Double.self, forKey: .z)
         highlight = try c.decodeIfPresent(String.self, forKey: .highlight)
+        pin = try c.decodeIfPresent([Double].self, forKey: .pin)
+        hideIn = try c.decodeIfPresent(Bool.self, forKey: .hideIn)
+        hideOut = try c.decodeIfPresent(Bool.self, forKey: .hideOut)
     }
 }
 
@@ -68,7 +77,7 @@ public struct PatchGroup: Codable, Equatable, Identifiable, Sendable {
 }
 
 public struct Patch: Codable, Equatable, Sendable {
-    public static let currentVersion = 13
+    public static let currentVersion = 14
     public var version: Int = Patch.currentVersion
     public var nodes: [PatchNode] = []
     public var cables: [PatchCable] = []
@@ -176,7 +185,7 @@ public extension Patch {
             // v11: roll holds chords — its one-note-per-step "notes" became a note grid
             for i in p.nodes.indices where p.nodes[i].kind == "roll" {
                 if let old = p.nodes[i].data["notes"], p.nodes[i].data["grid"] == nil {
-                    p.nodes[i].data["grid"] = RollNode.grid(fromNotes: old)
+                    p.nodes[i].data["grid"] = RollNode.grid(fromNotes: old, low: Int((p.nodes[i].params["low"] ?? -12).rounded()))
                 }
                 p.nodes[i].data["notes"] = nil
             }
@@ -198,6 +207,15 @@ public extension Patch {
                 }
             }
             for i in p.nodes.indices where ["wave", "shapes", "macro"].contains(p.nodes[i].kind) { p.nodes[i].params["voices"] = nil }
+        }
+        if version < 14 {
+            // v14: roll holds notes over its whole range (7 octaves) and scrolls; "lowest note" is now where
+            // the view sits — the old 2-octave grid moves to the notes it played
+            for i in p.nodes.indices where p.nodes[i].kind == "roll" {
+                if let g = p.nodes[i].data["grid"], g.count == RollNode.steps * RollNode.shown {
+                    p.nodes[i].data["grid"] = RollNode.grid(fromShown: g, low: Int((p.nodes[i].params["low"] ?? -12).rounded()))
+                }
+            }
         }
         if version < 13 {
             // v13: lfo lost its s&h shape; s&h (4) and random (5) both become random (now 4)

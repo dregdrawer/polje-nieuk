@@ -5533,7 +5533,7 @@
           "kind" : "integer",
           "max" : 24,
           "min" : -36,
-          "name" : "lowest note",
+          "name" : "view",
           "unit" : ""
         },
         {
@@ -5552,7 +5552,7 @@
         1,
         2
       ],
-      "summary" : "Piano roll: 2 octaves × 32 steps, chords too — up to 4 notes per step, all on the one pitch \/ gate cable"
+      "summary" : "Piano roll: 7 octaves (2 on screen, scroll for the rest) × 32 steps, chords too — up to 4 notes per step, all on the one pitch \/ gate cable"
     },
     {
       "aliases" : [

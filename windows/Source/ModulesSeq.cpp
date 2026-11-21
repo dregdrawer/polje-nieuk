@@ -234,7 +234,7 @@ void TuringNode::process(int frames, const float* const* in, uint64_t con, Proce
 void RollNode::process(int frames, const float* const*, uint64_t, ProcessContext& ctx) {
     int len = clampIndex(params[0] - 1, steps) + 1;
     double div = Divisions::beats(params[1]);
-    float low = std::round(params[2]);
+    float low = float(lowest);            // params[2] is only where the view sits
     float gateLen = std::clamp(params[3], 0.05f, 1.0f);
     int V = 1;
     for (int s = 0; s < len; ++s) {

@@ -392,7 +392,43 @@ void AppModel::patchChanged() {
 void AppModel::setView(Pt offset, float scale) {
     viewOffset = offset; viewScale = scale;
     viewSaveAt = now() + 0.5;
+    followPins();
     if (onViewport) onViewport();
+}
+
+// ---------------------------------------------------------------- boxes locked to the screen, hidden cables
+
+void AppModel::toggleLock(const juce::String& id) {
+    int i = patch.index(id);
+    if (i < 0) return;
+    checkpoint();
+    auto& n = patch.nodes[size_t(i)];
+    if (!n.pin) { Pt s = toScreen({ float(n.x), float(n.y) }); n.pin = std::array<double, 2> { s.x, s.y }; }
+    else n.pin.reset();
+    checkpoint(); scheduleAutosave(); changed();
+}
+void AppModel::followPins() {
+    bool any = false;
+    auto place = [&](Patch& p) {
+        for (auto& n : p.nodes) if (n.pin) {
+            n.x = ((*n.pin)[0] - viewOffset.x) / viewScale; n.y = ((*n.pin)[1] - viewOffset.y) / viewScale; any = true;
+        }
+    };
+    place(patch);
+    if (!any) return;
+    place(history.committed);           // following the view isn't an undo step
+    changed();
+}
+void AppModel::refreshPins() {
+    for (auto& n : patch.nodes) if (n.pin) { Pt s = toScreen({ float(n.x), float(n.y) }); n.pin = std::array<double, 2> { s.x, s.y }; }
+}
+void AppModel::toggleHideIn(const juce::String& id) {
+    int i = patch.index(id); if (i < 0) return;
+    checkpoint(); patch.nodes[size_t(i)].hideIn = !patch.nodes[size_t(i)].hideIn; checkpoint(); scheduleAutosave(); changed();
+}
+void AppModel::toggleHideOut(const juce::String& id) {
+    int i = patch.index(id); if (i < 0) return;
+    checkpoint(); patch.nodes[size_t(i)].hideOut = !patch.nodes[size_t(i)].hideOut; checkpoint(); scheduleAutosave(); changed();
 }
 
 void AppModel::zoomBy(float factor, Pt anchor) {
@@ -685,6 +721,7 @@ void AppModel::endDragMove() {
         n.x = std::max(-2000.0, std::round(n.x + d.x));
         n.y = std::max(-2000.0, std::round(n.y + d.y));
     }
+    refreshPins();
     dragState.ids.clear(); dragState.delta = {};
     patchChanged();
 }
@@ -1232,6 +1269,7 @@ void AppModel::load(const Patch& p) {
     patch = p;
     selectedNodes.clear(); selectedCable = {};
     topologyChanged();
+    followPins();
 }
 
 bool AppModel::openFile(const juce::File& f) {
@@ -1286,6 +1324,7 @@ void AppModel::restore(const Patch& p) {
     topologyChanged();
     history.reset(patch, true);
     restoringHistory = false;
+    followPins();
 }
 
 void AppModel::followClockInputs() {

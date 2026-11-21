@@ -58,11 +58,56 @@ public final class AppModel: ObservableObject {
         scale: min(max(UserDefaults.standard.object(forKey: "viewScale") as? Double ?? 1, 0.12), 2))
     var viewOffset: CGSize {
         get { viewport.offset }
-        set { viewport.offset = newValue; scheduleViewSave() }
+        set { viewport.offset = newValue; scheduleViewSave(); followPins() }
     }
     var viewScale: CGFloat {
         get { viewport.scale }
-        set { viewport.scale = newValue; scheduleViewSave() }
+        set { viewport.scale = newValue; scheduleViewSave(); followPins() }
+    }
+
+    // MARK: Boxes locked to the screen
+
+    /// Lock a box where it is on screen (or let it move with the canvas again). One undo step.
+    func toggleLock(_ id: UUID) {
+        guard let i = patch.index(of: id) else { return }
+        checkpoint()
+        if patch.nodes[i].pin == nil {
+            let s = toScreen(CGPoint(x: patch.nodes[i].x, y: patch.nodes[i].y))
+            patch.nodes[i].pin = [Double(s.x), Double(s.y)]
+        } else {
+            patch.nodes[i].pin = nil
+        }
+        checkpoint()
+        scheduleAutosave()
+    }
+    /// Pan / zoom: put the locked boxes back where they're locked on screen. Not an undo step.
+    func followPins() {
+        guard patch.nodes.contains(where: { $0.pin != nil }) else { return }
+        let o = viewOffset, s = Double(viewScale)
+        func place(_ p: inout Patch) {
+            for i in p.nodes.indices {
+                guard let pin = p.nodes[i].pin, pin.count == 2 else { continue }
+                p.nodes[i].x = (pin[0] - o.width) / s
+                p.nodes[i].y = (pin[1] - o.height) / s
+            }
+        }
+        place(&patch)
+        history.adjustCommitted(place)
+    }
+    /// A locked box was moved (dragged, tidied …): it's locked where it is now.
+    func refreshPins() {
+        for i in patch.nodes.indices where patch.nodes[i].pin != nil {
+            let s = toScreen(CGPoint(x: patch.nodes[i].x, y: patch.nodes[i].y))
+            patch.nodes[i].pin = [Double(s.x), Double(s.y)]
+        }
+    }
+    func toggleHideIn(_ id: UUID) {
+        guard let i = patch.index(of: id) else { return }
+        checkpoint(); patch.nodes[i].hideIn = patch.nodes[i].hideIn == true ? nil : true; checkpoint(); scheduleAutosave()
+    }
+    func toggleHideOut(_ id: UUID) {
+        guard let i = patch.index(of: id) else { return }
+        checkpoint(); patch.nodes[i].hideOut = patch.nodes[i].hideOut == true ? nil : true; checkpoint(); scheduleAutosave()
     }
     /// The zoom the boxes' own layer was last drawn at (see NodesHost): while you pinch, that layer is just
     /// stretched; once you stop it redraws sharp at the new zoom.
@@ -778,6 +823,7 @@ public final class AppModel: ObservableObject {
             p.nodes[i].y = max(-2000, (p.nodes[i].y + d.height).rounded())
         }
         patch = p
+        refreshPins()
         dragState.ids = []
         dragState.delta = .zero
     }
@@ -1166,6 +1212,8 @@ public final class AppModel: ObservableObject {
     /// canvas like the module list, at `at` (canvas-view point).
     struct PanelMenu: Identifiable { let id = UUID(); var items: [MenuItem]; var at: CGPoint }
     @Published var panelMenu: PanelMenu?
+    /// Mac: a selection box being drawn with the right mouse button (canvas-view coordinates).
+    @Published var rightMarquee: CGRect?
     /// The top bar menu that's open ("in", "out", "view", "file").
     @Published var barMenu: String?
     /// The box menu (right-click / long-press a title bar): which box, and where (canvas-view point).
@@ -1398,6 +1446,7 @@ public final class AppModel: ObservableObject {
         patch = p
         clearSelection()
         topologyChanged()
+        followPins()
     }
 
     // MARK: Undo / redo
@@ -1440,6 +1489,7 @@ public final class AppModel: ObservableObject {
         pendingCable = nil
         topologyChanged()
         history.reset(to: patch, keepHistory: true)  // linked controls may normalise it: not a new step
+        followPins()
     }
 
     /// clock: whether its clock inlet had a cable last time we looked.

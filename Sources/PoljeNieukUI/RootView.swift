@@ -18,6 +18,7 @@ public struct PoljeNieukRootView: View {
             TopBar(model: model, state: BarState(model), exporting: $exporting, importing: $importing,
                    confirmNew: $confirmNew)
                 .equatable()
+                .menuFrame("bar")                    // its own buttons open / switch / close its menus
                 .zIndex(1)                           // its dropdowns hang over the canvas
             if let err = model.audioError {
                 Text(err)
@@ -39,7 +40,7 @@ public struct PoljeNieukRootView: View {
                     }
                     .overlay {
                         // a top bar menu is open: a click anywhere else closes it
-                        if model.barMenu != nil {
+                        if PatchCanvasView.tapClosesMenus && model.barMenu != nil {
                             Color.clear.contentShape(Rectangle()).onTapGesture { model.barMenu = nil }
                         }
                     }
@@ -50,7 +51,7 @@ public struct PoljeNieukRootView: View {
         // the colours panel lives outside the canvas, so redrawing the canvas for a new colour never
         // disturbs the colour picker you're using
         .overlay(alignment: .topTrailing) {
-            if model.showColours { ColourMenu(model: model).padding(.top, 34) }
+            if model.showColours { ColourMenu(model: model).padding(.top, 34).menuFrame("colours") }
         }
         .background(Theme.bg)
         .preferredColorScheme(model.lightScheme ? .light : .dark)
@@ -219,6 +220,7 @@ struct TopBar: View, Equatable {
                 if state.barMenu == key {
                     PanelMenuView(items: items(), maxHeight: 640) { model.barMenu = nil }
                         .offset(y: 30)
+                        .menuFrame("barMenu")
                 }
             }
     }

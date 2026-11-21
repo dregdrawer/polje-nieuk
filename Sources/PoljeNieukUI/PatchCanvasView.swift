@@ -45,9 +45,13 @@ struct PatchCanvasView: View {
     #endif
 
     #if os(macOS)
-    static let leftDragSelects = true
+    static let leftDragSelects = false          // left-drag moves the view; right-drag draws a selection box
+    /// Mac: a press outside a menu closes it and still goes on to drag / select (NodesContainer's monitor);
+    /// iPad: a tap outside closes it.
+    static let tapClosesMenus = false
     #else
     static let leftDragSelects = false
+    static let tapClosesMenus = true
     #endif
 
     var body: some View {
@@ -61,7 +65,7 @@ struct PatchCanvasView: View {
                 // the cable you're dragging: a light layer on top, so following the pointer
                 // doesn't redraw every box and cable
                 if model.pendingCable != nil { PendingCableView(model: model).allowsHitTesting(false) }
-                if let m = marquee {
+                if let m = marquee ?? model.rightMarquee {
                     Rectangle().fill(Theme.text.opacity(0.06))
                         .overlay(Rectangle().stroke(Theme.text.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
                         .frame(width: m.width, height: m.height)
@@ -70,7 +74,7 @@ struct PatchCanvasView: View {
                 }
                 cableDeleteButton
                 PortHoverOverlay(model: model, hover: hover)
-                if model.finderAt != nil || model.showColours || model.boxMenu != nil || model.panelMenu != nil {
+                if Self.tapClosesMenus && (model.finderAt != nil || model.showColours || model.boxMenu != nil || model.panelMenu != nil) {
                     // a menu is open: the first touch anywhere else closes it — straight away, without
                     // waiting to see whether it's a double-tap (that wait was the lag)
                     Color.clear
@@ -87,11 +91,12 @@ struct PatchCanvasView: View {
                     PanelMenuView(items: pm.items, maxHeight: maxH) { model.panelMenu = nil }
                         .id(pm.id)
                         .offset(x: x, y: y)
+                        .menuFrame("panel")
                 }
                 if let bm = model.boxMenu {
                     let x = min(max(bm.at.x, 8), max(geo.size.width - BoxMenuView.width - 8, 8))
                     let y = min(max(bm.at.y, 8), max(geo.size.height - 110, 8))
-                    BoxMenuView(model: model, id: bm.id).offset(x: x, y: y)
+                    BoxMenuView(model: model, id: bm.id).offset(x: x, y: y).menuFrame("box")
                 }
                 if let at = model.finderAt {
                     // keep the whole list on screen: open it where you tapped, but shift it up/left
@@ -103,6 +108,7 @@ struct PatchCanvasView: View {
                     let y = min(max(s.y, 8), max(geo.size.height - h - 8, 8))
                     ObjectFinder(model: model, canvasPoint: at, maxHeight: maxH, contentHeight: $finderHeight)
                         .offset(x: x, y: y)
+                        .menuFrame("finder")
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
@@ -257,8 +263,7 @@ struct PatchCanvasView: View {
             DragGesture(minimumDistance: panThreshold)
                 .onChanged { v in
                     if model.isZooming { panStart = nil; marquee = nil; return }
-                    // a selection box: on Mac a left-drag always (the right button moves the view);
-                    // on iPad with the select tool
+                    // select tool (or ⇧-drag on Mac): a selection box instead of panning (on Mac a right-drag too)
                     if marquee != nil || (panStart == nil && (Self.leftDragSelects || model.selectMode || ModuleBox.shiftHeld)) {
                         marquee = CGRect(x: min(v.startLocation.x, v.location.x), y: min(v.startLocation.y, v.location.y),
                                          width: abs(v.location.x - v.startLocation.x), height: abs(v.location.y - v.startLocation.y))
@@ -343,6 +348,8 @@ struct PatchCanvasView: View {
         if model.hideCables { return nil }
         var best: (UUID, CGFloat)?
         for c in model.patch.cables {
+            if model.patch.nodes.first(where: { $0.id == c.fromNode })?.hideOut == true
+                || model.patch.nodes.first(where: { $0.id == c.toNode })?.hideIn == true { continue }   // hidden
             guard let (a, b) = endpoints(c) else { continue }
             let path = cablePath(a, b)
             for k in 0...24 {
@@ -532,10 +539,14 @@ struct BoxMenuView: View {
     static let width: CGFloat = 150          // about how wide it comes out (for keeping it on screen)
 
     var body: some View {
-        let cur = model.patch.nodes.first { $0.id == id }?.highlight
+        let node = model.patch.nodes.first { $0.id == id }
+        let cur = node?.highlight
         VStack(alignment: .leading, spacing: 0) {
             MenuRow(title: "duplicate") { model.duplicate(id); model.boxMenu = nil }
             MenuRow(title: "replace…") { model.boxMenu = nil; model.beginReplace(id) }
+            MenuRow(title: "lock to screen", checked: node?.pin != nil) { model.toggleLock(id); model.boxMenu = nil }
+            MenuRow(title: "hide cables in", checked: node?.hideIn == true) { model.toggleHideIn(id); model.boxMenu = nil }
+            MenuRow(title: "hide cables out", checked: node?.hideOut == true) { model.toggleHideOut(id); model.boxMenu = nil }
             Rectangle().fill(Theme.border.opacity(0.5)).frame(height: 1).padding(.vertical, 4)
             Text("highlight").font(Theme.monoSmall).foregroundStyle(Theme.faint)
                 .padding(.horizontal, 10).padding(.bottom, 4)
@@ -575,17 +586,21 @@ struct BoxMenuView: View {
 
 private struct MenuRow: View {
     let title: String
+    var checked = false
     let action: () -> Void
     @State private var hover = false
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(Theme.mono)
-                .foregroundStyle(hover ? Theme.inverse : Theme.text)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 10).padding(.vertical, 3)
-                .background(hover ? Theme.text : Color.clear)
-                .contentShape(Rectangle())
+            HStack(spacing: 6) {
+                Text(title).font(Theme.mono)
+                Spacer(minLength: 12)
+                if checked { Text("✓").font(Theme.mono) }
+            }
+            .foregroundStyle(hover ? Theme.inverse : Theme.text)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10).padding(.vertical, 3)
+            .background(hover ? Theme.text : Color.clear)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hover = $0 }

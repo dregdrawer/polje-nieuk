@@ -310,6 +310,8 @@ std::optional<Patch> Patch::fromJSON(const juce::String& json) {
             if (no->hasProperty("z")) n.z = double(no->getProperty("z"));
             if (no->hasProperty("text")) n.text = no->getProperty("text").toString();
             if (no->hasProperty("highlight")) n.highlight = no->getProperty("highlight").toString();
+            if (auto* pa = no->getProperty("pin").getArray(); pa && pa->size() == 2) n.pin = std::array<double, 2> { double((*pa)[0]), double((*pa)[1]) };
+            n.hideIn = bool(no->getProperty("hideIn")); n.hideOut = bool(no->getProperty("hideOut"));
             p.nodes.push_back(std::move(n));
         }
     }
@@ -362,6 +364,9 @@ juce::String Patch::toJSON() const {
         if (n.z) o->setProperty("z", *n.z);
         if (n.text) o->setProperty("text", *n.text);
         if (n.highlight) o->setProperty("highlight", *n.highlight);
+        if (n.pin) { juce::Array<juce::var> pa; pa.add((*n.pin)[0]); pa.add((*n.pin)[1]); o->setProperty("pin", pa); }
+        if (n.hideIn) o->setProperty("hideIn", true);
+        if (n.hideOut) o->setProperty("hideOut", true);
         ns.add(juce::var(o));
     }
     root->setProperty("nodes", ns);
@@ -492,12 +497,16 @@ Patch Patch::migrated() const {
         for (auto& n : p.nodes) {
             if (n.kind != "roll") continue;
             if (n.data.count("notes") && !n.data.count("grid")) {
-                const int steps = 32, rows = 24;
+                // straight onto the full 7-octave grid (v14), at the notes they played
+                const int steps = 32, rows = 84, shown = 24, lowest = -36;
+                int low = n.params.count("low") ? int(std::round(n.params["low"])) : -12;
                 std::vector<float> g(size_t(steps * rows), 0.0f);
                 auto& old = n.data["notes"];
                 for (int s = 0; s < std::min(int(old.size()), steps); ++s) {
                     float r = old[size_t(s)];
-                    if (std::isfinite(r) && r >= 0 && int(r) < rows) g[size_t(int(r) * steps + s)] = 1;
+                    if (!std::isfinite(r) || r < 0 || int(r) >= shown) continue;
+                    int row = int(r) + low - lowest;
+                    if (row >= 0 && row < rows) g[size_t(row * steps + s)] = 1;
                 }
                 n.data["grid"] = g;
             }
@@ -517,6 +526,19 @@ Patch Patch::migrated() const {
         }), p.cables.end());
         for (auto& n : p.nodes) if (n.kind == "wave" || n.kind == "shapes" || n.kind == "macro") n.params.erase("voices");
     }
+    if (version < 14)   // roll holds notes over its whole range (7 octaves) and scrolls; the old 2-octave grid moves to the notes it played
+        for (auto& n : p.nodes) {
+            if (n.kind != "roll" || !n.data.count("grid") || n.data["grid"].size() != size_t(32 * 24)) continue;
+            int low = n.params.count("low") ? int(std::round(n.params["low"])) : -12;
+            auto old = n.data["grid"];
+            std::vector<float> g(size_t(32 * 84), 0.0f);
+            for (int r = 0; r < 24; ++r) {
+                int row = r + low + 36;
+                if (row < 0 || row >= 84) continue;
+                for (int s = 0; s < 32; ++s) if (old[size_t(r * 32 + s)] > 0.5f) g[size_t(row * 32 + s)] = 1;
+            }
+            n.data["grid"] = g;
+        }
     if (version < 13)   // lfo lost its s&h shape; s&h (4) and random (5) both become random (now 4)
         for (auto& n : p.nodes)
             if (n.kind == "lfo" && n.params.count("shape") && std::isfinite(n.params["shape"]) && n.params["shape"] >= 3.5f) n.params["shape"] = 4;

@@ -339,6 +339,8 @@ struct PatchNode {
     std::optional<double> w, dh, z;
     std::optional<juce::String> text;
     std::optional<juce::String> highlight;   // a coloured frame around the box ("#rrggbb")
+    std::optional<std::array<double, 2>> pin; // locked to the screen: where it sits in the canvas view
+    bool hideIn = false, hideOut = false;     // don't draw the cables going in / out (they still work)
 };
 struct PatchCable {
     juce::String id, fromNode, toNode;
@@ -349,7 +351,7 @@ struct PatchGroup {
     std::vector<juce::String> members;
 };
 struct Patch {
-    static constexpr int currentVersion = 13;
+    static constexpr int currentVersion = 14;
     int version = currentVersion;
     std::vector<PatchNode> nodes;
     std::vector<PatchCable> cables;

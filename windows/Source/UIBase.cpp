@@ -347,6 +347,8 @@ bool hasTriggerRow(const ModuleSpec& s) { for (auto& p : s.params) if (p.isTrigg
 std::vector<int> rowParams(const ModuleSpec& s, const PatchNode& n) {
     std::vector<int> all;
     for (int i = 0; i < int(s.params.size()); ++i) if (!s.params[size_t(i)].isTrigger()) all.push_back(i);
+    // roll: where its view sits is set by the scrollbar beside the grid, not a row
+    if (s.kind == "roll") all.erase(std::remove_if(all.begin(), all.end(), [&](int i) { return s.params[size_t(i)].key == "low"; }), all.end());
     auto findKey = [&](const char* key) { for (size_t a = 0; a < all.size(); ++a) if (s.params[size_t(all[a])].key == key) return int(a); return -1; };
     if (int a = findKey("algo"); a >= 0) { int v = all[size_t(a)]; all.erase(all.begin() + a); all.insert(all.begin(), v); }
     if (int a = findKey("voices"); a >= 0) { int v = all[size_t(a)]; all.erase(all.begin() + a); all.insert(all.begin() + std::min(1, int(all.size())), v); }

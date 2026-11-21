@@ -94,6 +94,11 @@ public:
     Pt viewCenterInCanvas() const { return toCanvas({ viewSize.x / 2 - 90, viewSize.y / 3 }); }
     void zoomBy(float factor, Pt anchor);
     void setView(Pt offset, float scale);
+    void toggleLock(const juce::String& id);      // lock a box where it is on screen (or let it move again)
+    void followPins();                            // pan / zoom: locked boxes stay put on screen
+    void refreshPins();
+    void toggleHideIn(const juce::String& id);
+    void toggleHideOut(const juce::String& id);
     std::function<void()> onViewport;
     bool hasContent(Pt c);
 

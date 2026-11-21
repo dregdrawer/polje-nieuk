@@ -469,11 +469,15 @@ public final class TuringNode: DSPNode {
 // MARK: - roll : piano roll (monophonic)
 
 public final class RollNode: DSPNode {
-    // 0 length, 1 division, 2 lowest note, 3 gate length
+    // 0 length, 1 division, 2 view (the lowest note shown — the scrollbar), 3 gate length
     // outputs: pitch, gate, vel — a step with a chord sends all its notes down the same cables (up to 4;
     // the lowest first, which is what a mono module plays)
     public static let steps = 32
-    public static let rows = 24
+    /// Every note it can play: 7 octaves, row 0 = `lowest` semitones (C-3) … row 83 = B3.
+    public static let rows = 84
+    public static let lowest = -36
+    /// The rows on screen at once (2 octaves); scroll for the rest.
+    public static let shown = 24
     /// Notes on / off: row * steps + step (row 0 = lowest). Any number of notes per step.
     public let grid: UnsafeMutablePointer<Float>
     private var step = -1
@@ -498,12 +502,24 @@ public final class RollNode: DSPNode {
 
     @inline(__always) public func isOn(_ step: Int, _ row: Int) -> Bool { grid[row * Self.steps + step] > 0.5 }
 
-    /// The old one-note-per-step pattern (a row per step, -1 = rest) as a grid.
-    public static func grid(fromNotes notes: [Float]) -> [Float] {
+    /// The old one-note-per-step pattern (a row per step above `low`, -1 = rest) as a grid.
+    public static func grid(fromNotes notes: [Float], low: Int = -12) -> [Float] {
         var g = [Float](repeating: 0, count: steps * rows)
         for s in 0..<min(notes.count, steps) {
             let r = notes[s]
-            if r.isFinite, r >= 0, Int(r) < rows { g[Int(r) * steps + s] = 1 }
+            guard r.isFinite, r >= 0, Int(r) < shown else { continue }
+            let row = Int(r) + low - lowest
+            if row >= 0 && row < rows { g[row * steps + s] = 1 }
+        }
+        return g
+    }
+    /// A grid from before v14 (2 octaves counted from the "lowest note" setting) on the full range.
+    public static func grid(fromShown old: [Float], low: Int) -> [Float] {
+        var g = [Float](repeating: 0, count: steps * rows)
+        for r in 0..<shown {
+            let row = r + low - lowest
+            guard row >= 0 && row < rows else { continue }
+            for s in 0..<steps where r * steps + s < old.count && old[r * steps + s] > 0.5 { g[row * steps + s] = 1 }
         }
         return g
     }
@@ -511,7 +527,7 @@ public final class RollNode: DSPNode {
     public override func process(frames: Int, inputs: UnsafePointer<UnsafePointer<Float>>, connected: UInt64, ctx: ProcessContext) {
         let len = clampIndex(params[0] - 1, Self.steps) + 1
         let div = Divisions.beats(params[1])
-        let low = params[2].rounded()
+        let low = Float(Self.lowest)
         let gateLen = min(max(params[3], 0.05), 1)
         // notes on the cables: the most any step of the loop has (kept steady, so releases ring out)
         var V = 1

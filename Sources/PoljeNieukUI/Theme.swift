@@ -244,6 +244,8 @@ enum BoxLayout {
     /// eq only shows the bands that are switched on.
     static func rowParams(_ spec: ModuleSpec, _ node: PatchNode) -> [Int] {
         var all = spec.params.indices.filter { !spec.params[$0].isTrigger }
+        // roll: where its view sits is set by the scrollbar beside the grid, not a row
+        if spec.kind == "roll" { all.removeAll { spec.params[$0].key == "low" } }
         // the algorithm/type selector is stored last (so old cables keep their slots) but shown first
         if let a = all.firstIndex(where: { spec.params[$0].key == "algo" }) { all.insert(all.remove(at: a), at: 0) }
         // voices is stored last too (old cables keep their slots); shown second, under the engine / shape
