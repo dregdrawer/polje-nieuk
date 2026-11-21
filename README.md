@@ -202,4 +202,32 @@ To add a module: subclass `DSPNode` (no allocation or locks in `process`), then 
 
 ## Credits
 
-`texture~`, `resonator~`, `macro~`, `modal~`, `shapes~`, `xmod~`, `chance~` and `haze~` use the DSP source code of eight Eurorack modules designed by **Émilie Gillet**, released under the MIT licence (`Vendor/mutable`; every source file carries its copyright notice, and the licence text is in `Vendor/mutable/stmlib/LICENSE`). Only the DSP is used, through a thin bridge (`Vendor/mutable/bridge`). Following the original author's guidelines for derivative works, the original brand and module names aren't used in the app.
+polje nieuk stands on a lot of other people's work. Thank you to all of them.
+
+### Code used directly
+
+- **Émilie Gillet**: `texture~`, `resonator~`, `macro~`, `modal~`, `shapes~`, `xmod~`, `chance~` and `haze~` run the DSP source code of her Eurorack modules ([github.com/pichenettes/eurorack](https://github.com/pichenettes/eurorack)), released under the MIT licence (`Vendor/mutable`; every source file carries its copyright notice, and the licence text is in `Vendor/mutable/stmlib/LICENSE`). Only the DSP is used, through a thin bridge (`Vendor/mutable/bridge`). Following her guidelines for derivative works, the original brand and module names aren't used in the app.
+- **JUCE** (Raw Material Software): the Windows version is built with the [JUCE](https://juce.com) framework, used under its open-source licence (AGPLv3).
+
+### The patcher itself
+
+- **Max** (Miller Puckette, David Zicarelli and **Cycling '74**) and **Pure Data** (Miller Puckette): the whole idea and look of the app come from them: boxes named `thing~`, patch cords, double-click to make an object, a canvas drawn the way Pd draws it.
+- **Eurorack** (Doepfer's format, and everyone who builds for it): the 1 V/oct pitch, gates, clocks and CV that every module here speaks.
+- **Expert Sleepers** (Andrew Ostler): the app was made to run alongside the **disting NT**, and its *Automatic* input looks for it.
+
+### Designs the modules are modelled on
+
+None of these use the original code; they're our own versions of famous designs, and the credit goes to the people who made the originals.
+
+- `turing~`: the **Turing Machine** by Tom Whitwell (**Music Thing Modular**): a looping random shift register you can lock or let mutate.
+- `filter~`: the **Moog** transistor ladder (Robert Moog), the **Korg MS-20** filter, and the zero-delay-feedback state-variable filter described by **Andrew Simper** (Cytomic).
+- `reverb~`: **Freeverb** by Jezar at Dreampoint (room), **Jon Dattorro**'s plate from *Effect Design, Part 1* (plate), feedback delay networks after **Jean-Marc Jot** and **Michael Gerzon** (hall), and the classic spring tank (spring).
+- `comp~`: the **Teletronix / UREI LA-3A** opto and **UREI 1176** FET compressors, and the **SSL**-style VCA bus compressor.
+- `delay~`: tape echo (wow, flutter, saturation) and analog **BBD** (bucket-brigade) delays.
+- `stretch~`: **Paulstretch** by Nasca Octavian Paul.
+- `gain~`: **Ableton**'s Utility device.
+- `rack~`, `drumsynth~` and `drums~`: the **Roland TR-808 / TR-909** drum machines and the step-sequencer drum roll they made famous; the built-in kit is synthesized from scratch.
+- `roll~` and the piano-roll editors: the piano roll found in every DAW.
+- The sampler, looper and beat-repeat ideas come from the samplers, loopers and glitch effects musicians have used for decades.
+
+If we've missed you or got something wrong, please open an issue.
