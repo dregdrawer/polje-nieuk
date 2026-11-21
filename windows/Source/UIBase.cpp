@@ -506,15 +506,20 @@ void trash(GC& g, Pt c) {
     g.stroke(p, Theme::dim(), 1, true);
 }
 void resetArrow(GC& g, Pt c) {
+    // reset automation: an open circle running clockwise from the upper right round to the top, with an arrowhead there
+    const float r = 3.4f, pi = juce::MathConstants<float>::pi;
+    auto pt = [&](float deg) { float t = deg * pi / 180; return Pt { c.x + r * std::cos(t), c.y + r * std::sin(t) }; };
     juce::Path p;
-    const float pi = juce::MathConstants<float>::pi;
-    // SwiftUI angles (0 = right, clockwise in a y-down view) → JUCE (0 = up, clockwise): +90°
-    p.addCentredArc(c.x, c.y, 3.2f, 3.2f, 0, (-60 + 90) * pi / 180, (200 + 90) * pi / 180, true);
-    g.stroke(p, Theme::text(), 1.3f, true);
-    Pt a { c.x + 3.2f * std::cos(-60 * pi / 180), c.y + 3.2f * std::sin(-60 * pi / 180) };
+    p.startNewSubPath(pt(-40));
+    for (int k = 1; k <= 20; ++k) p.lineTo(pt(-40 + float(k) * 15));
+    Pt tip = pt(260); float t = 260 * pi / 180;
+    Pt dir { -std::sin(t), std::cos(t) }, nrm { std::cos(t), std::sin(t) };
     juce::Path h;
-    h.startNewSubPath(a.x - 2.4f, a.y - 0.6f); h.lineTo(a); h.lineTo(a.x - 0.3f, a.y + 2.4f);
-    g.stroke(h, Theme::text(), 1.3f, true);
+    h.startNewSubPath(tip.x - dir.x * 2.2f + nrm.x * 1.8f, tip.y - dir.y * 2.2f + nrm.y * 1.8f);
+    h.lineTo(tip);
+    h.lineTo(tip.x - dir.x * 2.2f - nrm.x * 1.8f, tip.y - dir.y * 2.2f - nrm.y * 1.8f);
+    g.stroke(p, Theme::dim(), 1.3f, true);
+    g.stroke(h, Theme::dim(), 1.3f, true);
 }
 void play(GC& g, Pt c, juce::Colour col) {
     juce::Path p; p.addTriangle(c.x - 2.5f, c.y - 3.5f, c.x + 3.5f, c.y, c.x - 2.5f, c.y + 3.5f);

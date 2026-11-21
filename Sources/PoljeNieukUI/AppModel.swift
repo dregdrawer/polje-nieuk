@@ -30,6 +30,8 @@ public final class AppModel: ObservableObject {
     @Published var selectedNodes: Set<UUID> = []
     @Published var selectedCable: UUID?
     @Published var pendingCable: PendingCable?
+    /// Mac: a selection box being drawn with the right mouse button (canvas-view coordinates).
+    @Published var rightMarquee: CGRect?
     @Published var finderAt: CGPoint? {          // canvas point where the object box is being typed
         didSet { if finderAt == nil { replaceTarget = nil } }
     }

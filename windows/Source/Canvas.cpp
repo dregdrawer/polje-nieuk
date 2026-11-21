@@ -910,6 +910,7 @@ void Canvas::mouseDown(const juce::MouseEvent& e) {
     if (!deleteButton.isEmpty() && deleteButton.toFloat().contains(p)) { model.removeCable(model.selectedCable); return; }
     if (began(p, e)) return;
     bgPressed = true; panning = false; marquee.reset();
+    bgRight = e.mods.isPopupMenu();          // right-click and drag: a selection box
     bgStart = p; panStart = model.viewOffset;
     model.isZooming = false;
 }
@@ -920,7 +921,7 @@ void Canvas::mouseDrag(const juce::MouseEvent& e) {
     if (press) { moved(p); return; }
     if (!bgPressed) return;
     if (!panning && !marquee && p.getDistanceFrom(bgStart) < 3) return;
-    if (marquee || (!panning && (model.selectMode || e.mods.isShiftDown()))) {
+    if (marquee || (!panning && (bgRight || model.selectMode || e.mods.isShiftDown()))) {
         marquee = Rect(std::min(bgStart.x, p.x), std::min(bgStart.y, p.y), std::abs(p.x - bgStart.x), std::abs(p.y - bgStart.y));
         repaint();
         return;
@@ -943,6 +944,7 @@ void Canvas::mouseUp(const juce::MouseEvent& e) {
         return;
     }
     if (panning) { panning = false; return; }
+    if (bgRight) return;                     // a right-click on empty canvas without a drag: nothing
     // a tap on empty canvas or a cable
     if (e.getNumberOfClicks() >= 2) {
         if (auto c = hitCable(p)) { model.removeCable(*c); return; }

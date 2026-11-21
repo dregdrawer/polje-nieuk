@@ -150,6 +150,7 @@ private:
     enum class Mode3D { none, pan, lift, orbit, box } mode3D = Mode3D::none;
     Pt start3D, startOffset3D, startBoard3D; double startZ3D = 0, pitch3D = 0, yaw3D = 0, pressH3D = 0; juce::String lift3D;
     juce::Image gridImage;
+    bool bgRight = false;
     juce::Image bgImage; int bgW = 0, bgH = 0, bgVersion = -1; float bgPx = 0;   // the background picture, scaled to fill the window
     juce::Path cablePlain, cableDashed, cableSel, cableDashedStroke;
     bool cablesDirty = true; float dashedFor = 0;

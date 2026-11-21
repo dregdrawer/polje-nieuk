@@ -1122,6 +1122,41 @@ final class NodesContainer: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         super.viewDidMoveToWindow()
         canvas.setBackingScale(window?.backingScaleFactor ?? 2)
         needsLayout = true
+        if let m = rightMonitor { NSEvent.removeMonitor(m); rightMonitor = nil }
+        if window != nil {
+            rightMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .rightMouseDragged, .rightMouseUp]) { [weak self] e in
+                self?.rightMarquee(e) ?? e
+            }
+        }
+    }
+
+    // right-click and drag on empty canvas: a selection box (the empty canvas itself only sees the left button)
+    private var rightMonitor: Any?
+    private var rightStart: CGPoint?
+    private func rightMarquee(_ e: NSEvent) -> NSEvent? {
+        guard e.window === window else { return e }
+        let p = point(e)
+        switch e.type {
+        case .rightMouseDown:
+            guard !model.threeD, bounds.contains(p), canvas.item(at: p) == nil else { return e }
+            rightStart = p
+            return nil
+        case .rightMouseDragged:
+            guard let s = rightStart else { return e }
+            if hypot(p.x - s.x, p.y - s.y) > 3 || model.rightMarquee != nil {
+                model.rightMarquee = CGRect(x: min(s.x, p.x), y: min(s.y, p.y), width: abs(p.x - s.x), height: abs(p.y - s.y))
+            }
+            return nil
+        default:
+            guard rightStart != nil else { return e }
+            rightStart = nil
+            if let r = model.rightMarquee {
+                let a = model.toCanvas(CGPoint(x: r.minX, y: r.minY)), b = model.toCanvas(CGPoint(x: r.maxX, y: r.maxY))
+                model.select(in: CGRect(x: a.x, y: a.y, width: b.x - a.x, height: b.y - a.y), adding: e.modifierFlags.contains(.shift))
+                model.rightMarquee = nil
+            }
+            return nil
+        }
     }
     override func layout() {
         super.layout()

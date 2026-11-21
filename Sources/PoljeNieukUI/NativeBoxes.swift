@@ -438,14 +438,22 @@ struct LivePart {
         p.addRect(CGRect(x: c.x - 2.5, y: c.y - 2.5, width: 5, height: 6))
         g.stroke(p, with: .color(Theme.dim), style: StrokeStyle(lineWidth: 1, lineCap: .round, lineJoin: .round))
     }
+    /// reset automation: an open circle running clockwise from the upper right round to the top, with an arrowhead there
     static func resetArrow(_ g: LiveGC, _ c: CGPoint) {
+        let r: CGFloat = 3.4
+        func pt(_ deg: CGFloat) -> CGPoint { let t = deg * .pi / 180; return CGPoint(x: c.x + r * cos(t), y: c.y + r * sin(t)) }
         var p = Path()
-        p.addArc(center: c, radius: 3.2, startAngle: .degrees(-60), endAngle: .degrees(200), clockwise: false)
-        g.stroke(p, with: .color(Theme.text), style: StrokeStyle(lineWidth: 1.3, lineCap: .round))
-        let a = CGPoint(x: c.x + 3.2 * cos(-60 * .pi / 180), y: c.y + 3.2 * sin(-60 * .pi / 180))
+        p.move(to: pt(-40))
+        for k in 1...20 { p.addLine(to: pt(-40 + CGFloat(k) * 15)) }          // −40° … 260° (y-down: clockwise)
+        let tip = pt(260), t = CGFloat(260) * .pi / 180
+        let dir = CGPoint(x: -sin(t), y: cos(t)), nrm = CGPoint(x: cos(t), y: sin(t))   // travel direction, outward
         var head = Path()
-        head.move(to: CGPoint(x: a.x - 2.4, y: a.y - 0.6)); head.addLine(to: a); head.addLine(to: CGPoint(x: a.x - 0.3, y: a.y + 2.4))
-        g.stroke(head, with: .color(Theme.text), style: StrokeStyle(lineWidth: 1.3, lineCap: .round, lineJoin: .round))
+        head.move(to: CGPoint(x: tip.x - dir.x * 2.2 + nrm.x * 1.8, y: tip.y - dir.y * 2.2 + nrm.y * 1.8))
+        head.addLine(to: tip)
+        head.addLine(to: CGPoint(x: tip.x - dir.x * 2.2 - nrm.x * 1.8, y: tip.y - dir.y * 2.2 - nrm.y * 1.8))
+        let style = StrokeStyle(lineWidth: 1.3, lineCap: .round, lineJoin: .round)
+        g.stroke(p, with: .color(Theme.dim), style: style)
+        g.stroke(head, with: .color(Theme.dim), style: style)
     }
     static func play(_ g: LiveGC, _ c: CGPoint, _ color: Color) {
         var p = Path()

@@ -60,7 +60,7 @@ struct PatchCanvasView: View {
                     // doesn't redraw every box and cable
                     if model.pendingCable != nil { PendingCableView(model: model).allowsHitTesting(false) }
                 }
-                if let m = marquee {
+                if let m = marquee ?? model.rightMarquee {
                     Rectangle().fill(Theme.text.opacity(0.06))
                         .overlay(Rectangle().stroke(Theme.text.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
                         .frame(width: m.width, height: m.height)
