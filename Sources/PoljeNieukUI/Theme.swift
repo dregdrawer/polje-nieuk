@@ -286,6 +286,7 @@ enum BoxLayout {
 
     static func portRows(_ node: PatchNode, _ spec: ModuleSpec, _ hw: HardwareCounts) -> Int {
         let p = ports(node, spec, hw)
+        if node.kind == "rack" { return max(p.ins.count, 2) }      // the pad outlets sit beside the drum roll's rows
         return rowOutlets(node.kind) ? p.ins.count : max(p.ins.count, p.outs.count)
     }
 
@@ -328,6 +329,11 @@ enum BoxLayout {
     static func outlet(_ node: PatchNode, _ spec: ModuleSpec, _ hw: HardwareCounts, _ i: Int) -> CGPoint {
         var y = header + 3 + CGFloat(i) * portRow + portRow / 2
         if !node.collapsed, let pi = outletParam(node.kind, i), let ry = paramRowY(node, spec, hw, pi) { y = ry }
+        if !node.collapsed && node.kind == "rack" && i >= 2 {
+            // rack~: pad k's outlet is level with its row in the drum roll
+            let lane = RackView.rollHeight / CGFloat(RackLayout.pads)
+            y = header + portsHeight(node, spec, hw) + 4 + CGFloat(i - 2) * lane + lane / 2
+        }
         if node.collapsed {
             y = collapsedRight(node, spec).firstIndex(of: i).map(collapsedY) ?? header / 2
         }

@@ -14,7 +14,10 @@ struct PortHoverOverlay: View {
 
     var body: some View {
         Canvas { ctx, _ in
-            guard let hp = hover.point, model.finderAt == nil else { return }
+            // while a cable is being dragged: the port it would connect to if let go here
+            let pc = model.pendingCable
+            guard let hp = pc?.point ?? hover.point, model.finderAt == nil else { return }
+            let reach: CGFloat = pc == nil ? 22 : 24          // 24 = what finishCable connects to
             var best: (CGPoint, String, Bool, CGFloat)?
             let hw = model.hw, z = model.viewScale, o = model.viewOffset
             for n in model.patch.nodes {
@@ -24,10 +27,11 @@ struct PortHoverOverlay: View {
                 let r = CGRect(x: n.x * z + o.width, y: n.y * z + o.height,
                                width: BoxLayout.width(n) * z, height: BoxLayout.height(n, spec, hw) * z).insetBy(dx: -40, dy: -40)   // ports stick out past the edge
                 guard r.contains(hp) else { continue }
-                for p in BoxLayout.visiblePorts(n, spec, hw) {
+                if let pc, n.id == pc.node { continue }
+                for p in BoxLayout.visiblePorts(n, spec, hw) where pc.map({ p.output != $0.fromOutput }) ?? true {
                     let s = model.toScreen(p.point)
                     let d = hypot(s.x - hp.x, s.y - hp.y)
-                    if d < 22 && d < (best?.3 ?? .infinity) { best = (s, p.name, p.output, d) }
+                    if d < reach && d < (best?.3 ?? .infinity) { best = (s, p.name, p.output, d) }
                 }
             }
             guard let (pt, name, isOut, _) = best else { return }

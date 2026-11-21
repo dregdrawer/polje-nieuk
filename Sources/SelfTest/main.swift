@@ -1102,6 +1102,34 @@ do {
     check(ok, "each octave step moves the chord exactly 12 semitones (\(seen))")
 }
 
+print("rack~ pad outlets")
+do {
+    // pad 1 played with its own outlet patched: it comes out there, not in L / R; unpatched it's back in the mix
+    func play(patched: Bool) -> (main: Float, own: Float) {
+        var p = Patch()
+        let rk = PatchNode(kind: "rack", x: 0, y: 0, data: ["hits": [Float](repeating: 0, count: RackLayout.pads * RackLayout.steps)])
+        let at = PatchNode(kind: "atten", x: 0, y: 0)
+        p.nodes = [rk, at]
+        if patched { p.cables = [PatchCable(fromNode: rk.id, fromPort: 2, toNode: at.id, toPort: 0)] }
+        let h = GraphHost(sampleRate: sr); h.load(p); h.prepareForStart()
+        let ins = UnsafeMutablePointer<UnsafeMutablePointer<Float>>.allocate(capacity: 1); ins[0] = .allocate(capacity: kMaxBlock); ins[0].update(repeating: 0, count: kMaxBlock)
+        let outs = UnsafeMutablePointer<UnsafeMutablePointer<Float>>.allocate(capacity: 1); outs[0] = .allocate(capacity: kMaxBlock)
+        let node = h.node(rk.id)! as! RackNode
+        node.audition = 0
+        var main: [Float] = [], own: [Float] = []
+        for _ in 0..<Int(0.3 * sr / Double(kMaxBlock)) {
+            h.process(frames: kMaxBlock, inputs: ins, inputCount: 0, outputs: outs, outputCount: 1)
+            main += UnsafeBufferPointer(start: node.outputs[0], count: kMaxBlock)
+            own += UnsafeBufferPointer(start: node.outputs[2], count: kMaxBlock)
+        }
+        return (rms(main[...]), rms(own[...]))
+    }
+    let a = play(patched: true), b = play(patched: false)
+    check(a.own > 0.01 && a.main < 1e-6, "pad 1's outlet patched: it plays only there (own \(a.own), main \(a.main))")
+    check(b.main > 0.01 && b.own < 1e-6, "unpatched: pad 1 is back in the main L / R (main \(b.main))")
+    check(ModuleRegistry.spec("rack")!.outputs.count == 18, "rack~ has L, R and one outlet per pad")
+}
+
 print("lfo~")
 do {
     check(Divisions.beats(16) == 32 && Divisions.beats(17) == 64 && ModuleRegistry.spec("lfo")!.params[3].max == 17,

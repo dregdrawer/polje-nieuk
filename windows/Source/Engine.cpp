@@ -836,6 +836,11 @@ std::shared_ptr<CompiledGraph> GraphHost::compile(const Patch& patch) {
                 e.inputs[p] = dest;
             }
         }
+        {
+            uint64_t po = 0;
+            for (auto& c : cables) if (c.fromNode == id && c.fromPort < 64) po |= uint64_t(1) << c.fromPort;
+            node->patchedOutputs = po;
+        }
         if (node->spec.kind == "out") {
             uint64_t cv = 0;
             for (size_t p = 0; p < std::min<size_t>(nIn, 64); ++p) {

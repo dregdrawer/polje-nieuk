@@ -241,7 +241,7 @@ public enum ModuleRegistry {
         ModuleSpec(kind: "rack", name: "rack~", category: "Instruments",
                    summary: "Sampling drum machine: 16 pads with a drum roll, starter kit, drop your own samples",
                    aliases: ["drum rack", "drum machine", "drums", "pads", "808", "909", "kit", "beat", "sampler"],
-                   inputs: ["clock", "reset"], outputs: ["L", "R"],
+                   inputs: ["clock", "reset"], outputs: ["L", "R"] + (1...RackLayout.pads).map { "pad \($0)" },
                    params: RackLayout.params(),
                    factory: { RackNode(spec: $0, sampleRate: $1) }),
         ModuleSpec(kind: "roll", name: "roll~", category: "Sequencing",

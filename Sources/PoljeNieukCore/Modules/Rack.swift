@@ -135,6 +135,9 @@ public final class RackNode: DSPNode {
         let oL = outputs[0], oR = outputs[1]
         oL.update(repeating: 0, count: frames)
         oR.update(repeating: 0, count: frames)
+        // a pad whose own outlet is patched plays there (mono) instead of in the L / R mix
+        let own = patchedOutputs >> 2
+        for k in 0..<RackLayout.pads where own & (1 << UInt64(k)) != 0 { outputs[2 + k].update(repeating: 0, count: frames) }
         if guardian.busy { return }
         let len = clampIndex(params[0] - 1, RackLayout.steps) + 1
         let div = Divisions.beats(params[1])
@@ -197,6 +200,7 @@ public final class RackNode: DSPNode {
                 let audible = params[b + 5] < 0.5 && (!anySolo || params[b + 6] > 0.5)
                 if !audible { continue }
                 let g = env[k] * params[b + 3]
+                if own & (1 << UInt64(k)) != 0 { outputs[2 + k][i] = (xl + xr) * 0.5 * g * master; continue }
                 let pan = min(max(params[b + 4], -1), 1)
                 xl *= g * min(1, 1 - pan); xr *= g * min(1, 1 + pan)
                 l += xl; r += xr

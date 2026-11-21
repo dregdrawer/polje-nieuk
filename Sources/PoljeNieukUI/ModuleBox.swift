@@ -192,7 +192,7 @@ struct ModuleBox: View {
             if selected {
                 iconButton("xmark") { model.removeNode(node.id) }
             }
-            iconButton(node.collapsed ? "chevron.down" : "chevron.up") { model.toggleCollapsed(node.id) }
+            iconButton("minus") { model.toggleCollapsed(node.id) }
         }
         .padding(.leading, 10)
         .padding(.trailing, 4)

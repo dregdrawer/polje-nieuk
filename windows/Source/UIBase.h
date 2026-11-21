@@ -152,6 +152,7 @@ void addCable(juce::Path& p, Pt a, Pt b, float scale);
 /// Small drawn icons (NativeBoxes.swift Icons).
 namespace Icons {
     void xmark(GC& g, Pt c, float size = 3, std::optional<juce::Colour> colour = std::nullopt);
+    void dash(GC& g, Pt c);
     void chevron(GC& g, Pt c, bool up);
     void waveform(GC& g, Pt c);
     void trash(GC& g, Pt c);

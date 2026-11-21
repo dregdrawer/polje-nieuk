@@ -251,6 +251,7 @@ public:
     static const float* voice(const float* input, int v) { return input + v * kMaxBlock; }
     float* outVoice(int k, int v) { return outputs[size_t(k)].data() + v * kMaxBlock; }
     uint64_t cvChannels = 0;                   // out~: channels fed only by control voltages
+    uint64_t patchedOutputs = 0;               // bit k: outlet k has a cable (rack~ sends a pad to its own outlet)
     virtual void clearState() {}
 
 private:

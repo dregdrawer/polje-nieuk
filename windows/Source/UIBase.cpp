@@ -385,6 +385,7 @@ std::vector<int> rowParams(const ModuleSpec& s, const PatchNode& n) {
 
 int portRows(const PatchNode& n, const ModuleSpec& s, const HardwareCounts& hw) {
     auto p = ports(n, s, hw);
+    if (n.kind == "rack") return std::max(int(p.ins.size()), 2);     // the pad outlets sit beside the drum roll's rows
     return rowOutlets(n.kind) ? int(p.ins.size()) : int(std::max(p.ins.size(), p.outs.size()));
 }
 bool sideDisplay(const std::string& k) { return k == "slider" || k == "knob" || k == "drums" || k == "roll"; }
@@ -417,6 +418,8 @@ Pt inlet(const PatchNode& n, const ModuleSpec& s, const HardwareCounts&, int i) 
 Pt outlet(const PatchNode& n, const ModuleSpec& s, const HardwareCounts& hw, int i) {
     float y = header + 3 + float(i) * portRow + portRow / 2;
     if (!n.collapsed) { int pi = outletParam(n.kind, i); if (pi >= 0) if (auto ry = paramRowY(n, s, hw, pi)) y = *ry; }
+    if (!n.collapsed && n.kind == "rack" && i >= 2)    // rack~: pad k's outlet is level with its row in the drum roll
+        y = header + portsHeight(n, s, hw) + 4 + float(i - 2) * 9 + 4.5f;
     if (n.collapsed) {
         auto r = collapsedRight(n, s);
         auto it = std::find(r.begin(), r.end(), i);
@@ -475,6 +478,10 @@ void xmark(GC& g, Pt c, float s, std::optional<juce::Colour> colour) {
     p.startNewSubPath(c.x - s, c.y - s); p.lineTo(c.x + s, c.y + s);
     p.startNewSubPath(c.x + s, c.y - s); p.lineTo(c.x - s, c.y + s);
     g.stroke(p, colour.value_or(Theme::dim()), 1.4f, true);
+}
+void dash(GC& g, Pt c) {      // collapse / expand a box
+    juce::Path p; p.startNewSubPath(c.x - 3.5f, c.y); p.lineTo(c.x + 3.5f, c.y);
+    g.stroke(p, Theme::dim(), 1.4f, true);
 }
 void chevron(GC& g, Pt c, bool up) {
     juce::Path p; float d = up ? -1.0f : 1.0f;

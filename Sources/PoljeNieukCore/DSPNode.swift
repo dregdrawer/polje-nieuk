@@ -193,6 +193,10 @@ open class DSPNode {
         outputs[k] + v * kMaxBlock
     }
 
+    /// Which outlets have a cable (bit k = outlet k); set when the patch is loaded. rack~ sends a pad to its
+    /// own outlet instead of the main mix while that outlet is patched.
+    public internal(set) var patchedOutputs: UInt64 = 0
+
     /// UI: activity per outlet — block peak with a ~250 ms fall, so short clock / gate pulses still show.
     public let outLevel: UnsafeMutablePointer<Float>
 

@@ -498,7 +498,8 @@ private enum Region: Equatable {
             }
         }
         // outlet activity dots (audio on)
-        let outs = n.collapsed ? BoxLayout.collapsedRight(n, spec) : Array(BoxLayout.ports(n, spec, geo.hw).outs.indices)
+        var outs = n.collapsed ? BoxLayout.collapsedRight(n, spec) : Array(BoxLayout.ports(n, spec, geo.hw).outs.indices)
+        if n.kind == "rack" && !n.collapsed { outs = outs.filter { $0 < 2 } }     // the pads light up themselves
         if m.isRunning, !outs.isEmpty, n.kind != "in" {
             let ys = outs.map { BoxLayout.outlet(n, spec, geo.hw, $0).y - n.y }
             let names = outs.map { $0 < spec.outputs.count ? spec.outputs[$0] : "" }

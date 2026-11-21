@@ -243,7 +243,7 @@ struct LivePart {
                 let dot = CGRect(x: c.x - 4.5, y: c.y - 4.5, width: 9, height: 9)
                 if !node.bypassed { g.fill(Path(ellipseIn: dot), with: .color(Theme.text)) }
                 g.stroke(Path(ellipseIn: dot.insetBy(dx: 0.5, dy: 0.5)), with: .color(node.bypassed ? Theme.dim : Theme.text), lineWidth: 1)
-            case .collapse: Icons.chevron(g, c, up: !node.collapsed)
+            case .collapse: Icons.dash(g, c)
             case .close: Icons.xmark(g, c)
             case .audioMenu: Icons.waveform(g, c)
             case .resetAuto: Icons.resetArrow(g, c)
@@ -401,6 +401,12 @@ struct LivePart {
         p.move(to: CGPoint(x: c.x - size, y: c.y - size)); p.addLine(to: CGPoint(x: c.x + size, y: c.y + size))
         p.move(to: CGPoint(x: c.x + size, y: c.y - size)); p.addLine(to: CGPoint(x: c.x - size, y: c.y + size))
         g.stroke(p, with: .color(color), style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
+    }
+    /// collapse / expand a box
+    static func dash(_ g: LiveGC, _ c: CGPoint) {
+        var p = Path()
+        p.move(to: CGPoint(x: c.x - 3.5, y: c.y)); p.addLine(to: CGPoint(x: c.x + 3.5, y: c.y))
+        g.stroke(p, with: .color(Theme.dim), style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
     }
     static func chevron(_ g: LiveGC, _ c: CGPoint, up: Bool) {
         var p = Path()

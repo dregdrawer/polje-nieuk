@@ -115,7 +115,7 @@ static void header(GC& g, const BoxGeo& geo, AppModel& m) {
                 g.strokeEllipse(dot.reduced(0.5f), node.bypassed ? Theme::dim() : Theme::text(), 1);
                 break;
             }
-            case BoxGeo::collapse: Icons::chevron(g, c, !node.collapsed); break;
+            case BoxGeo::collapse: Icons::dash(g, c); break;
             case BoxGeo::close: Icons::xmark(g, c); break;
             case BoxGeo::audioMenu: Icons::waveform(g, c); break;
             case BoxGeo::resetAuto: Icons::resetArrow(g, c); break;

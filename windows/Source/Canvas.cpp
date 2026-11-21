@@ -186,7 +186,7 @@ std::vector<LivePart> Canvas::partsFor(Item& it) {
     }
     std::vector<int> outs;
     if (n.collapsed) outs = BoxLayout::collapsedRight(n, *spec);
-    else { auto p = BoxLayout::ports(n, *spec, geo.hw); for (int k = 0; k < int(p.outs.size()); ++k) outs.push_back(k); }
+    else { auto p = BoxLayout::ports(n, *spec, geo.hw); for (int k = 0; k < int(p.outs.size()); ++k) if (n.kind != "rack" || k < 2) outs.push_back(k); }   // rack pads light up themselves
     if (model.isRunning && !outs.empty() && n.kind != "in") {
         std::vector<float> ys; std::vector<juce::String> names; std::vector<bool> gate;
         for (int k : outs) {
@@ -424,18 +424,23 @@ void Canvas::paint(juce::Graphics& g) {
             }
         }
     }
-    // the port under the pointer, with its name
-    if (hover && !model.finderAt && !press) {
+    // the port under the pointer, with its name — and while a cable is dragged, the port it would connect to
+    auto& pc = model.pendingCable;
+    std::optional<Pt> at = pc ? std::optional<Pt>(pc->point) : (press ? std::nullopt : hover);
+    if (at && !model.finderAt) {
+        float reach = pc ? 24.0f : 22.0f;            // 24 = what finishCable connects to
         std::optional<std::tuple<Pt, juce::String, bool>> best; float bd = INFINITY;
         for (auto& n : model.patch.nodes) {
             auto* sp = Registry::spec(n.kind);
             if (!sp) continue;
+            if (pc && n.id == pc->node) continue;
             Rect r(float(n.x) * s + o.x, float(n.y) * s + o.y, BoxLayout::width(n) * s, BoxLayout::height(n, *sp, model.hw) * s);
-            if (!r.expanded(40).contains(*hover)) continue;
+            if (!r.expanded(40).contains(*at)) continue;
             for (auto& vp : BoxLayout::visiblePorts(n, *sp, model.hw)) {
+                if (pc && vp.output == pc->fromOutput) continue;
                 Pt q = model.toScreen(vp.point);
-                float dd = q.getDistanceFrom(*hover);
-                if (dd < 22 && dd < bd) { bd = dd; best = std::make_tuple(q, vp.name, vp.output); }
+                float dd = q.getDistanceFrom(*at);
+                if (dd < reach && dd < bd) { bd = dd; best = std::make_tuple(q, vp.name, vp.output); }
             }
         }
         if (best) {

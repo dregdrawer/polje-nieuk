@@ -274,6 +274,9 @@ public final class GraphHost {
                     ptrs[p] = UnsafePointer(dest)
                 }
             }
+            node.patchedOutputs = cables.reduce(UInt64(0)) { m, c in
+                c.fromNode == id && c.fromPort < 64 ? m | (1 << UInt64(c.fromPort)) : m
+            }
             if let out = node as? HardwareOutNode {
                 // channels fed only by control voltages skip out~'s gain (1 V/oct stays 1 V/oct)
                 var cv: UInt64 = 0

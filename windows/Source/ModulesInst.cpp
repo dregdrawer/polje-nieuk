@@ -139,6 +139,9 @@ void RackNode::trigger(int k) {
 void RackNode::process(int frames, const float* const* in, uint64_t con, ProcessContext& ctx) {
     float* oL = out(0); float* oR = out(1);
     std::fill(oL, oL + frames, 0.0f); std::fill(oR, oR + frames, 0.0f);
+    // a pad whose own outlet is patched plays there (mono) instead of in the L / R mix
+    uint64_t own = patchedOutputs >> 2;
+    for (int k = 0; k < RackLayout::pads; ++k) if ((own >> k) & 1u) std::fill(out(2 + k), out(2 + k) + frames, 0.0f);
     if (guardian.busy()) return;
     int len = clampIndex(params[0] - 1, RackLayout::steps) + 1;
     double div = Divisions::beats(params[1]);
@@ -186,6 +189,7 @@ void RackNode::process(int frames, const float* const* in, uint64_t con, Process
             bool audible = params[size_t(b + 5)] < 0.5f && (!anySolo || params[size_t(b + 6)] > 0.5f);
             if (!audible) continue;
             float gg = env[k] * params[size_t(b + 3)], pan = std::clamp(params[size_t(b + 4)], -1.0f, 1.0f);
+            if ((own >> k) & 1u) { out(2 + k)[i] = (xl + xr) * 0.5f * gg * master; continue; }
             l += xl * gg * std::min(1.0f, 1 - pan); r += xr * gg * std::min(1.0f, 1 + pan);
         }
         oL[i] = l * master; oR[i] = r * master;
