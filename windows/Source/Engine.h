@@ -347,7 +347,7 @@ struct PatchGroup {
     std::vector<juce::String> members;
 };
 struct Patch {
-    static constexpr int currentVersion = 12;
+    static constexpr int currentVersion = 13;
     int version = currentVersion;
     std::vector<PatchNode> nodes;
     std::vector<PatchCable> cables;

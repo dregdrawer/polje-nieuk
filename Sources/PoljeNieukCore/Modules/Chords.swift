@@ -27,6 +27,7 @@ public final class ChordNode: DSPNode {
     private var notes = [Float](repeating: 0, count: ChordNode.maxVoices)       // the chord now (semitones)
     private var count = 3
     private var last: [Float] = []                                            // for voice leading
+    private var lastOctave = 0
     private var sig = Int.min
     private var gateEdge = EdgeDetector()
     private var gateHigh = false
@@ -123,6 +124,11 @@ public final class ChordNode: DSPNode {
         var changed = false
         if h != sig {
             sig = h
+            // the octave setting moves the remembered chord too, so voice leading doesn't pull it back
+            if octave != lastOctave {
+                for k in last.indices { last[k] += Float(12 * (octave - lastOctave)) }
+                lastOctave = octave
+            }
             let c = Self.build(mode: mode, key: key, scale: scale, degree: degree, size: size, type: type, voices: voices,
                                inversion: inversion, spread: spread, octave: octave, shift: shift,
                                previous: leading && last.count == voices ? last : nil)

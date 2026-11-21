@@ -8,7 +8,6 @@ struct RackView: View {
     let node: RackNode
     let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let patchNode: PatchNode
-    var clocked: Bool { clockPatched(model, patchNode.id) }
     @State var paint: Float?
     /// the pad a file is being dragged over (it lights up)
     @State var dropPad: Int?
@@ -38,7 +37,7 @@ struct RackView: View {
                             .lineLimit(1).truncationMode(.tail)
                             .frame(width: Self.label - 4, height: Self.rollHeight / 16, alignment: .leading)
                             .contentShape(Rectangle())
-                            .onTapGesture { select(k); if !clocked { node.audition = k } }
+                            .onTapGesture { select(k) }          // selects only; ▶ plays
                     }
                 }
                 .frame(width: Self.label)
@@ -128,16 +127,15 @@ struct RackView: View {
         .padding(4)
         .frame(height: 42)
         .frame(maxWidth: .infinity)
-        .background(LiveCanvas(signature: { LiveSig.q(min(max(node.readouts[1 + k], 0), 1), 8) }, every: 2, native: false) { ctx, size in   // pad buttons sit on top
+        .background(LiveCanvas(signature: { node.readouts[1 + k] > 0.05 ? 1 : 0 }, native: false) { ctx, size in   // pad buttons sit on top
             ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
-            let lv = CGFloat(min(max(node.readouts[1 + k], 0), 1))
-            if lv > 0.01 { ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.text.opacity(0.35 * lv))) }
+            if node.readouts[1 + k] > 0.05 { ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.text.opacity(0.3))) }   // on / off, no fade
         })
         .overlay(Rectangle().stroke(k == selected || dropPad == k ? Theme.text : Theme.border,
                                     lineWidth: dropPad == k ? 2.5 : (k == selected ? 1.5 : 0.5)))
         .overlay { if dropPad == k { Rectangle().fill(Theme.text.opacity(0.12)).allowsHitTesting(false) } }
         .contentShape(Rectangle())
-        .onTapGesture { select(k); if !clocked { node.audition = k } }
+        .onTapGesture { select(k) }          // selects only; ▶ plays
         .dropDestination(for: URL.self) { urls, _ in
             dropPad = nil
             return model.loadPads(patchNode.id, from: k, urls)          // several files: this pad and the next ones
@@ -167,7 +165,6 @@ struct DrumSynthView: View {
     let node: DrumSynthNode
     let model: AppModel   // not observed: the box re-renders when its BoxKey changes (see NodesHost)
     let patchNode: PatchNode
-    var clocked: Bool { clockPatched(model, patchNode.id) }
     @State var paint: Float?
 
     static let laneHeight: CGFloat = 14
@@ -187,7 +184,7 @@ struct DrumSynthView: View {
                                 .lineLimit(1)
                                 .frame(width: Self.label - 4, height: Self.laneHeight, alignment: .leading)
                                 .contentShape(Rectangle())
-                                .onTapGesture { select(v); if !clocked { node.audition = v } }
+                                .onTapGesture { select(v) }          // selects only; ▶ plays
                         }
                     }
                     .frame(width: Self.label)
@@ -271,14 +268,13 @@ struct DrumSynthView: View {
         .padding(4)
         .frame(height: 42)
         .frame(maxWidth: .infinity)
-        .background(LiveCanvas(signature: { LiveSig.q(min(max(node.readouts[1 + v], 0), 1), 8) }, every: 2, native: false) { ctx, size in   // pad buttons sit on top
+        .background(LiveCanvas(signature: { node.readouts[1 + v] > 0.05 ? 1 : 0 }, native: false) { ctx, size in   // pad buttons sit on top
             ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
-            let lv = CGFloat(min(max(node.readouts[1 + v], 0), 1))
-            if lv > 0.01 { ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.text.opacity(0.35 * lv))) }
+            if node.readouts[1 + v] > 0.05 { ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.text.opacity(0.3))) }   // on / off, no fade
         })
         .overlay(Rectangle().stroke(v == selected ? Theme.text : Theme.border, lineWidth: v == selected ? 1.5 : 0.5))
         .contentShape(Rectangle())
-        .onTapGesture { select(v); if !clocked { node.audition = v } }
+        .onTapGesture { select(v) }          // selects only; ▶ plays
         .help("\(name(v)) — tap to play (when no clock is patched in; ▶ always plays) · M mute · S solo")
     }
 

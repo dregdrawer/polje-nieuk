@@ -101,7 +101,7 @@ let looper = node("looper", ["dry": 0])
 let mix = node("mix")
 let out = node("out")
 let atten = node("atten", ["off": 0.5, "amt": 0])
-let newKinds = ["gain", "comp", "limit", "gate", "eq", "chorus", "phaser", "redux", "shift", "autopan", "repeat", "env", "rand"]
+let newKinds = ["gain", "comp", "limit", "gate", "eq", "chorus", "phaser", "redux", "shift", "autopan", "repeat", "env"]
 let chain = newKinds.map { node($0) }
 patch.nodes = [hwIn, clock, grain, delay, verb, filt, drive, lfo, looper, mix, out, atten] + chain
 func cable(_ a: PatchNode, _ ap: Int, _ b: PatchNode, _ bp: Int) -> PatchCable {
@@ -561,12 +561,6 @@ check(abs(kb[2].last! - 0.5) < 1e-4, "knob~ 0…5 V: knob 3 fully up gives 5 V")
 
 print("Modulators (Gillet DSP)")
 func upCrossings(_ x: [Float]) -> Int { var n = 0, p: Float = 0; for v in x { if v > 0 && p <= 0 { n += 1 }; p = v }; return n }
-let (_, slOut) = runSource("slopes", params: ["ramp": 1, "out": 2, "range": 1, "freq": 0], seconds: 4)
-let slX = upCrossings(slOut[0])
-check(slX >= 7 && slX <= 9 && slOut.allSatisfy { rms($0[...]) > 0.05 }, "slopes~ loops at 2 Hz on all 4 outputs (\(slX) cycles in 4 s)")
-let (_, slSync) = runSource("slopes", params: ["ramp": 1, "out": 2, "range": 1, "sync": 1, "div": Float(Divisions.index("1/4"))], seconds: 4)
-let slSX = upCrossings(slSync[0])
-check(slSX >= 7 && slSX <= 9, "slopes~ synced to 1/4 at 120 BPM runs at 2 Hz (\(slSX) cycles)")
 let (_, chOut) = runSource("chance", params: ["sync": 1, "div": Float(Divisions.index("1/16"))], seconds: 4)
 let chT = onsets(chOut[0]) + onsets(chOut[2])
 check(chT >= 28 && chT <= 34, "chance~ coin toss: every 1/16 goes to T1 or T3 (\(onsets(chOut[0])) + \(onsets(chOut[2])))")
@@ -577,13 +571,7 @@ let xs = stride(from: Int(sr * 0.25), to: chLoop[3].count, by: Int(sr * 0.5)).ma
 let period = (1...8).first { p in (20..<24).allSatisfy { xs[$0] == xs[$0 + p] } }
 check(period != nil && Set(xs[20...]).count > 1, "chance~ déjà vu 100 % locks into a loop (period \(period.map(String.init) ?? "none") beats)")
 
-print("segments~")
 check(ShapesNames.names.count == 47, "shapes~ lists all \(ShapesNames.names.count) shapes")
-let (_, segLFO) = runSource("segments", params: ["count": 0, "t1": 0, "l1": 1, "a1": 0.5], seconds: 4)
-let segMax = segLFO[0].max()!, segMin = segLFO[0].min()!
-check(segMax > 0.75 && segMin < 0.05 && upCrossings(segLFO[0].map { $0 - 0.4 }) >= 2, String(format: "segments~ single looping ramp is a free LFO, 0…8 V (%.2f…%.2f)", segMin, segMax))
-let (_, segIdle) = runSource("segments", params: ["count": 1], seconds: 1)
-check(segIdle[0].allSatisfy { abs($0) < 0.01 }, "segments~ envelope rests at 0 V until a gate arrives")
 
 // MARK: - Every module
 
@@ -637,8 +625,8 @@ func exercise(_ kind: String, params: [String: Float], seconds: Double, hostRate
 }
 
 /// Sound sources and modulators keep producing output in silence; effects should settle.
-let selfSounding: Set<String> = ["clock", "keys", "seq", "turing", "roll", "drums", "lfo", "rand", "atten", "slider", "knob",
-                                 "slopes", "chance", "segments", "macro", "shapes", "modal", "resonator", "looper",
+let selfSounding: Set<String> = ["clock", "keys", "seq", "turing", "roll", "drums", "lfo", "atten", "slider", "knob",
+                                 "chance", "macro", "shapes", "modal", "resonator", "looper",
                                  "sampler", "grain", "stretch", "texture", "haze", "in", "env", "xmod", "wave", "chord"]
 var moduleProblems: [String] = []
 var sweepRuns = 0
@@ -754,7 +742,7 @@ do {
     let gateHigh = seqOut[1].last! > 0.2
     check(lfoNode.outLevel[0] > 0.5, "lfo~ outlet shows activity (\(lfoNode.outLevel[0]))")
     check(seqNode.outLevel[1] > 0.3 || !gateHigh, "seq~ gate outlet shows activity after a step (\(seqNode.outLevel[1]))")
-    let (idle, _) = runSource("segments", params: ["count": 1], seconds: 1)     // envelope with no gate: idle
+    let (idle, _) = runSource("env", seconds: 1)     // envelope follower with nothing coming in: idle
     check(idle.outLevel[0] < 0.01, "an idle envelope's outlet stays dark (\(idle.outLevel[0]))")
 }
 
@@ -1091,6 +1079,55 @@ do {
     let gap = Int(0.05 * sr)
     check(first[0] >= 0 && abs((first[1] - first[0]) - gap) < 70 && abs((first[2] - first[1]) - gap) < 70,
           "strum 50 ms: the voices open 50 ms apart (\(first))")
+}
+
+print("chord~ octave with voice leading")
+do {
+    // voice leading on: raising the octave must move the chord up an octave at once, not get pulled back
+    var p = Patch()
+    let ch = PatchNode(kind: "chord", x: 0, y: 0, params: ["voices": 0, "lead": 1])
+    p.nodes = [ch]
+    let h = GraphHost(sampleRate: sr); h.load(p); h.prepareForStart()
+    let ins = UnsafeMutablePointer<UnsafeMutablePointer<Float>>.allocate(capacity: 1); ins[0] = .allocate(capacity: kMaxBlock); ins[0].update(repeating: 0, count: kMaxBlock)
+    let outs = UnsafeMutablePointer<UnsafeMutablePointer<Float>>.allocate(capacity: 1); outs[0] = .allocate(capacity: kMaxBlock)
+    let node = h.node(ch.id)!
+    func notes() -> [Int] {
+        for _ in 0..<8 { h.process(frames: kMaxBlock, inputs: ins, inputCount: 0, outputs: outs, outputCount: 1) }
+        return (0..<3).map { Int((node.outputs[0][$0 * kMaxBlock + kMaxBlock - 1] * 120).rounded()) }
+    }
+    let a = notes()
+    var seen = [a]
+    for o in [1, 2, 1, 0, -1] { node.base[10] = Float(o); seen.append(notes()) }
+    let ok = zip(seen, [0, 1, 2, 1, 0, -1]).allSatisfy { c, o in c == a.map { $0 + 12 * o } }
+    check(ok, "each octave step moves the chord exactly 12 semitones (\(seen))")
+}
+
+print("lfo~")
+do {
+    check(Divisions.beats(16) == 32 && Divisions.beats(17) == 64 && ModuleRegistry.spec("lfo")!.params[3].max == 17,
+          "lfo~ syncs up to every 8 and 16 bars")
+    check(ModuleRegistry.spec("lfo")!.params[0].max == 4, "shapes: sine, triangle, saw, square, random (no s&h)")
+    var old = Patch(); old.version = 12
+    old.nodes = [4, 5, 2].map { PatchNode(kind: "lfo", x: 0, y: 0, params: ["shape": Float($0)]) }
+    check(old.migrated().nodes.map { $0.params["shape"]! } == [4, 4, 2], "older patches: s&h and random both become random")
+    // a patched clock drives it: 8 pulses a second, division 1 bar (16 pulses) → one cycle every 2 s
+    var p = Patch()
+    let clk = PatchNode(kind: "lfo", x: 0, y: 0, params: ["shape": 3, "rate": 8, "depth": 0.5, "offset": 0.5])
+    let lfo = PatchNode(kind: "lfo", x: 0, y: 0, params: ["shape": 2, "div": Float(Divisions.index("1 bar")), "depth": 0.5, "offset": 0.5])
+    p.nodes = [clk, lfo]
+    p.cables = [PatchCable(fromNode: clk.id, fromPort: 0, toNode: lfo.id, toPort: 0)]
+    let h = GraphHost(sampleRate: sr); h.load(p); h.prepareForStart()
+    let ins = UnsafeMutablePointer<UnsafeMutablePointer<Float>>.allocate(capacity: 1); ins[0] = .allocate(capacity: kMaxBlock); ins[0].update(repeating: 0, count: kMaxBlock)
+    let outs = UnsafeMutablePointer<UnsafeMutablePointer<Float>>.allocate(capacity: 1); outs[0] = .allocate(capacity: kMaxBlock)
+    var y: [Float] = []
+    for _ in 0..<Int(5 * sr / Double(kMaxBlock)) {
+        h.process(frames: kMaxBlock, inputs: ins, inputCount: 0, outputs: outs, outputCount: 1)
+        y.append(contentsOf: UnsafeBufferPointer(start: h.node(lfo.id)!.outputs[0], count: kMaxBlock))
+    }
+    var wraps: [Int] = []
+    for i in 1..<y.count where y[i] < y[i - 1] - 0.5 { wraps.append(i) }
+    let period = wraps.count >= 2 ? Double(wraps[1] - wraps[0]) / sr : 0
+    check(abs(period - 2) < 0.02, "clock in: 16 pulses at 8 Hz = one 1-bar cycle every \(period) s")
 }
 
 print("seq~ up to 64 steps")
@@ -1732,7 +1769,7 @@ do {
 
 print("Inlet order: pitch first")
 do {
-    for k in ["modal", "macro", "shapes", "slopes"] { check(ModuleRegistry.spec(k)!.inputs.first == "pitch", "\(k)~ takes pitch first") }
+    for k in ["modal", "macro", "shapes"] { check(ModuleRegistry.spec(k)!.inputs.first == "pitch", "\(k)~ takes pitch first") }
     check(ModuleRegistry.spec("resonator")!.inputs == ["in", "pitch", "strum"], "resonator~: in, pitch, strum")
     for k in ["keys", "seq", "turing", "roll"] { check(Array(ModuleRegistry.spec(k)!.outputs.prefix(2)) == ["pitch", "gate"], "\(k)~ gives pitch, gate") }
     var old = Patch(); old.version = 6

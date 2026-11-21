@@ -152,31 +152,6 @@ private:
     MIXmod* dsp; RateBridge bridge; MIXmodParams q {};
 };
 
-class SlopesNode : public DSPNode {
-public:
-    SlopesNode(const ModuleSpec& s, double sr) : DSPNode(s, sr), dsp(mi_slopes_create()), bridge(sr, MI_SLOPES_RATE, MI_SLOPES_BLOCK, 1, 4) {}
-    ~SlopesNode() override { mi_slopes_destroy(dsp); }
-    void process(int frames, const float* const* in, uint64_t con, ProcessContext& ctx) override {
-        bool hasPitch = isConnected(con, 0), hasGate = isConnected(con, 1);
-        q.ramp_mode = clampIndex(params[0], 3); q.output_mode = clampIndex(params[1], 4); q.range = clampIndex(params[2], 3);
-        float semis = params[3] + (hasPitch ? cvSemitones(in[0][frames - 1]) : 0);
-        if (params[8] > 0.5f && q.range != 2) {
-            double hz = ctx.sampleRate / std::max(ctx.samplesPerBeat * Divisions::beats(params[9]), 1.0);
-            double root = q.range == 0 ? 0.125 : 2;
-            semis += float(12 * std::log2(std::max(hz, 1e-6) / root));
-        }
-        q.frequency = semis;
-        q.slope = params[4]; q.shape = params[5]; q.smoothness = params[6]; q.shift = params[7];
-        q.gate_patched = hasGate ? 1 : 0;
-        bridge.run(frames, [&](int, int i) { return hasGate ? in[1][i] : 0.0f; }, [&] {
-            mi_slopes_process(dsp, &q, bridge.inChannel(0), bridge.outChannel(0), bridge.outChannel(1), bridge.outChannel(2), bridge.outChannel(3));
-        }, [&](int c, int i, float v) { out(c)[i] = v; });
-        for (int c = 0; c < 4; ++c) readouts[size_t(c)] = out(c)[frames - 1];
-    }
-private:
-    MISlopes* dsp; RateBridge bridge; MISlopesParams q {};
-};
-
 class ChanceNode : public DSPNode {
 public:
     ChanceNode(const ModuleSpec& s, double sr) : DSPNode(s, sr), dsp(mi_chance_create()), bridge(sr, MI_CHANCE_RATE, MI_CHANCE_BLOCK, 2, 7) {}
@@ -206,31 +181,6 @@ public:
     }
 private:
     MIChance* dsp; RateBridge bridge; MIChanceParams q {};
-};
-
-class SegmentsNode : public DSPNode {
-public:
-    SegmentsNode(const ModuleSpec& s, double sr) : DSPNode(s, sr), dsp(mi_segments_create()), bridge(sr, MI_SEGMENTS_RATE, MI_SEGMENTS_BLOCK, 1, 2) {}
-    ~SegmentsNode() override { mi_segments_destroy(dsp); }
-    void process(int frames, const float* const* in, uint64_t con, ProcessContext&) override {
-        bool hasGate = isConnected(con, 0);
-        q.count = clampIndex(params[0], 6) + 1;
-        q.gate_patched = hasGate ? 1 : 0;
-        for (int k = 0; k < 6; ++k) {
-            int b = 1 + k * 4;
-            q.type[k] = clampIndex(params[size_t(b)], 3); q.primary[k] = params[size_t(b + 1)];
-            q.secondary[k] = params[size_t(b + 2)]; q.loop[k] = params[size_t(b + 3)] > 0.5f ? 1 : 0;
-        }
-        float active = 0;
-        float* o = out(0);
-        bridge.run(frames, [&](int, int i) { return hasGate ? in[0][i] : 0.0f; }, [&] {
-            mi_segments_process(dsp, &q, bridge.inChannel(0), bridge.outChannel(0), bridge.outChannel(1));
-            active = bridge.outChannel(1)[MI_SEGMENTS_BLOCK - 1];
-        }, [&](int c, int i, float v) { if (c == 0) o[i] = v; });
-        readouts[0] = o[frames - 1]; readouts[1] = active;
-    }
-private:
-    MISegments* dsp; RateBridge bridge; MISegmentsParams q {};
 };
 
 class ShapesNode : public DSPNode {
@@ -314,9 +264,7 @@ Factory factoryMI(const std::string& k) {
     if (k == "macro") return make<MacroNode>();
     if (k == "modal") return make<ModalNode>();
     if (k == "xmod") return make<XmodNode>();
-    if (k == "slopes") return make<SlopesNode>();
     if (k == "chance") return make<ChanceNode>();
-    if (k == "segments") return make<SegmentsNode>();
     if (k == "shapes") return make<ShapesNode>();
     if (k == "haze") return make<HazeNode>();
     return nullptr;

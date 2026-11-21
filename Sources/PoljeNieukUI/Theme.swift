@@ -175,7 +175,7 @@ enum BoxLayout {
 
     static func hasReadout(_ kind: String) -> Bool {
         ["clock", "looper", "grain", "rec", "comp", "limit", "repeat", "gain", "mix",
-         "sampler", "stretch", "peq", "keys", "seq", "turing", "roll", "drums", "slider", "knob", "segments", "lfo", "rack", "drumsynth", "scope", "wave", "chord"].contains(kind)
+         "sampler", "stretch", "peq", "keys", "seq", "turing", "roll", "drums", "slider", "knob", "lfo", "rack", "drumsynth", "scope", "wave", "chord"].contains(kind)
     }
 
     /// Height of the live area under the ports (waveforms and curves are taller).
@@ -191,7 +191,6 @@ enum BoxLayout {
         case "drums": return 8 * portRow + 6    // one lane per outlet row, lined up
         case "slider": return 180
         case "knob": return 100
-        case "segments": return 44
         case "rack": return 16 * 9 + 8 + 4 * 42 + 3 * 4 + 8
         case "drumsynth": return 4 * 14 + 8 + 42 + 8
         case "comp": return 92
@@ -269,11 +268,6 @@ enum BoxLayout {
             let n = DrumSynthLayout.shown
             return (0..<DrumSynthLayout.globals).map { $0 } + (b..<b + n).map { $0 }
                 + all.filter { $0 >= DrumSynthLayout.globals && !($0 >= b && $0 < b + n) && patched.contains(kParamPortBase + $0) }
-        }
-        if spec.kind == "segments" {
-            // only the segments in use
-            let n = SegmentsLayout.count(node.params["count"] ?? 1)
-            return all.filter { $0 == 0 || ($0 - 1) / 4 < n }
         }
         if spec.kind == "slider" || spec.kind == "knob" {
             // the controls themselves live in the display; their rows appear only while CV is patched into them

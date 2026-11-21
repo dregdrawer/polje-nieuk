@@ -7,7 +7,6 @@ using C = juce::Colour;
 static juce::String u8(const char* s) { return juce::String::fromUTF8(s); }
 static juce::String fmt(const char* f, double v) { char b[96]; std::snprintf(b, sizeof b, f, v); return b; }
 static float toDB(float x) { return 20 * std::log10(std::max(fin(x), 1e-5f)); }
-static bool clockPatched(AppModel& m, const juce::String& id) { for (auto& c : m.patch.cables) if (c.toNode == id && c.toPort == 0) return true; return false; }
 
 void drawStepGrid(GC& g, Pt size, int len, std::optional<float> division) {
     float cw = size.x / float(std::max(len, 1));
@@ -620,20 +619,16 @@ public:
             g.fill(Rect(0, 0, w, h), Theme::row());
             g.fill(Rect(0, h / 2, w, 0.5f), Theme::faint());
             juce::Path path;
-            if (shape == 5) {
-                for (int k = 0; k < 7; ++k) {
+            if (shape == 4) {
+                // random: the last six values and the glide now under way, scrolling left as it plays
+                float ph = std::clamp(fin(r[1]), 0.0f, 1.0f);
+                for (int i = 0; i <= 120; ++i) {
+                    float u = float(i) / 120 * 6 + ph;
+                    int k = std::min(int(u), 6); float f = u - float(k);
                     float a0 = r[size_t(2 + k)] * depth + offset, a1 = r[size_t(3 + k)] * depth + offset;
-                    for (int j = 0; j <= 10; ++j) {
-                        float t = float(j) / 10, kk = (1 - std::cos(juce::MathConstants<float>::pi * t)) / 2;
-                        Pt pt { (float(k) + t) / 7 * w, y(a0 + (a1 - a0) * kk) };
-                        if (k == 0 && j == 0) path.startNewSubPath(pt); else path.lineTo(pt);
-                    }
-                }
-            } else if (shape == 4) {
-                for (int k = 0; k < 8; ++k) {
-                    float v = r[size_t(2 + k)] * depth + offset, x0 = float(k) / 8 * w, x1 = float(k + 1) / 8 * w;
-                    if (k == 0) path.startNewSubPath(x0, y(v)); else path.lineTo(x0, y(v));
-                    path.lineTo(x1, y(v));
+                    float kk = (1 - std::cos(juce::MathConstants<float>::pi * f)) / 2;
+                    Pt pt { float(i) / 120 * w, y(a0 + (a1 - a0) * kk) };
+                    if (i == 0) path.startNewSubPath(pt); else path.lineTo(pt);
                 }
             } else {
                 for (int k = 0; k <= 80; ++k) {
@@ -646,7 +641,7 @@ public:
             }
             g.stroke(path, Theme::text().withMultipliedAlpha(0.75f), 1);
             float ph = std::clamp(fin(r[1]), 0.0f, 1.0f);
-            float px = shape == 4 ? w * 7.5f / 8 : (shape == 5 ? w : ph * w);
+            float px = shape == 4 ? w : ph * w;
             g.fill(Rect(px, 0, 0.5f, h), Theme::dim());
             g.fillEllipse(Rect(px - 3, y(r[0]) - 3, 6, 6), Theme::text());
             float bx = w + 8;
@@ -958,30 +953,6 @@ public:
     }
 };
 
-// ---------------------------------------------------------------- segments~
-
-class SegmentsDisplay : public NativeDisplay {
-public:
-    using NativeDisplay::NativeDisplay;
-    std::vector<LivePart> parts(Rect r) override {
-        auto* d = dsp();
-        if (!d) return {};
-        return { part("segments", r.reduced(0, 4), [this, d] { return LiveSig::readouts(d, 4, 1024) + LiveSig::patch(node); }, [this, d](GC& g, Pt size) {
-            int n = SegmentsLayout::count(p("count", 1));
-            int active = ri(d->readouts[1]);
-            float v = std::clamp(fin(d->readouts[0]) / 0.8f, 0.0f, 1.0f), w = size.x / float(n);
-            for (int k = 0; k < n; ++k) {
-                Rect rr(float(k) * w + 1, 0, w - 2, size.y);
-                g.fill(rr, k == active ? Theme::text().withMultipliedAlpha(0.18f) : Theme::row());
-                float tv = p("t" + std::to_string(k + 1), 0);
-                int ti = std::isfinite(tv) ? std::clamp(int(std::round(tv)), 0, 2) : 0;
-                g.text(SegmentsLayout::types[size_t(ti)], { rr.getCentreX(), 8 }, 9, Theme::dim());
-                if (k == active) g.fill(Rect(rr.getX(), size.y - v * (size.y - 16), rr.getWidth(), v * (size.y - 16)), Theme::text().withMultipliedAlpha(0.7f));
-            }
-        }, 1, true) };
-    }
-};
-
 // ---------------------------------------------------------------- slider~ / knob~
 
 class ControlsDisplay : public NativeDisplay {
@@ -1260,6 +1231,7 @@ public:
     virtual void audition(int k) = 0;
     virtual int nameLines() const { return 1; }
     float padLevel(int k) { auto* d = dsp(); return d ? fin(d->readouts[size_t(1 + k)]) : 0.0f; }
+    bool padPlaying(int k) { return padLevel(k) > 0.05f; }
     int len() const { return int(std::round(p("len", 16))); }
     int selected() const { return int(std::round(p("sel", 0))); }
     Rect inner(Rect r) const { return r.reduced(0, 4); }
@@ -1313,15 +1285,14 @@ public:
         Rect padsArea(inner(r).getX(), top, inner(r).getWidth(), padRect(0, r).getBottom() - top);
         auto pads = part("pads", padsArea, [this, n] {
             int64_t h = 0;
-            for (int k = 0; k < n; ++k) LiveSig::mix(h, LiveSig::q(std::clamp(padLevel(k), 0.0f, 1.0f), 8));
+            for (int k = 0; k < n; ++k) if (padPlaying(k)) h |= int64_t(1) << k;   // a pad lights while it plays: on / off, no fade
             return h;
         }, [this, n, r, padsArea](GC& g, Pt) {
             for (int k = 0; k < n; ++k) {
                 auto pr = padRect(k, r).translated(-padsArea.getX(), -padsArea.getY());
-                float lv = std::clamp(padLevel(k), 0.0f, 1.0f);
-                if (lv > 0.01f) g.fill(pr, Theme::text().withMultipliedAlpha(0.35f * lv));
+                if (padPlaying(k)) g.fill(pr, Theme::text().withMultipliedAlpha(0.3f));
             }
-        }, 2);
+        }, 1);
         return { roll, pads };
     }
     void paintStatic(GC& g, Rect r) override {
@@ -1377,7 +1348,7 @@ public:
         auto rr = rollRect(r);
         if (rr.contains(pt)) {
             int k = int((pt.y - rr.getY()) / laneHeight());
-            if (k >= 0 && k < lanes()) { select(k); if (!clockPatched(model, id)) audition(k); }
+            if (k >= 0 && k < lanes()) select(k);
             return true;
         }
         for (int k = 0; k < padRows() * padCols(); ++k) if (padRect(k, r).contains(pt)) { pressedPad = k; return true; }
@@ -1395,8 +1366,7 @@ public:
                 else { audition(k); select(k); }
                 return;
             }
-        select(k);
-        if (!clockPatched(model, id)) audition(k);
+        select(k);                   // the pad itself only selects it (the play button plays it)
     }
 private:
     std::optional<float> paint;
@@ -1467,7 +1437,6 @@ std::unique_ptr<NativeDisplay> NativeDisplay::make(AppModel& m, const PatchNode&
     if (k == "scope") return std::make_unique<ScopeDisplay>(m, n, s);
     if (k == "drumsynth") return std::make_unique<DrumSynthDisplay>(m, n, s);
     if (k == "rack") return std::make_unique<RackDisplay>(m, n, s);
-    if (k == "segments") return std::make_unique<SegmentsDisplay>(m, n, s);
     if (k == "slider" || k == "knob") return std::make_unique<ControlsDisplay>(m, n, s);
     if (k == "peq") return std::make_unique<EQDisplay>(m, n, s);
     if (k == "clock") return std::make_unique<ClockDisplay>(m, n, s);

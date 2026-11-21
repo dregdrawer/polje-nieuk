@@ -429,6 +429,8 @@ public:
         bool changed = false;
         if (h != sig) {
             sig = h;
+            // the octave setting moves the remembered chord too, so voice leading doesn't pull it back
+            if (octave != lastOctave) { for (auto& v : last) v += float(12 * (octave - lastOctave)); lastOctave = octave; }
             auto c = Chords::build(mode, key, scale, degree, size, type, voices, inversion, spread, octave, shift,
                                    leading && int(last.size()) == voices ? &last : nullptr);
             for (int k = 0; k < maxVoices; ++k) notes[k] = k < int(c.notes.size()) ? c.notes[size_t(k)] : (c.notes.empty() ? 0 : c.notes.back());
@@ -463,7 +465,7 @@ public:
 private:
     float notes[maxVoices] = {};
     int count = 3, retrig = 0, chordRoot = 0, quality = 0;
-    std::vector<float> last;
+    std::vector<float> last; int lastOctave = 0;
     unsigned long long sig = 0x8000000000000000ull;
     EdgeDetector gateEdge;
     bool gateHigh = false, alternate = false, on[maxVoices] = {};

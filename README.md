@@ -113,11 +113,9 @@ Every voice takes **pitch first**, then its gate / trigger — the same order th
 
 **Modulation**
 - `slider~` / `knob~`: 1, 2, 4 or 8 big faders or knobs, each with its own CV outlet (0…10 V, ±10 V, 0…5 V, ±5 V or 0…1 V, with smoothing). Several fingers can move several controls at once; double-tap returns a control to the middle. Made for live playing: patch them into any parameter. Patched into a parameter, a control *sets* it across its whole range (other modulation still adds on top), and shows the target's name and live value. Dropped on a `mix~` channel inlet, a fader / knob controls that channel's level.
-- `segments~`: chain 1–6 segments, each a ramp (time + shape), step (level + glide) or hold (level + time), with loop points. That gives envelopes from AD to multi-stage, looping LFOs, step sequences and sample & hold. Gate inlet.
-- `slopes~`: function generator (Gillet DSP) with four related outputs: AD / looping / AR, gates / amplitude / phase / frequency output modes, low/mid/audio range, and clock sync.
 - `chance~`: random gates T1–T3 and quantised voltages X1–X3 + Y (Gillet DSP), seven T models, déjà-vu looping, six scales; follows the app clock or external clock inlets.
-- `lfo~`: sine, triangle, saw, square, s&h or random (a smooth random wander); free or clock-synced; the display shows the waveform with a moving playhead and the current value.
-- `env~`, `rand~`
+- `lfo~`: sine, triangle, saw, square or random (a smooth random wander); free or clock-synced (1/32 up to every 16 bars); the display shows the waveform with a moving playhead and the current value.
+- `env~`
 - `atten~`: attenuverter, offset and slew; outputs a constant when nothing is patched in.
 
 **Utility**
@@ -204,4 +202,4 @@ To add a module: subclass `DSPNode` (no allocation or locks in `process`), then 
 
 ## Credits
 
-`texture~`, `resonator~`, `macro~`, `modal~`, `shapes~`, `xmod~`, `slopes~`, `chance~`, `segments~` and `haze~` use the DSP source code of ten Eurorack modules designed by **Émilie Gillet**, released under the MIT licence (`Vendor/mutable`; every source file carries its copyright notice, and the licence text is in `Vendor/mutable/stmlib/LICENSE`). Only the DSP is used, through a thin bridge (`Vendor/mutable/bridge`). Following the original author's guidelines for derivative works, the original brand and module names aren't used in the app.
+`texture~`, `resonator~`, `macro~`, `modal~`, `shapes~`, `xmod~`, `chance~` and `haze~` use the DSP source code of eight Eurorack modules designed by **Émilie Gillet**, released under the MIT licence (`Vendor/mutable`; every source file carries its copyright notice, and the licence text is in `Vendor/mutable/stmlib/LICENSE`). Only the DSP is used, through a thin bridge (`Vendor/mutable/bridge`). Following the original author's guidelines for derivative works, the original brand and module names aren't used in the app.

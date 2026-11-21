@@ -51,38 +51,6 @@ final class EnvelopeNode: DSPNode {
     }
 }
 
-/// rand~ : random / sample-and-hold source with smoothing, free or clock-locked.
-final class RandomNode: DSPNode {
-    // 0 rate, 1 sync, 2 division, 3 smooth, 4 depth, 5 offset, 6 polarity
-    private var clock = PhaseClock()
-    private var prev: Double = 0
-    private var target: Float = 0, cur: Float = 0
-    private var rng = XorShift(seed: 0x5EED_1234)
-    private var trig = EdgeDetector()
-
-    override func process(frames: Int, inputs: UnsafePointer<UnsafePointer<Float>>, connected: UInt64, ctx: ProcessContext) {
-        let sync = params[1] > 0.5
-        let hz = Double(params[0])
-        let div = Divisions.beats(params[2])
-        let periodSamples = sync ? div * ctx.samplesPerBeat : sampleRate / max(hz, 0.001)
-        let smooth = params[3]
-        let coef: Float = smooth <= 0.001 ? 1 : 1 - expf(-3 / (smooth * Float(periodSamples)))
-        let depth = params[4], off = params[5], uni = params[6] > 0.5
-        let hasTrig = isConnected(connected, 0)
-        let tin = inputs[0], out = outputs[0]
-        for i in 0..<frames {
-            let p = clock.advance(sync: sync, hz: hz, divBeats: div, beat: ctx.beat[i], sampleRate: sampleRate)
-            var fire = hasTrig ? trig.rising(tin[i]) : p < prev
-            if !hasTrig && sync && ctx.beat[i] < 0 { fire = false }
-            prev = p
-            if fire { target = uni ? rng.next() : rng.next() * 2 - 1 }
-            cur += (target - cur) * coef
-            out[i] = cur * depth + off
-        }
-        readouts[0] = out[frames - 1]
-    }
-}
-
 /// atten~ : attenuverter + offset + slew. With nothing patched in it is a constant (handy for CV).
 final class AttenNode: DSPNode {
     // 0 amount, 1 offset, 2 slew ms

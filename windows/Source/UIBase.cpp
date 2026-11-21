@@ -195,7 +195,6 @@ void GC::fillGradient(Rect r, const std::vector<std::pair<juce::Colour, float>>&
 // ---------------------------------------------------------------- layouts
 
 namespace ControlsLayout { const std::vector<std::string> ranges = { "0…10 V", "±10 V", "0…5 V", "±5 V", "0…1 V" }; }
-namespace SegmentsLayout { const std::vector<std::string> types = { "ramp", "step", "hold" }; }
 
 namespace BoxLayout {
 std::map<juce::String, PortUsage> usage;
@@ -278,7 +277,7 @@ float readoutHeight(const PatchNode& n) {
 std::pair<bool, bool> resizable(const std::string& k) { return { k != "in" && k != "out", readoutHeight(k) > 0 }; }
 bool hasReadout(const std::string& k) {
     static const std::set<std::string> s { "clock", "looper", "grain", "rec", "comp", "limit", "repeat", "gain", "mix", "sampler", "stretch", "peq",
-        "keys", "seq", "turing", "roll", "drums", "slider", "knob", "segments", "lfo", "rack", "drumsynth", "scope", "wave", "chord" };
+        "keys", "seq", "turing", "roll", "drums", "slider", "knob", "lfo", "rack", "drumsynth", "scope", "wave", "chord" };
     return s.count(k) > 0;
 }
 float readoutHeight(const std::string& k) {
@@ -292,7 +291,6 @@ float readoutHeight(const std::string& k) {
     if (k == "drums") return 8 * portRow + 6;
     if (k == "slider") return 180;
     if (k == "knob") return 100;
-    if (k == "segments") return 44;
     if (k == "rack") return 16 * 9 + 8 + 4 * 42 + 3 * 4 + 8;
     if (k == "drumsynth") return 4 * 14 + 8 + 42 + 8;
     if (k == "comp") return 92;
@@ -371,12 +369,6 @@ std::vector<int> rowParams(const ModuleSpec& s, const PatchNode& n) {
         for (int k = 0; k < globals; ++k) r.push_back(k);
         for (int k = b; k < b + shown; ++k) r.push_back(k);
         for (int i : all) if (i >= globals && !(i >= b && i < b + shown) && patched.count(kParamPortBase + i)) r.push_back(i);
-        return r;
-    }
-    if (s.kind == "segments") {
-        int cnt = SegmentsLayout::count(param(n, "count", 1));
-        std::vector<int> r;
-        for (int i : all) if (i == 0 || (i - 1) / 4 < cnt) r.push_back(i);
         return r;
     }
     if (s.kind == "slider" || s.kind == "knob") {

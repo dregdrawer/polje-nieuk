@@ -2,7 +2,7 @@ import Foundation
 import MutableDSP
 
 // Second batch of modules built on Emilie Gillet's open-source Eurorack DSP (MIT licence, see Vendor/mutable):
-// xmod~ (cross-modulator), slopes~ (4-output function generator), chance~ (random gates and voltages).
+// xmod~ (cross-modulator), chance~ (random gates and voltages).
 
 // MARK: - xmod~ (cross / meta modulator)
 
@@ -37,51 +37,6 @@ final class XmodNode: DSPNode {
         bridge.run(frames: frames, input: { c, i in c == 0 ? car[i] : mod[i] }, render: {
             mi_xmod_process(dsp, &q, bridge.inChannel(0), bridge.inChannel(1), bridge.outChannel(0), bridge.outChannel(1))
         }, output: { c, i, v in if c == 0 { o[i] = v } else { aux[i] = v } })
-    }
-}
-
-// MARK: - slopes~ (4-channel function generator)
-
-final class SlopesNode: DSPNode {
-    // 0 ramp mode, 1 output mode, 2 range, 3 frequency, 4 slope, 5 shape, 6 smoothness, 7 shift, 8 sync, 9 division
-    // inputs: 0 pitch (0.1 = 1 octave), 1 gate/trig
-    private let dsp: OpaquePointer
-    private let bridge: RateBridge
-    private var q = MISlopesParams()
-
-    override init(spec: ModuleSpec, sampleRate: Double) {
-        dsp = mi_slopes_create()!
-        bridge = RateBridge(hostRate: sampleRate, nativeRate: Double(MI_SLOPES_RATE), block: Int(MI_SLOPES_BLOCK), chIn: 1, chOut: 4)
-        super.init(spec: spec, sampleRate: sampleRate)
-    }
-    deinit { mi_slopes_destroy(dsp) }
-
-    override func process(frames: Int, inputs: UnsafePointer<UnsafePointer<Float>>, connected: UInt64, ctx: ProcessContext) {
-        let pitch = inputs[0], gate = inputs[1]                   // inputs: 0 pitch, 1 gate
-        let hasPitch = isConnected(connected, 0), hasGate = isConnected(connected, 1)
-        q.ramp_mode = Int32(clampIndex(params[0], 3))
-        q.output_mode = Int32(clampIndex(params[1], 4))
-        q.range = Int32(clampIndex(params[2], 3))
-        var semis = params[3] + (hasPitch ? cvSemitones(pitch[frames - 1]) : 0)
-        // sync: one cycle per clock division, the frequency knob becomes a ±ratio around it
-        let sync = params[8] > 0.5 && q.range != 2
-        if sync {
-            let beats = Divisions.beats(params[9])
-            let hz = ctx.sampleRate / max(ctx.samplesPerBeat * beats, 1)
-            let root: Double = q.range == 0 ? 0.125 : 2
-            semis += Float(12 * log2(max(hz, 1e-6) / root))
-        }
-        q.frequency = semis
-        q.slope = params[4]; q.shape = params[5]; q.smoothness = params[6]; q.shift = params[7]
-        q.gate_patched = hasGate ? 1 : 0
-        let o0 = outputs[0], o1 = outputs[1], o2 = outputs[2], o3 = outputs[3]
-        bridge.run(frames: frames, input: { _, i in hasGate ? gate[i] : 0 }, render: {
-            mi_slopes_process(dsp, &q, bridge.inChannel(0), bridge.outChannel(0), bridge.outChannel(1),
-                              bridge.outChannel(2), bridge.outChannel(3))
-        }, output: { c, i, v in
-            switch c { case 0: o0[i] = v; case 1: o1[i] = v; case 2: o2[i] = v; default: o3[i] = v }
-        })
-        for c in 0..<4 { readouts[c] = outputs[c][frames - 1] }
     }
 }
 
@@ -140,74 +95,6 @@ final class ChanceNode: DSPNode {
                               bridge.outChannel(3), bridge.outChannel(4), bridge.outChannel(5), bridge.outChannel(6))
         }, output: { c, i, v in outputs[c][i] = v })
         for c in 0..<7 { readouts[c] = outputs[c][frames - 1] }
-    }
-}
-
-// MARK: - segments~ (chainable ramp / step / hold segments: envelopes, LFOs, sequences)
-
-public enum SegmentsLayout {
-    public static let maxSegments = 6
-    public static let types = ["ramp", "step", "hold"]
-    /// parameter indices of segment k (0-based): type, primary, secondary, loop
-    public static func base(_ k: Int) -> Int { 1 + k * 4 }
-    public static func count(_ v: Float) -> Int { clampIndex(v, maxSegments) + 1 }
-    static func params() -> [ParamSpec] {
-        var p: [ParamSpec] = [.choice("count", "segments", (1...maxSegments).map { "\($0)" }, def: 1)]
-        let defTypes = [0, 0, 2, 0, 0, 0]
-        let defPrimary: [Float] = [0.25, 0.45, 0.6, 0.4, 0.4, 0.4]
-        for k in 1...maxSegments {
-            p.append(.choice("t\(k)", "\(k) type", types, def: defTypes[k - 1]))
-            p.append(ParamSpec("a\(k)", "\(k) time/level", 0, 1, defPrimary[k - 1], unit: "%"))
-            p.append(ParamSpec("b\(k)", "\(k) shape/time", 0, 1, 0.5, unit: "%"))
-            p.append(.toggle("l\(k)", "\(k) loop", false))
-        }
-        return p
-    }
-}
-
-final class SegmentsNode: DSPNode {
-    // 0 count, then per segment: type, primary, secondary, loop
-    // inputs: 0 gate   outputs: 0 out
-    private let dsp: OpaquePointer
-    private let bridge: RateBridge
-    private var q = MISegmentsParams()
-
-    override init(spec: ModuleSpec, sampleRate: Double) {
-        dsp = mi_segments_create()!
-        bridge = RateBridge(hostRate: sampleRate, nativeRate: Double(MI_SEGMENTS_RATE), block: Int(MI_SEGMENTS_BLOCK), chIn: 1, chOut: 2)
-        super.init(spec: spec, sampleRate: sampleRate)
-    }
-    deinit { mi_segments_destroy(dsp) }
-
-    override func process(frames: Int, inputs: UnsafePointer<UnsafePointer<Float>>, connected: UInt64, ctx: ProcessContext) {
-        let gate = inputs[0], hasGate = isConnected(connected, 0)
-        let n = SegmentsLayout.count(params[0])
-        q.count = Int32(n)
-        q.gate_patched = hasGate ? 1 : 0
-        withUnsafeMutableBytes(of: &q.type) { t in
-            let tp = t.bindMemory(to: Int32.self)
-            for k in 0..<6 { tp[k] = Int32(clampIndex(params[SegmentsLayout.base(k)], 3)) }
-        }
-        withUnsafeMutableBytes(of: &q.loop) { l in
-            let lp = l.bindMemory(to: Int32.self)
-            for k in 0..<6 { lp[k] = params[SegmentsLayout.base(k) + 3] > 0.5 ? 1 : 0 }
-        }
-        withUnsafeMutableBytes(of: &q.primary) { a in
-            let ap = a.bindMemory(to: Float.self)
-            for k in 0..<6 { ap[k] = params[SegmentsLayout.base(k) + 1] }
-        }
-        withUnsafeMutableBytes(of: &q.secondary) { b in
-            let bp = b.bindMemory(to: Float.self)
-            for k in 0..<6 { bp[k] = params[SegmentsLayout.base(k) + 2] }
-        }
-        let o = outputs[0]
-        var active: Float = 0
-        bridge.run(frames: frames, input: { _, i in hasGate ? gate[i] : 0 }, render: {
-            mi_segments_process(dsp, &q, bridge.inChannel(0), bridge.outChannel(0), bridge.outChannel(1))
-            active = bridge.outChannel(1)[Int(MI_SEGMENTS_BLOCK) - 1]
-        }, output: { c, i, v in if c == 0 { o[i] = v } })
-        readouts[0] = o[frames - 1]
-        readouts[1] = active
     }
 }
 

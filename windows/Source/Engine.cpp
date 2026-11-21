@@ -11,8 +11,8 @@ namespace Divisions {
 const std::vector<std::string> names = { "1/32", "1/16T", "1/16", "1/8T", "1/16D", "1/8", "1/4T", "1/8D",
                                          "1/4", "1/2T", "1/4D", "1/2", "1/2D", "1 bar", "2 bars", "4 bars" };
 static const double beatValues[] = { 0.125, 1.0 / 6, 0.25, 1.0 / 3, 0.375, 0.5, 2.0 / 3, 0.75,
-                                     1, 4.0 / 3, 1.5, 2, 3, 4, 8, 16 };
-double beats(float v) { return beatValues[clampIndex(v, 16)]; }
+                                     1, 4.0 / 3, 1.5, 2, 3, 4, 8, 16, 32, 64 };   // the last two: lfo~ only (8 / 16 bars)
+double beats(float v) { return beatValues[clampIndex(v, 18)]; }
 int index(const std::string& n) {
     auto it = std::find(names.begin(), names.end(), n);
     return it == names.end() ? 0 : int(it - names.begin());
@@ -514,6 +514,19 @@ Patch Patch::migrated() const {
             return false;
         }), p.cables.end());
         for (auto& n : p.nodes) if (n.kind == "wave" || n.kind == "shapes" || n.kind == "macro") n.params.erase("voices");
+    }
+    if (version < 13)   // lfo~ lost its s&h shape; s&h (4) and random (5) both become random (now 4)
+        for (auto& n : p.nodes)
+            if (n.kind == "lfo" && n.params.count("shape") && std::isfinite(n.params["shape"]) && n.params["shape"] >= 3.5f) n.params["shape"] = 4;
+    if (version < 13) {   // rand~, slopes~ and segments~ are gone (lfo~ covers them): their boxes and cables go too
+        std::set<juce::String> gone;
+        for (auto& n : p.nodes) if (n.kind == "rand" || n.kind == "slopes" || n.kind == "segments") gone.insert(n.id);
+        if (!gone.empty()) {
+            p.nodes.erase(std::remove_if(p.nodes.begin(), p.nodes.end(), [&](const PatchNode& n) { return gone.count(n.id) > 0; }), p.nodes.end());
+            p.cables.erase(std::remove_if(p.cables.begin(), p.cables.end(), [&](const PatchCable& c) { return gone.count(c.fromNode) || gone.count(c.toNode); }), p.cables.end());
+            for (auto& g : p.groups) g.members.erase(std::remove_if(g.members.begin(), g.members.end(), [&](const juce::String& m) { return gone.count(m) > 0; }), g.members.end());
+            p.groups.erase(std::remove_if(p.groups.begin(), p.groups.end(), [](const PatchGroup& g) { return g.members.empty(); }), p.groups.end());
+        }
     }
     if (version < 9)
         for (auto& n : p.nodes) {

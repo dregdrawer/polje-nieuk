@@ -213,23 +213,48 @@ final class MixerNode: DSPNode {
 }
 
 /// lfo~ : free or clock-synced modulation source (also useful as CV back into the modular).
+/// A patched clock drives it instead (its pulses count as 1/16 notes, so the division still applies);
+/// reset starts the wave from the top.
 final class LFONode: DSPNode {
     private var phase: Double = 0
     private var prevPhase: Double = 0
     private var held: Float = 0
     private var prevHeld: Float = 0
     private var rng = XorShift(seed: 0x1234_5678)
+    private var clockEdge = EdgeDetector(), resetEdge = EdgeDetector()
+    private var pulses = -1, samplesSincePulse = 0, pulsePeriod = 3000
+    private var beatZero: Double = 0                 // synced to the beat: where a reset put the start
 
     override func process(frames: Int, inputs: UnsafePointer<UnsafePointer<Float>>, connected: UInt64, ctx: ProcessContext) {
-        let shape = clampIndex(params[0], 6)
+        let shape = clampIndex(params[0], 5)
         let sync = params[1] > 0.5
         let rate = Double(params[2])
         let div = Divisions.beats(params[3])
         let depth = params[4], offset = params[5]
         let out = outputs[0]
+        let hasClock = isConnected(connected, 0), hasReset = isConnected(connected, 1)
+        let ck = inputs[0], rs = inputs[1]
+        if ctx.stopPending { pulses = -1; beatZero = 0 }
         for i in 0..<frames {
-            if sync {
-                let p = ctx.beat[i] / div
+            if hasReset && resetEdge.rising(rs[i]) {
+                pulses = -1; phase = 0; prevPhase = 0
+                beatZero = ctx.beat[i]
+            }
+            if hasClock {
+                // follow the patched clock: 1 pulse = 1/16 note, smooth between pulses
+                samplesSincePulse += 1
+                if clockEdge.rising(ck[i]) && ctx.running {
+                    if pulses >= 0 && samplesSincePulse > 16 { pulsePeriod = samplesSincePulse }
+                    pulses += 1
+                    samplesSincePulse = 0
+                }
+                if pulses >= 0 {
+                    let pos = Double(pulses) + min(Double(samplesSincePulse) / Double(max(pulsePeriod, 1)), 0.999)
+                    let p = pos * 0.25 / div
+                    phase = p - floor(p)
+                }
+            } else if sync {
+                let p = (ctx.beat[i] - beatZero) / div
                 phase = p - floor(p)
             } else {
                 phase += rate / sampleRate
@@ -238,7 +263,7 @@ final class LFONode: DSPNode {
             if phase < prevPhase {
                 prevHeld = held
                 held = rng.next() * 2 - 1
-                // UI: the last 8 held values (s&h display), newest last
+                // UI: the last 8 random values, newest last
                 for k in 2..<9 { readouts[k] = readouts[k + 1] }
                 readouts[9] = held
             }
@@ -250,7 +275,6 @@ final class LFONode: DSPNode {
             case 1: v = p < 0.5 ? 4 * p - 1 : 3 - 4 * p
             case 2: v = 2 * p - 1
             case 3: v = p < 0.5 ? 1 : -1
-            case 4: v = held
             default:
                 // random: glide smoothly (cosine) from the last random value to the next over each cycle
                 let k = (1 - cosf(.pi * p)) / 2

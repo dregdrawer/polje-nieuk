@@ -6,8 +6,7 @@ BoxGeo::BoxGeo(const PatchNode& n, const ModuleSpec& s, const HardwareCounts& hw
     : node(&n), spec(&s), hw(hw_) {
     w = BoxLayout::width(n); h = BoxLayout::height(n, s, hw);
     if (s.bypass() != BypassMode::none) buttons.push_back({ bypass, Rect(6, 2, 18, 18) });
-    std::vector<std::pair<Button, float>> right { { collapse, 18 } };
-    if (selected) right.push_back({ close, 18 });
+    std::vector<std::pair<Button, float>> right { { close, 18 }, { collapse, 18 } };   // the cross always, at the very right
     if (dynamic_cast<SampleBufferNode*>(m.node(n.id))) right.push_back({ audioMenu, 18 });
     if (m.canAutomate(s) && !n.collapsed) {
         if (m.hasAutomation(n)) right.push_back({ resetAuto, 15 });

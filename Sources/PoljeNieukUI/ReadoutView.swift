@@ -59,25 +59,6 @@ struct ReadoutView: View {
             if let n = node as? DrumSynthNode { DrumSynthView(node: n, model: model, patchNode: patchNode).padding(.vertical, 4) }
         case "rack":
             if let n = node as? RackNode { RackView(node: n, model: model, patchNode: patchNode).padding(.vertical, 4) }
-        case "segments":
-            if let node {
-                LiveCanvas(signature: { LiveSig.readouts(node, 4, steps: 1024) &+ LiveSig.patch(patchNode) }, smooth: true) { ctx, size in
-                    let n = SegmentsLayout.count(patchNode.params["count"] ?? 1)
-                    let active = ri(node.readouts[1]), v = CGFloat(min(max(fin(node.readouts[0]) / 0.8, 0), 1))
-                    let w = size.width / CGFloat(n)
-                    for k in 0..<n {
-                        let r = CGRect(x: CGFloat(k) * w + 1, y: 0, width: w - 2, height: size.height)
-                        ctx.fill(Path(r), with: .color(k == active ? Theme.text.opacity(0.18) : Theme.row))
-                        let t = SegmentsLayout.types[clampTypeIndex(patchNode.params["t\(k + 1)"] ?? 0)]
-                        ctx.draw(LiveText(t, size: 9, color: Theme.dim), at: CGPoint(x: r.midX, y: 8))
-                        if k == active {
-                            ctx.fill(Path(CGRect(x: r.minX, y: size.height - v * (size.height - 16), width: r.width, height: v * (size.height - 16))),
-                                     with: .color(Theme.text.opacity(0.7)))
-                        }
-                    }
-                }
-                .padding(.vertical, 4)
-            }
         case "slider", "knob":
             if let node {
                 ControlsView(style: kind == "slider" ? .slider : .knob, node: node, model: model, patchNode: patchNode)
@@ -263,7 +244,6 @@ struct ProgressBar: View {
     }
 }
 
-@inline(__always) func clampTypeIndex(_ v: Float) -> Int { v.isFinite ? min(max(Int(v.rounded()), 0), SegmentsLayout.types.count - 1) : 0 }
 
 
 /// ▶ ❚❚ ■ on the clock box. Pause holds the beat where it is; stop also rewinds, so ▶ starts everything

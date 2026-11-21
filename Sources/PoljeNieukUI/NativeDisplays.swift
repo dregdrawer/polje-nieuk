@@ -51,7 +51,6 @@ import PoljeNieukCore
         case "scope": return ScopeDisplay(model: model, node: node, spec: spec)
         case "drumsynth": return DrumSynthDisplay(model: model, node: node, spec: spec)
         case "rack": return RackDisplay(model: model, node: node, spec: spec)
-        case "segments": return SegmentsDisplay(model: model, node: node, spec: spec)
         case "slider", "knob": return ControlsDisplay(model: model, node: node, spec: spec)
         case "peq": return EQDisplay(model: model, node: node, spec: spec)
         case "clock": return ClockDisplay(model: model, node: node, spec: spec)
@@ -497,33 +496,6 @@ final class ScopeDisplay: NativeDisplay {
     }
 }
 
-// MARK: - segments~
-
-final class SegmentsDisplay: NativeDisplay {
-    override func parts(_ r: CGRect) -> [LivePart] {
-        guard let d = dsp else { return [] }
-        return [part("segments", r.insetBy(dx: 0, dy: 4), smooth: true, signature: { [weak self] in
-            LiveSig.readouts(d, 4, steps: 1024) &+ (self.map { LiveSig.patch($0.node) } ?? 0)
-        }) { [weak self] ctx, size in
-            guard let self else { return }
-            let patchNode = self.node
-            let n = SegmentsLayout.count(patchNode.params["count"] ?? 1)
-            let active = ri(d.readouts[1]), v = CGFloat(min(max(fin(d.readouts[0]) / 0.8, 0), 1))
-            let w = size.width / CGFloat(n)
-            for k in 0..<n {
-                let r = CGRect(x: CGFloat(k) * w + 1, y: 0, width: w - 2, height: size.height)
-                ctx.fill(Path(r), with: .color(k == active ? Theme.text.opacity(0.18) : Theme.row))
-                let t = SegmentsLayout.types[clampTypeIndex(patchNode.params["t\(k + 1)"] ?? 0)]
-                ctx.draw(LiveText(t, size: 9, color: Theme.dim), at: CGPoint(x: r.midX, y: 8))
-                if k == active {
-                    ctx.fill(Path(CGRect(x: r.minX, y: size.height - v * (size.height - 16), width: r.width, height: v * (size.height - 16))),
-                             with: .color(Theme.text.opacity(0.7)))
-                }
-            }
-        }]
-    }
-}
-
 // MARK: - slider~ / knob~
 
 final class ControlsDisplay: NativeDisplay {
@@ -640,6 +612,7 @@ class PadsDisplay: NativeDisplay {
     func laneName(_ k: Int) -> String { "" }
     func padName(_ k: Int) -> String { laneName(k) }
     func padLevel(_ k: Int) -> Float { fin(dsp?.readouts[1 + k] ?? 0) }
+    func padPlaying(_ k: Int) -> Bool { padLevel(k) > 0.05 }
     func audition(_ k: Int) {}
     var nameLines: Int { 1 }
     private var paint: Float?
@@ -647,7 +620,6 @@ class PadsDisplay: NativeDisplay {
 
     var len: Int { Int((node.params["len"] ?? 16).rounded()) }
     var selected: Int { Int((node.params["sel"] ?? 0).rounded()) }
-    var clocked: Bool { clockPatched(model, id) }
 
     func inner(_ r: CGRect) -> CGRect { r.insetBy(dx: 0, dy: 4) }
     func rollRect(_ r: CGRect) -> CGRect {
@@ -681,21 +653,20 @@ class PadsDisplay: NativeDisplay {
             LiveSig.mix(&h, LiveSig.patch(self.node)); LiveSig.mix(&h, self.selected)
             return h
         }) { [weak self] g, size in self?.drawRoll(g, size) }
-        // the pads' levels light them as they play
+        // a pad lights while it plays: just on / off, no fade
         let n = padRows * padCols
         let top = padRect(n - padCols, r).minY
         let padsArea = CGRect(x: inner(r).minX, y: top, width: inner(r).width, height: padRect(0, r).maxY - top)
-        let pads = part("pads", padsArea, every: 2, signature: { [weak self] in
+        let pads = part("pads", padsArea, signature: { [weak self] in
             guard let self else { return 0 }
             var h = 0
-            for k in 0..<n { LiveSig.mix(&h, LiveSig.q(min(max(self.padLevel(k), 0), 1), 8)) }
+            for k in 0..<n where self.padPlaying(k) { h |= 1 << k }
             return h
         }) { [weak self] g, size in
             guard let self else { return }
             for k in 0..<n {
                 let pr = self.padRect(k, r).offsetBy(dx: -padsArea.minX, dy: -padsArea.minY)
-                let lv = CGFloat(min(max(self.padLevel(k), 0), 1))
-                if lv > 0.01 { g.fill(Path(pr), with: .color(Theme.text.opacity(0.35 * lv))) }
+                if self.padPlaying(k) { g.fill(Path(pr), with: .color(Theme.text.opacity(0.3))) }
             }
         }
         return [roll, pads]
@@ -759,7 +730,7 @@ class PadsDisplay: NativeDisplay {
         let rr = rollRect(r)
         if rr.contains(p) {          // a lane name
             let k = Int((p.y - rr.minY) / laneHeight)
-            if k >= 0 && k < lanes { select(k); if !clocked { audition(k) } }
+            if k >= 0 && k < lanes { select(k) }
             return true
         }
         for k in 0..<(padRows * padCols) where padRect(k, r).contains(p) { pressedPad = k; return true }
@@ -778,8 +749,7 @@ class PadsDisplay: NativeDisplay {
             }
             return
         }
-        select(k)
-        if !clocked { audition(k) }
+        select(k)                    // the pad itself only selects it (▶ plays it)
     }
 }
 

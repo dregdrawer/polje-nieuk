@@ -6952,7 +6952,7 @@
           "def" : 13,
           "key" : "div",
           "kind" : "choice",
-          "max" : 15,
+          "max" : 17,
           "min" : 0,
           "name" : "division",
           "options" : [
@@ -6971,7 +6971,9 @@
             "1\/2D",
             "1 bar",
             "2 bars",
-            "4 bars"
+            "4 bars",
+            "8 bars",
+            "16 bars"
           ],
           "unit" : ""
         },
@@ -7649,124 +7651,6 @@
 
       ],
       "summary" : "Envelope follower → control signal"
-    },
-    {
-      "aliases" : [
-        "random",
-        "s&h",
-        "sh",
-        "noise",
-        "chaos"
-      ],
-      "bypass" : "silent",
-      "category" : "Modulation",
-      "inputs" : [
-        "trig"
-      ],
-      "kind" : "rand",
-      "name" : "rand~",
-      "outputs" : [
-        "out"
-      ],
-      "outputsAreCV" : true,
-      "params" : [
-        {
-          "curve" : "exponential",
-          "def" : 2,
-          "key" : "rate",
-          "kind" : "continuous",
-          "max" : 50,
-          "min" : 0.05000000074505806,
-          "name" : "rate",
-          "unit" : "Hz"
-        },
-        {
-          "curve" : "linear",
-          "def" : 0,
-          "key" : "sync",
-          "kind" : "toggle",
-          "max" : 1,
-          "min" : 0,
-          "name" : "sync",
-          "unit" : ""
-        },
-        {
-          "curve" : "linear",
-          "def" : 8,
-          "key" : "div",
-          "kind" : "choice",
-          "max" : 15,
-          "min" : 0,
-          "name" : "division",
-          "options" : [
-            "1\/32",
-            "1\/16T",
-            "1\/16",
-            "1\/8T",
-            "1\/16D",
-            "1\/8",
-            "1\/4T",
-            "1\/8D",
-            "1\/4",
-            "1\/2T",
-            "1\/4D",
-            "1\/2",
-            "1\/2D",
-            "1 bar",
-            "2 bars",
-            "4 bars"
-          ],
-          "unit" : ""
-        },
-        {
-          "curve" : "linear",
-          "def" : 0,
-          "key" : "smooth",
-          "kind" : "continuous",
-          "max" : 1,
-          "min" : 0,
-          "name" : "smooth",
-          "unit" : "%"
-        },
-        {
-          "curve" : "linear",
-          "def" : 0.5,
-          "key" : "depth",
-          "kind" : "continuous",
-          "max" : 1,
-          "min" : 0,
-          "name" : "depth",
-          "unit" : "%"
-        },
-        {
-          "curve" : "linear",
-          "def" : 0,
-          "key" : "off",
-          "kind" : "continuous",
-          "max" : 1,
-          "min" : -1,
-          "name" : "offset",
-          "unit" : ""
-        },
-        {
-          "curve" : "linear",
-          "def" : 0,
-          "key" : "pol",
-          "kind" : "choice",
-          "max" : 1,
-          "min" : 0,
-          "name" : "polarity",
-          "options" : [
-            "bipolar",
-            "unipolar"
-          ],
-          "unit" : ""
-        }
-      ],
-      "polyOutputs" : [
-
-      ],
-      "summary" : "Random \/ sample & hold, smoothable"
     },
     {
       "aliases" : [
@@ -8767,491 +8651,6 @@
     },
     {
       "aliases" : [
-        "envelope",
-        "adsr",
-        "multistage",
-        "segment",
-        "stages",
-        "lfo",
-        "function",
-        "step"
-      ],
-      "bypass" : "silent",
-      "category" : "Modulation",
-      "inputs" : [
-        "gate"
-      ],
-      "kind" : "segments",
-      "name" : "segments~",
-      "outputs" : [
-        "out"
-      ],
-      "outputsAreCV" : true,
-      "params" : [
-        {
-          "curve" : "linear",
-          "def" : 1,
-          "key" : "count",
-          "kind" : "choice",
-          "max" : 5,
-          "min" : 0,
-          "name" : "segments",
-          "options" : [
-            "1",
-            "2",
-            "3",
-            "4",
-            "5",
-            "6"
-          ],
-          "unit" : ""
-        },
-        {
-          "curve" : "linear",
-          "def" : 0,
-          "key" : "t1",
-          "kind" : "choice",
-          "max" : 2,
-          "min" : 0,
-          "name" : "1 type",
-          "options" : [
-            "ramp",
-            "step",
-            "hold"
-          ],
-          "unit" : ""
-        },
-        {
-          "curve" : "linear",
-          "def" : 0.25,
-          "key" : "a1",
-          "kind" : "continuous",
-          "max" : 1,
-          "min" : 0,
-          "name" : "1 time\/level",
-          "unit" : "%"
-        },
-        {
-          "curve" : "linear",
-          "def" : 0.5,
-          "key" : "b1",
-          "kind" : "continuous",
-          "max" : 1,
-          "min" : 0,
-          "name" : "1 shape\/time",
-          "unit" : "%"
-        },
-        {
-          "curve" : "linear",
-          "def" : 0,
-          "key" : "l1",
-          "kind" : "toggle",
-          "max" : 1,
-          "min" : 0,
-          "name" : "1 loop",
-          "unit" : ""
-        },
-        {
-          "curve" : "linear",
-          "def" : 0,
-          "key" : "t2",
-          "kind" : "choice",
-          "max" : 2,
-          "min" : 0,
-          "name" : "2 type",
-          "options" : [
-            "ramp",
-            "step",
-            "hold"
-          ],
-          "unit" : ""
-        },
-        {
-          "curve" : "linear",
-          "def" : 0.44999998807907104,
-          "key" : "a2",
-          "kind" : "continuous",
-          "max" : 1,
-          "min" : 0,
-          "name" : "2 time\/level",
-          "unit" : "%"
-        },
-        {
-          "curve" : "linear",
-          "def" : 0.5,
-          "key" : "b2",
-          "kind" : "continuous",
-          "max" : 1,
-          "min" : 0,
-          "name" : "2 shape\/time",
-          "unit" : "%"
-        },
-        {
-          "curve" : "linear",
-          "def" : 0,
-          "key" : "l2",
-          "kind" : "toggle",
-          "max" : 1,
-          "min" : 0,
-          "name" : "2 loop",
-          "unit" : ""
-        },
-        {
-          "curve" : "linear",
-          "def" : 2,
-          "key" : "t3",
-          "kind" : "choice",
-          "max" : 2,
-          "min" : 0,
-          "name" : "3 type",
-          "options" : [
-            "ramp",
-            "step",
-            "hold"
-          ],
-          "unit" : ""
-        },
-        {
-          "curve" : "linear",
-          "def" : 0.60000002384185791,
-          "key" : "a3",
-          "kind" : "continuous",
-          "max" : 1,
-          "min" : 0,
-          "name" : "3 time\/level",
-          "unit" : "%"
-        },
-        {
-          "curve" : "linear",
-          "def" : 0.5,
-          "key" : "b3",
-          "kind" : "continuous",
-          "max" : 1,
-          "min" : 0,
-          "name" : "3 shape\/time",
-          "unit" : "%"
-        },
-        {
-          "curve" : "linear",
-          "def" : 0,
-          "key" : "l3",
-          "kind" : "toggle",
-          "max" : 1,
-          "min" : 0,
-          "name" : "3 loop",
-          "unit" : ""
-        },
-        {
-          "curve" : "linear",
-          "def" : 0,
-          "key" : "t4",
-          "kind" : "choice",
-          "max" : 2,
-          "min" : 0,
-          "name" : "4 type",
-          "options" : [
-            "ramp",
-            "step",
-            "hold"
-          ],
-          "unit" : ""
-        },
-        {
-          "curve" : "linear",
-          "def" : 0.40000000596046448,
-          "key" : "a4",
-          "kind" : "continuous",
-          "max" : 1,
-          "min" : 0,
-          "name" : "4 time\/level",
-          "unit" : "%"
-        },
-        {
-          "curve" : "linear",
-          "def" : 0.5,
-          "key" : "b4",
-          "kind" : "continuous",
-          "max" : 1,
-          "min" : 0,
-          "name" : "4 shape\/time",
-          "unit" : "%"
-        },
-        {
-          "curve" : "linear",
-          "def" : 0,
-          "key" : "l4",
-          "kind" : "toggle",
-          "max" : 1,
-          "min" : 0,
-          "name" : "4 loop",
-          "unit" : ""
-        },
-        {
-          "curve" : "linear",
-          "def" : 0,
-          "key" : "t5",
-          "kind" : "choice",
-          "max" : 2,
-          "min" : 0,
-          "name" : "5 type",
-          "options" : [
-            "ramp",
-            "step",
-            "hold"
-          ],
-          "unit" : ""
-        },
-        {
-          "curve" : "linear",
-          "def" : 0.40000000596046448,
-          "key" : "a5",
-          "kind" : "continuous",
-          "max" : 1,
-          "min" : 0,
-          "name" : "5 time\/level",
-          "unit" : "%"
-        },
-        {
-          "curve" : "linear",
-          "def" : 0.5,
-          "key" : "b5",
-          "kind" : "continuous",
-          "max" : 1,
-          "min" : 0,
-          "name" : "5 shape\/time",
-          "unit" : "%"
-        },
-        {
-          "curve" : "linear",
-          "def" : 0,
-          "key" : "l5",
-          "kind" : "toggle",
-          "max" : 1,
-          "min" : 0,
-          "name" : "5 loop",
-          "unit" : ""
-        },
-        {
-          "curve" : "linear",
-          "def" : 0,
-          "key" : "t6",
-          "kind" : "choice",
-          "max" : 2,
-          "min" : 0,
-          "name" : "6 type",
-          "options" : [
-            "ramp",
-            "step",
-            "hold"
-          ],
-          "unit" : ""
-        },
-        {
-          "curve" : "linear",
-          "def" : 0.40000000596046448,
-          "key" : "a6",
-          "kind" : "continuous",
-          "max" : 1,
-          "min" : 0,
-          "name" : "6 time\/level",
-          "unit" : "%"
-        },
-        {
-          "curve" : "linear",
-          "def" : 0.5,
-          "key" : "b6",
-          "kind" : "continuous",
-          "max" : 1,
-          "min" : 0,
-          "name" : "6 shape\/time",
-          "unit" : "%"
-        },
-        {
-          "curve" : "linear",
-          "def" : 0,
-          "key" : "l6",
-          "kind" : "toggle",
-          "max" : 1,
-          "min" : 0,
-          "name" : "6 loop",
-          "unit" : ""
-        }
-      ],
-      "polyOutputs" : [
-
-      ],
-      "summary" : "Chain 1–6 ramp \/ step \/ hold segments: envelopes, looping LFOs, sequences, S&H"
-    },
-    {
-      "aliases" : [
-        "function",
-        "envelope",
-        "lfo",
-        "slope",
-        "ramp",
-        "tides",
-        "ad",
-        "ar",
-        "polyphase"
-      ],
-      "bypass" : "silent",
-      "category" : "Modulation",
-      "inputs" : [
-        "pitch",
-        "gate"
-      ],
-      "kind" : "slopes",
-      "name" : "slopes~",
-      "outputs" : [
-        "1",
-        "2",
-        "3",
-        "4"
-      ],
-      "outputsAreCV" : true,
-      "params" : [
-        {
-          "curve" : "linear",
-          "def" : 1,
-          "key" : "ramp",
-          "kind" : "choice",
-          "max" : 2,
-          "min" : 0,
-          "name" : "ramp",
-          "options" : [
-            "AD",
-            "looping",
-            "AR"
-          ],
-          "unit" : ""
-        },
-        {
-          "curve" : "linear",
-          "def" : 2,
-          "key" : "out",
-          "kind" : "choice",
-          "max" : 3,
-          "min" : 0,
-          "name" : "outputs",
-          "options" : [
-            "gates",
-            "amplitude",
-            "phase",
-            "frequency"
-          ],
-          "unit" : ""
-        },
-        {
-          "curve" : "linear",
-          "def" : 1,
-          "key" : "range",
-          "kind" : "choice",
-          "max" : 2,
-          "min" : 0,
-          "name" : "range",
-          "options" : [
-            "low",
-            "mid",
-            "audio"
-          ],
-          "unit" : ""
-        },
-        {
-          "curve" : "linear",
-          "def" : 0,
-          "key" : "freq",
-          "kind" : "continuous",
-          "max" : 48,
-          "min" : -48,
-          "name" : "frequency",
-          "unit" : "st"
-        },
-        {
-          "curve" : "linear",
-          "def" : 0.5,
-          "key" : "slope",
-          "kind" : "continuous",
-          "max" : 1,
-          "min" : 0,
-          "name" : "slope",
-          "unit" : "%"
-        },
-        {
-          "curve" : "linear",
-          "def" : 0.5,
-          "key" : "shape",
-          "kind" : "continuous",
-          "max" : 1,
-          "min" : 0,
-          "name" : "shape",
-          "unit" : "%"
-        },
-        {
-          "curve" : "linear",
-          "def" : 0.5,
-          "key" : "smooth",
-          "kind" : "continuous",
-          "max" : 1,
-          "min" : 0,
-          "name" : "smoothness",
-          "unit" : "%"
-        },
-        {
-          "curve" : "linear",
-          "def" : 0.75,
-          "key" : "shift",
-          "kind" : "continuous",
-          "max" : 1,
-          "min" : 0,
-          "name" : "shift",
-          "unit" : "%"
-        },
-        {
-          "curve" : "linear",
-          "def" : 0,
-          "key" : "sync",
-          "kind" : "toggle",
-          "max" : 1,
-          "min" : 0,
-          "name" : "sync",
-          "unit" : ""
-        },
-        {
-          "curve" : "linear",
-          "def" : 13,
-          "key" : "div",
-          "kind" : "choice",
-          "max" : 15,
-          "min" : 0,
-          "name" : "division",
-          "options" : [
-            "1\/32",
-            "1\/16T",
-            "1\/16",
-            "1\/8T",
-            "1\/16D",
-            "1\/8",
-            "1\/4T",
-            "1\/8D",
-            "1\/4",
-            "1\/2T",
-            "1\/4D",
-            "1\/2",
-            "1\/2D",
-            "1 bar",
-            "2 bars",
-            "4 bars"
-          ],
-          "unit" : ""
-        }
-      ],
-      "polyOutputs" : [
-
-      ],
-      "summary" : "Function generator: 4 related slopes (envelope, LFO or oscillator), clock-sync"
-    },
-    {
-      "aliases" : [
         "random",
         "generative",
         "probability",
@@ -9518,7 +8917,8 @@
       "bypass" : "silent",
       "category" : "Modulation",
       "inputs" : [
-
+        "clock",
+        "reset"
       ],
       "kind" : "lfo",
       "name" : "lfo~",
@@ -9532,7 +8932,7 @@
           "def" : 0,
           "key" : "shape",
           "kind" : "choice",
-          "max" : 5,
+          "max" : 4,
           "min" : 0,
           "name" : "shape",
           "options" : [
@@ -9540,7 +8940,6 @@
             "triangle",
             "saw",
             "square",
-            "s&h",
             "random"
           ],
           "unit" : ""
@@ -9570,7 +8969,7 @@
           "def" : 13,
           "key" : "div",
           "kind" : "choice",
-          "max" : 15,
+          "max" : 17,
           "min" : 0,
           "name" : "division",
           "options" : [
@@ -9589,7 +8988,9 @@
             "1\/2D",
             "1 bar",
             "2 bars",
-            "4 bars"
+            "4 bars",
+            "8 bars",
+            "16 bars"
           ],
           "unit" : ""
         },

@@ -65,7 +65,7 @@ public struct PatchGroup: Codable, Equatable, Identifiable, Sendable {
 }
 
 public struct Patch: Codable, Equatable, Sendable {
-    public static let currentVersion = 12
+    public static let currentVersion = 13
     public var version: Int = Patch.currentVersion
     public var nodes: [PatchNode] = []
     public var cables: [PatchCable] = []
@@ -195,6 +195,19 @@ public extension Patch {
                 }
             }
             for i in p.nodes.indices where ["wave", "shapes", "macro"].contains(p.nodes[i].kind) { p.nodes[i].params["voices"] = nil }
+        }
+        if version < 13 {
+            // v13: lfo~ lost its s&h shape; s&h (4) and random (5) both become random (now 4)
+            for i in p.nodes.indices where p.nodes[i].kind == "lfo" {
+                if let s = p.nodes[i].params["shape"], s.isFinite, s >= 3.5 { p.nodes[i].params["shape"] = 4 }
+            }
+            // rand~, slopes~ and segments~ are gone (lfo~ covers them): their boxes and cables go too
+            let gone = Set(p.nodes.filter { ["rand", "slopes", "segments"].contains($0.kind) }.map(\.id))
+            if !gone.isEmpty {
+                p.nodes.removeAll { gone.contains($0.id) }
+                p.cables.removeAll { gone.contains($0.fromNode) || gone.contains($0.toNode) }
+                p.groups = p.groups?.map { var g = $0; g.members.removeAll { gone.contains($0) }; return g }.filter { !$0.members.isEmpty }
+            }
         }
         if version < 9 {
             // v9: div~ outlets became a ×16 … ÷64 list; old ÷n (default ÷k on outlet k) keeps its meaning.

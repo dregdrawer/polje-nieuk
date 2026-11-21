@@ -150,14 +150,28 @@ private:
 class LFONode : public DSPNode {
 public:
     using DSPNode::DSPNode;
-    void process(int frames, const float* const*, uint64_t, ProcessContext& ctx) override {
-        int shape = clampIndex(params[0], 6);
+    void process(int frames, const float* const* in, uint64_t con, ProcessContext& ctx) override {
+        int shape = clampIndex(params[0], 5);
         bool sync = params[1] > 0.5f;
         double rate = params[2], div = Divisions::beats(params[3]);
         float depth = params[4], offset = params[5];
         float* o = out(0);
+        bool hasClock = isConnected(con, 0), hasReset = isConnected(con, 1);
+        if (ctx.stopPending) { pulses = -1; beatZero = 0; }
         for (int i = 0; i < frames; ++i) {
-            if (sync) { double p = ctx.beat[i] / div; phase = p - std::floor(p); }
+            if (hasReset && resetEdge.rising(in[1][i])) { pulses = -1; phase = 0; prevPhase = 0; beatZero = ctx.beat[i]; }
+            if (hasClock) {
+                // follow the patched clock: 1 pulse = 1/16 note, smooth between pulses
+                samplesSincePulse++;
+                if (clockEdge.rising(in[0][i]) && ctx.running) {
+                    if (pulses >= 0 && samplesSincePulse > 16) pulsePeriod = samplesSincePulse;
+                    pulses++; samplesSincePulse = 0;
+                }
+                if (pulses >= 0) {
+                    double pos = double(pulses) + std::min(double(samplesSincePulse) / double(std::max(pulsePeriod, 1)), 0.999);
+                    double p = pos * 0.25 / div; phase = p - std::floor(p);
+                }
+            } else if (sync) { double p = (ctx.beat[i] - beatZero) / div; phase = p - std::floor(p); }
             else { phase += rate / sampleRate; if (phase >= 1) phase -= 1; }
             if (phase < prevPhase) {
                 prevHeld = held; held = rng.next() * 2 - 1;
@@ -171,7 +185,6 @@ public:
                 case 1: v = p < 0.5f ? 4 * p - 1 : 3 - 4 * p; break;
                 case 2: v = 2 * p - 1; break;
                 case 3: v = p < 0.5f ? 1.0f : -1.0f; break;
-                case 4: v = held; break;
                 default: { float k = (1 - std::cos(juce::MathConstants<float>::pi * p)) / 2; v = prevHeld + (held - prevHeld) * k; }
             }
             o[i] = v * depth + offset;
@@ -180,6 +193,9 @@ public:
     }
 private:
     double phase = 0, prevPhase = 0; float held = 0, prevHeld = 0; XorShift rng { 0x12345678u };
+    EdgeDetector clockEdge, resetEdge;
+    int pulses = -1, samplesSincePulse = 0, pulsePeriod = 3000;
+    double beatZero = 0;
 };
 
 /// slider~ / knob~: 1–8 controls, each a CV outlet; patched into a parameter they set its position.
@@ -265,36 +281,6 @@ private:
     float env = 0;
 };
 
-class RandomNode : public DSPNode {
-public:
-    using DSPNode::DSPNode;
-    void process(int frames, const float* const* in, uint64_t con, ProcessContext& ctx) override {
-        bool sync = params[1] > 0.5f;
-        double hz = params[0], div = Divisions::beats(params[2]);
-        double period = sync ? div * ctx.samplesPerBeat : sampleRate / std::max(hz, 0.001);
-        float smooth = params[3];
-        float coef = smooth <= 0.001f ? 1.0f : 1 - std::exp(-3 / (smooth * float(period)));
-        float depth = params[4], off = params[5];
-        bool uni = params[6] > 0.5f, hasTrig = isConnected(con, 0);
-        float* o = out(0);
-        for (int i = 0; i < frames; ++i) {
-            double p;
-            if (sync) { double b = ctx.beat[i] / div; phase = b - std::floor(b); }
-            else { phase += hz / sampleRate; if (phase >= 1) phase -= std::floor(phase); }
-            p = phase;
-            bool fire = hasTrig ? trig.rising(in[0][i]) : p < prev;
-            if (!hasTrig && sync && ctx.beat[i] < 0) fire = false;
-            prev = p;
-            if (fire) target = uni ? rng.next() : rng.next() * 2 - 1;
-            cur += (target - cur) * coef;
-            o[i] = cur * depth + off;
-        }
-        readouts[0] = o[frames - 1];
-    }
-private:
-    double phase = 0, prev = 0; float target = 0, cur = 0; XorShift rng { 0x5EED1234u }; EdgeDetector trig;
-};
-
 class AttenNode : public DSPNode {
 public:
     using DSPNode::DSPNode;
@@ -317,7 +303,6 @@ Factory factoryCore(const std::string& k) {
     if (k == "slider" || k == "knob") return make<ControlsNode>();
     if (k == "gain") return make<UtilityNode>();
     if (k == "env") return make<EnvelopeNode>();
-    if (k == "rand") return make<RandomNode>();
     if (k == "atten") return make<AttenNode>();
     if (k == "text") return make<DSPNode>();
     return nullptr;

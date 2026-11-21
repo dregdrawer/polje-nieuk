@@ -81,8 +81,7 @@ struct LivePart {
         var b: [(Button, CGRect)] = []
         if spec.bypass != .none { b.append((.bypass, CGRect(x: 6, y: 2, width: 18, height: 18))) }
         // the right-hand buttons, from the right edge in
-        var right: [(Button, CGFloat)] = [(.collapse, 18)]
-        if selected { right.append((.close, 18)) }
+        var right: [(Button, CGFloat)] = [(.close, 18), (.collapse, 18)]      // ✕ always, at the very right
         if model.node(node.id) is SampleBufferNode { right.append((.audioMenu, 18)) }
         if model.canAutomate(spec) && !node.collapsed {
             if model.hasAutomation(node) { right.append((.resetAuto, 15)) }

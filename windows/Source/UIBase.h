@@ -107,11 +107,6 @@ namespace ControlsLayout {
     inline int valueIndex(int k) { return 3 + k; }
     extern const std::vector<std::string> ranges;
 }
-namespace SegmentsLayout {
-    extern const std::vector<std::string> types;
-    inline int count(float v) { return clampIndex(v, 6) + 1; }
-    inline int base(int k) { return 1 + k * 4; }
-}
 
 namespace BoxLayout {
     extern std::map<juce::String, PortUsage> usage;
