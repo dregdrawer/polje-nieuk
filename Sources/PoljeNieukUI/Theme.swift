@@ -162,6 +162,9 @@ enum BoxLayout {
     }
 
     /// Display height as drawn: the user's resized height, never shorter than the default.
+    /// samplerack / drumsynth: L, R, then one outlet per drum-roll row (a pad / voice on its own chain).
+    static func hasLaneOutlets(_ kind: String) -> Bool { kind == "rack" || kind == "drumsynth" }
+
     /// rack / drumsynth: one drum-roll row. Making the box taller makes the rows taller (the pads keep their size).
     static func padLaneHeight(_ node: PatchNode) -> CGFloat {
         let (base, lanes): (CGFloat, Int) = node.kind == "rack" ? (RackView.rollHeight / CGFloat(RackLayout.pads), RackLayout.pads)
@@ -293,7 +296,7 @@ enum BoxLayout {
 
     static func portRows(_ node: PatchNode, _ spec: ModuleSpec, _ hw: HardwareCounts) -> Int {
         let p = ports(node, spec, hw)
-        if node.kind == "rack" { return max(p.ins.count, 2) }      // the pad outlets sit beside the drum roll's rows
+        if hasLaneOutlets(node.kind) { return max(p.ins.count, 2) }      // the pad / voice outlets sit beside the drum roll's rows
         return rowOutlets(node.kind) ? p.ins.count : max(p.ins.count, p.outs.count)
     }
 
@@ -336,8 +339,8 @@ enum BoxLayout {
     static func outlet(_ node: PatchNode, _ spec: ModuleSpec, _ hw: HardwareCounts, _ i: Int) -> CGPoint {
         var y = header + 3 + CGFloat(i) * portRow + portRow / 2
         if !node.collapsed, let pi = outletParam(node.kind, i), let ry = paramRowY(node, spec, hw, pi) { y = ry }
-        if !node.collapsed && node.kind == "rack" && i >= 2 {
-            // rack: pad k's outlet is level with its row in the drum roll
+        if !node.collapsed && hasLaneOutlets(node.kind) && i >= 2 {
+            // samplerack / drumsynth: pad (voice) k's outlet is level with its row in the drum roll
             let lane = padLaneHeight(node)
             y = header + portsHeight(node, spec, hw) + 4 + CGFloat(i - 2) * lane + lane / 2
         }
@@ -365,22 +368,22 @@ enum BoxLayout {
 
     /// Every port currently drawn on a box (for Pencil/mouse hover highlighting).
     static func visiblePorts(_ node: PatchNode, _ spec: ModuleSpec, _ hw: HardwareCounts)
-        -> [(point: CGPoint, name: String, output: Bool)] {
-        var r: [(CGPoint, String, Bool)] = []
+        -> [(point: CGPoint, name: String, output: Bool, port: Int)] {
+        var r: [(CGPoint, String, Bool, Int)] = []
         let p = ports(node, spec, hw)
         if node.collapsed {
             for k in collapsedLeft(node, spec) {
-                if let pt = destination(node, spec, hw, port: k) { r.append((pt, inletName(spec, k), false)) }
+                if let pt = destination(node, spec, hw, port: k) { r.append((pt, inletName(spec, k), false, k)) }
             }
-            for k in collapsedRight(node, spec) { r.append((outlet(node, spec, hw, k), spec.outputs[k], true)) }
+            for k in collapsedRight(node, spec) { r.append((outlet(node, spec, hw, k), spec.outputs[k], true, k)) }
         } else {
-            for k in p.ins.indices { r.append((inlet(node, spec, hw, k), p.ins[k], false)) }
-            for k in p.outs.indices { r.append((outlet(node, spec, hw, k), p.outs[k], true)) }
+            for k in p.ins.indices { r.append((inlet(node, spec, hw, k), p.ins[k], false, k)) }
+            for k in p.outs.indices { r.append((outlet(node, spec, hw, k), p.outs[k], true, k)) }
             for k in rowParams(spec, node) {
-                if let pt = paramInlet(node, spec, hw, k) { r.append((pt, spec.params[k].name, false)) }
+                if let pt = paramInlet(node, spec, hw, k) { r.append((pt, spec.params[k].name, false, kParamPortBase + k)) }
             }
         }
-        return r.map { (point: $0.0, name: $0.1, output: $0.2) }
+        return r.map { (point: $0.0, name: $0.1, output: $0.2, port: $0.3) }
     }
 
     /// Canvas position of a cable's destination, for an audio inlet or a parameter inlet.

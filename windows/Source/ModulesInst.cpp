@@ -214,7 +214,7 @@ struct DrumSynthNode::Impl {
     RateBridge bridge;
     MIMacroParams q[V] {};
     int gateLeft[V] = {}, pending[V] = { -1, -1, -1, -1 };
-    float level[V] = {}, gl[V] = {}, gr[V] = {}, env[V] = { 1, 1, 1, 1 }, attackInc[V] = { 1, 1, 1, 1 }, decayMul[V] = { 1, 1, 1, 1 };
+    float level[V] = {}, gl[V] = {}, gr[V] = {}, gm[V] = {}, env[V] = { 1, 1, 1, 1 }, attackInc[V] = { 1, 1, 1, 1 }, decayMul[V] = { 1, 1, 1, 1 };
     bool aux[V] = {}, attacking[V] = {};
     int step = -1, extCount = -1;
     StepClock clock;
@@ -275,10 +275,13 @@ void DrumSynthNode::process(int frames, const float* const* in, uint64_t con, Pr
         bool audible = params[size_t(b + 12)] < 0.5f && (!anySolo || params[size_t(b + 13)] > 0.5f);
         float g = audible ? params[size_t(b + 10)] * master : 0;
         float pan = std::clamp(params[size_t(b + 11)], -1.0f, 1.0f);
-        m.gl[v] = g * std::min(1.0f, 1 - pan); m.gr[v] = g * std::min(1.0f, 1 + pan);
+        m.gl[v] = g * std::min(1.0f, 1 - pan); m.gr[v] = g * std::min(1.0f, 1 + pan); m.gm[v] = g;
         m.aux[v] = params[size_t(b + 5)] > 0.5f;
     }
     float* oL = out(0); float* oR = out(1);
+    // a voice whose own outlet is patched plays there (mono) instead of in the L / R mix
+    uint64_t own = patchedOutputs >> 2;
+    for (int v = 0; v < V; ++v) if ((own >> v) & 1u) std::fill(out(2 + v), out(2 + v) + frames, 0.0f);
     for (auto& l : m.level) l *= 0.9f;
     if (ctx.stopPending) { m.extCount = -1; m.step = -1; }
     m.bridge.run(frames, [&](int c, int i) -> float {
@@ -312,7 +315,8 @@ void DrumSynthNode::process(int frames, const float* const* in, uint64_t con, Pr
         if (m.attacking[v]) { m.env[v] = std::min(m.env[v] + m.attackInc[v], 1.0f); if (m.env[v] >= 1) m.attacking[v] = false; }
         else m.env[v] *= m.decayMul[v];
         float y = x * m.env[v];
-        oL[i] += y * m.gl[v]; oR[i] += y * m.gr[v];
+        if ((own >> v) & 1u) out(2 + v)[i] = y * m.gm[v];
+        else { oL[i] += y * m.gl[v]; oR[i] += y * m.gr[v]; }
         m.level[v] = std::max(m.level[v], std::abs(y));
     });
     readouts[0] = float(m.step);

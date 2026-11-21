@@ -666,7 +666,7 @@ class PadsDisplay: NativeDisplay {
             guard let self else { return }
             for k in 0..<n {
                 let pr = self.padRect(k, r).offsetBy(dx: -padsArea.minX, dy: -padsArea.minY)
-                if self.padPlaying(k) { g.fill(Path(pr), with: .color(Theme.text.opacity(0.3))) }
+                if self.padPlaying(k) { g.fill(Path(pr), with: .color(Theme.text.opacity(0.14))) }
             }
         }
         return [roll, pads]

@@ -1087,6 +1087,18 @@ void AppModel::autoTick() {
 
 // ---------------------------------------------------------------- cables
 
+std::optional<juce::String> AppModel::outletName(const PatchNode& n, int port) {
+    if (!BoxLayout::hasLaneOutlets(n.kind) || port < 2) return std::nullopt;
+    int k = port - 2;
+    if (auto* r = dynamic_cast<RackNode*>(node(n.id)); r && k < int(r->padNames.size())) return juce::String::fromUTF8(r->padNames[size_t(k)].c_str());
+    if (n.kind == "drumsynth" && k < DrumSynthLayout::voices) {
+        auto key = "e" + std::to_string(k + 1);
+        int e = n.params.count(key) ? int(std::round(n.params.at(key))) : DrumSynthLayout::engines[size_t(k)];
+        return juce::String::fromUTF8(DrumSynthLayout::label(k, e).c_str());
+    }
+    return std::nullopt;
+}
+
 int AppModel::topBox(Pt p) const {
     for (int i = int(patch.nodes.size()) - 1; i >= 0; --i) {
         auto& n = patch.nodes[size_t(i)];
@@ -1369,7 +1381,7 @@ void AppModel::loadIntoSelection(const juce::File& f) {
             return;
         }
     for (auto& id : selectedNodes) if (dynamic_cast<SampleBufferNode*>(node(id))) { loadAudio(f, id); return; }
-    audioError = juce::String::fromUTF8("Select a looper, sampler, stretch or rack first \xe2\x80\x94 or drag the file onto one (or onto a rack pad).");
+    audioError = juce::String::fromUTF8("Select a looper, sampler, stretch or samplerack first \xe2\x80\x94 or drag the file onto one (or onto a samplerack pad).");
     changed();
 }
 

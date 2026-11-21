@@ -3439,7 +3439,11 @@
       "name" : "drumsynth",
       "outputs" : [
         "L",
-        "R"
+        "R",
+        "voice 1",
+        "voice 2",
+        "voice 3",
+        "voice 4"
       ],
       "outputsAreCV" : false,
       "params" : [
@@ -4205,6 +4209,9 @@
     },
     {
       "aliases" : [
+        "samplerack",
+        "sample rack",
+        "rack",
         "drum rack",
         "drum machine",
         "drums",
@@ -4222,7 +4229,7 @@
         "reset"
       ],
       "kind" : "rack",
-      "name" : "rack",
+      "name" : "samplerack",
       "outputs" : [
         "L",
         "R",

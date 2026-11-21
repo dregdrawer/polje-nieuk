@@ -30,8 +30,6 @@ public final class AppModel: ObservableObject {
     @Published var selectedNodes: Set<UUID> = []
     @Published var selectedCable: UUID?
     @Published var pendingCable: PendingCable?
-    /// Mac: a selection box being drawn with the right mouse button (canvas-view coordinates).
-    @Published var rightMarquee: CGRect?
     @Published var finderAt: CGPoint? {          // canvas point where the object box is being typed
         didSet { if finderAt == nil { replaceTarget = nil } }
     }
@@ -1262,6 +1260,15 @@ public final class AppModel: ObservableObject {
 
     // MARK: Cables
 
+    /// samplerack / drumsynth: what a pad (voice) outlet carries — the sample's or the voice's name.
+    func outletName(_ n: PatchNode, _ port: Int) -> String? {
+        guard BoxLayout.hasLaneOutlets(n.kind), port >= 2 else { return nil }
+        let k = port - 2
+        if let r = host.node(n.id) as? RackNode, k < r.padNames.count { return r.padNames[k] }
+        if let d = host.node(n.id) as? DrumSynthNode { return DrumSynthView(node: d, model: self, patchNode: n).name(k) }
+        return nil
+    }
+
     /// The box on top at a canvas point (boxes later in the patch are drawn over earlier ones), as its index.
     func topBox(at p: CGPoint) -> Int? {
         patch.nodes.indices.last { i in
@@ -1637,7 +1644,7 @@ public final class AppModel: ObservableObject {
             return
         }
         guard let id = selectedNodes.first(where: { host.node($0) is SampleBufferNode }) else {
-            audioError = "Select a looper, sampler, stretch or rack first — or drag the file onto one (or onto a rack pad)."
+            audioError = "Select a looper, sampler, stretch or samplerack first — or drag the file onto one (or onto a samplerack pad)."
             return
         }
         loadAudio(url, into: id)

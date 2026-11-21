@@ -123,7 +123,8 @@ namespace BoxLayout {
     juce::Point<float> textSize(const PatchNode& n);
     float width(const PatchNode& n);
     float readoutHeight(const PatchNode& n);
-    float padLaneHeight(const PatchNode& n);   // rack / drumsynth: one drum-roll row (grows with the box)
+    float padLaneHeight(const PatchNode& n);
+    bool hasLaneOutlets(const std::string& kind);   // samplerack / drumsynth: L, R, then one outlet per drum-roll row   // rack / drumsynth: one drum-roll row (grows with the box)
     float readoutHeight(const std::string& kind);
     std::pair<bool, bool> resizable(const std::string& kind);
     bool hasReadout(const std::string& kind);
@@ -142,7 +143,7 @@ namespace BoxLayout {
     Pt outlet(const PatchNode& n, const ModuleSpec& s, const HardwareCounts& hw, int i);
     std::optional<float> paramRowY(const PatchNode& n, const ModuleSpec& s, const HardwareCounts& hw, int param);
     std::optional<Pt> paramInlet(const PatchNode& n, const ModuleSpec& s, const HardwareCounts& hw, int param);
-    struct VisiblePort { Pt point; juce::String name; bool output; };
+    struct VisiblePort { Pt point; juce::String name; bool output; int port = -1; };
     std::vector<VisiblePort> visiblePorts(const PatchNode& n, const ModuleSpec& s, const HardwareCounts& hw);
     std::optional<Pt> destination(const PatchNode& n, const ModuleSpec& s, const HardwareCounts& hw, int port);
 }

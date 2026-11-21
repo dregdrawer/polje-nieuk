@@ -373,6 +373,7 @@ public final class DrumSynthNode: DSPNode {
     private var level = [Float](repeating: 0, count: DrumSynthLayout.voices)
     private var gl = [Float](repeating: 0, count: DrumSynthLayout.voices)
     private var gr = [Float](repeating: 0, count: DrumSynthLayout.voices)
+    private var gm = [Float](repeating: 0, count: DrumSynthLayout.voices)     // a voice on its own outlet (mono)
     private var aux = [Bool](repeating: false, count: DrumSynthLayout.voices)
     private var env = [Float](repeating: 1, count: DrumSynthLayout.voices)
     private var attacking = [Bool](repeating: false, count: DrumSynthLayout.voices)
@@ -453,10 +454,13 @@ public final class DrumSynthNode: DSPNode {
             let audible = params[b + 12] < 0.5 && (!anySolo || params[b + 13] > 0.5)
             let g = audible ? params[b + 10] * master : 0
             let pan = min(max(params[b + 11], -1), 1)
-            gl[v] = g * min(1, 1 - pan); gr[v] = g * min(1, 1 + pan)
+            gl[v] = g * min(1, 1 - pan); gr[v] = g * min(1, 1 + pan); gm[v] = g
             aux[v] = params[b + 5] > 0.5
         }
         let oL = outputs[0], oR = outputs[1]
+        // a voice whose own outlet is patched plays there (mono) instead of in the L / R mix
+        let own = patchedOutputs >> 2
+        for v in 0..<V where own & (1 << UInt64(v)) != 0 { outputs[2 + v].update(repeating: 0, count: frames) }
         for v in 0..<V { level[v] *= 0.9 }
         if ctx.stopPending { extCount = -1; step = -1 }
         bridge.run(frames: frames, input: { [self] c, i in
@@ -501,8 +505,8 @@ public final class DrumSynthNode: DSPNode {
             if attacking[v] { env[v] = min(env[v] + attackInc[v], 1); if env[v] >= 1 { attacking[v] = false } }
             else { env[v] *= decayMul[v] }
             let y = x * env[v]
-            oL[i] += y * gl[v]
-            oR[i] += y * gr[v]
+            if own & (1 << UInt64(v)) != 0 { outputs[2 + v][i] = y * gm[v] }
+            else { oL[i] += y * gl[v]; oR[i] += y * gr[v] }
             level[v] = max(level[v], abs(y))
         })
         readouts[0] = Float(step)

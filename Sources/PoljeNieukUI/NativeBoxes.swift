@@ -182,7 +182,7 @@ struct LivePart {
         }
         for i in p.outs.indices {
             // rack pad outlets sit one per drum-roll row: a little smaller, so they don't touch
-            let size = node.kind == "rack" && i >= 2 ? min(BoxLayout.port, BoxLayout.padLaneHeight(node) - 3) : BoxLayout.port
+            let size = BoxLayout.hasLaneOutlets(node.kind) && i >= 2 ? min(BoxLayout.port, BoxLayout.padLaneHeight(node) - 3) : BoxLayout.port
             r.append(Port(port: i, output: true, center: CGPoint(x: w, y: BoxLayout.outlet(node, spec, hw, i).y - node.y), size: size))
         }
         for i in BoxLayout.rowParams(spec, node) {

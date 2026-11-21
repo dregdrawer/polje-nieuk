@@ -160,7 +160,8 @@ public:
 
     // cables
     void finishCable(Pt screen);
-    int topBox(Pt canvasPoint) const;           // the box drawn on top there (index), or -1
+    int topBox(Pt canvasPoint) const;
+    std::optional<juce::String> outletName(const PatchNode& n, int port);   // samplerack / drumsynth pad outlet: the sample (voice)           // the box drawn on top there (index), or -1
     void connect(const juce::String& a, int ap, const juce::String& b, int bp);
     bool pickUpCable(const juce::String& node, int port, Pt point);
 

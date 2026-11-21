@@ -501,7 +501,7 @@ private enum Region: Equatable {
         }
         // outlet activity dots (audio on)
         var outs = n.collapsed ? BoxLayout.collapsedRight(n, spec) : Array(BoxLayout.ports(n, spec, geo.hw).outs.indices)
-        if n.kind == "rack" && !n.collapsed { outs = outs.filter { $0 < 2 } }     // the pads light up themselves
+        if BoxLayout.hasLaneOutlets(n.kind) && !n.collapsed { outs = outs.filter { $0 < 2 } }     // the pads light up themselves
         if m.isRunning, !outs.isEmpty, n.kind != "in" {
             let ys = outs.map { BoxLayout.outlet(n, spec, geo.hw, $0).y - n.y }
             let names = outs.map { $0 < spec.outputs.count ? spec.outputs[$0] : "" }
@@ -1118,31 +1118,24 @@ final class NodesContainer: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         }
     }
 
-    // right-click and drag on empty canvas: a selection box (the empty canvas itself only sees the left button)
+    // right-click and drag on empty canvas moves the view (a left-drag there draws a selection box)
     private var rightMonitor: Any?
-    private var rightStart: CGPoint?
+    private var rightStart: (point: CGPoint, offset: CGSize)?
     private func rightMarquee(_ e: NSEvent) -> NSEvent? {
         guard e.window === window else { return e }
         let p = point(e)
         switch e.type {
         case .rightMouseDown:
             guard bounds.contains(p), canvas.item(at: p) == nil else { return e }
-            rightStart = p
+            rightStart = (p, model.viewOffset)
             return nil
         case .rightMouseDragged:
             guard let s = rightStart else { return e }
-            if hypot(p.x - s.x, p.y - s.y) > 3 || model.rightMarquee != nil {
-                model.rightMarquee = CGRect(x: min(s.x, p.x), y: min(s.y, p.y), width: abs(p.x - s.x), height: abs(p.y - s.y))
-            }
+            model.viewOffset = CGSize(width: s.offset.width + p.x - s.point.x, height: s.offset.height + p.y - s.point.y)
             return nil
         default:
             guard rightStart != nil else { return e }
             rightStart = nil
-            if let r = model.rightMarquee {
-                let a = model.toCanvas(CGPoint(x: r.minX, y: r.minY)), b = model.toCanvas(CGPoint(x: r.maxX, y: r.maxY))
-                model.select(in: CGRect(x: a.x, y: a.y, width: b.x - a.x, height: b.y - a.y), adding: e.modifierFlags.contains(.shift))
-                model.rightMarquee = nil
-            }
             return nil
         }
     }

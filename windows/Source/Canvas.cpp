@@ -188,7 +188,7 @@ std::vector<LivePart> Canvas::partsFor(Item& it) {
     }
     std::vector<int> outs;
     if (n.collapsed) outs = BoxLayout::collapsedRight(n, *spec);
-    else { auto p = BoxLayout::ports(n, *spec, geo.hw); for (int k = 0; k < int(p.outs.size()); ++k) if (n.kind != "rack" || k < 2) outs.push_back(k); }   // rack pads light up themselves
+    else { auto p = BoxLayout::ports(n, *spec, geo.hw); for (int k = 0; k < int(p.outs.size()); ++k) if (!BoxLayout::hasLaneOutlets(n.kind) || k < 2) outs.push_back(k); }   // rack pads light up themselves
     if (model.isRunning && !outs.empty() && n.kind != "in") {
         std::vector<float> ys; std::vector<juce::String> names; std::vector<bool> gate;
         for (int k : outs) {
@@ -457,7 +457,8 @@ void Canvas::paint(juce::Graphics& g) {
                 if (pc && vp.output == pc->fromOutput) continue;
                 Pt q = model.toScreen(vp.point);
                 float dd = q.getDistanceFrom(*at);
-                if (dd < reach && dd < bd) { bd = dd; best = std::make_tuple(q, vp.name, vp.output); }
+                auto name = vp.output ? model.outletName(n, vp.port).value_or(vp.name) : vp.name;   // a pad outlet: the sample's name
+                if (dd < reach && dd < bd) { bd = dd; best = std::make_tuple(q, name, vp.output); }
             }
         }
         if (best) {
@@ -936,7 +937,7 @@ void Canvas::mouseDown(const juce::MouseEvent& e) {
     if (!deleteButton.isEmpty() && deleteButton.toFloat().contains(p)) { model.removeCable(model.selectedCable); return; }
     if (began(p, e)) return;
     bgPressed = true; panning = false; marquee.reset();
-    bgRight = e.mods.isPopupMenu();          // right-click and drag: a selection box
+    bgRight = e.mods.isPopupMenu();          // right-drag moves the view; a left-drag draws a selection box
     bgStart = p; panStart = model.viewOffset;
     model.isZooming = false;
 }
@@ -946,7 +947,7 @@ void Canvas::mouseDrag(const juce::MouseEvent& e) {
     if (press) { moved(p); return; }
     if (!bgPressed) return;
     if (!panning && !marquee && p.getDistanceFrom(bgStart) < 3) return;
-    if (marquee || (!panning && (bgRight || model.selectMode || e.mods.isShiftDown()))) {
+    if (marquee || (!panning && !bgRight)) {
         marquee = Rect(std::min(bgStart.x, p.x), std::min(bgStart.y, p.y), std::abs(p.x - bgStart.x), std::abs(p.y - bgStart.y));
         repaint();
         return;

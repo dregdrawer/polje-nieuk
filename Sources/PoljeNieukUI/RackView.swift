@@ -129,7 +129,7 @@ struct RackView: View {
         .frame(maxWidth: .infinity)
         .background(LiveCanvas(signature: { node.readouts[1 + k] > 0.05 ? 1 : 0 }, native: false) { ctx, size in   // pad buttons sit on top
             ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
-            if node.readouts[1 + k] > 0.05 { ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.text.opacity(0.3))) }   // on / off, no fade
+            if node.readouts[1 + k] > 0.05 { ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.text.opacity(0.14))) }   // on / off, no fade
         })
         .overlay(Rectangle().stroke(k == selected || dropPad == k ? Theme.text : Theme.border,
                                     lineWidth: dropPad == k ? 2.5 : (k == selected ? 1.5 : 0.5)))
@@ -270,7 +270,7 @@ struct DrumSynthView: View {
         .frame(maxWidth: .infinity)
         .background(LiveCanvas(signature: { node.readouts[1 + v] > 0.05 ? 1 : 0 }, native: false) { ctx, size in   // pad buttons sit on top
             ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
-            if node.readouts[1 + v] > 0.05 { ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.text.opacity(0.3))) }   // on / off, no fade
+            if node.readouts[1 + v] > 0.05 { ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.text.opacity(0.14))) }   // on / off, no fade
         })
         .overlay(Rectangle().stroke(v == selected ? Theme.text : Theme.border, lineWidth: v == selected ? 1.5 : 0.5))
         .contentShape(Rectangle())

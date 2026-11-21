@@ -9,7 +9,7 @@ TEAM=25PG878U8X
 BUNDLE=com.grzegorzdalmata.poljenieuk
 
 # First physical iPad that's connected
-DEVICE=$(xcrun devicectl list devices 2>/dev/null | awk '/iPad/ && /connected/ { for (i = 1; i <= NF; i++) if ($i ~ /^[0-9A-F]{8}-[0-9A-F]{16}$/) print $i }' | head -1)
+DEVICE=$(xcrun devicectl list devices 2>/dev/null | awk '/iPad/ && (/connected/ || /available/) { for (i = 1; i <= NF; i++) if ($i ~ /^[0-9A-F]{8}-[0-9A-F]{16}$/) print $i }' | head -1)
 if [[ -z "$DEVICE" ]]; then
   echo "No iPad found. Plug it in with a data cable, unlock it, and tap Trust."; exit 1
 fi

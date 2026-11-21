@@ -34,7 +34,9 @@ struct PortHoverOverlay: View {
                 for p in BoxLayout.visiblePorts(n, spec, hw) where pc.map({ p.output != $0.fromOutput }) ?? true {
                     let s = model.toScreen(p.point)
                     let d = hypot(s.x - hp.x, s.y - hp.y)
-                    if d < reach && d < (best?.3 ?? .infinity) { best = (s, p.name, p.output, d) }
+                    // a samplerack / drumsynth pad outlet: the sample's (voice's) name
+                    let name = p.output ? (model.outletName(n, p.port) ?? p.name) : p.name
+                    if d < reach && d < (best?.3 ?? .infinity) { best = (s, name, p.output, d) }
                 }
             }
             guard let (pt, name, isOut, _) = best else { return }

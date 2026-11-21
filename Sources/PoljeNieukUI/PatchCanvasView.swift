@@ -44,6 +44,12 @@ struct PatchCanvasView: View {
     @State private var canvasFrameBox = FrameBox()
     #endif
 
+    #if os(macOS)
+    static let leftDragSelects = true
+    #else
+    static let leftDragSelects = false
+    #endif
+
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
@@ -55,7 +61,7 @@ struct PatchCanvasView: View {
                 // the cable you're dragging: a light layer on top, so following the pointer
                 // doesn't redraw every box and cable
                 if model.pendingCable != nil { PendingCableView(model: model).allowsHitTesting(false) }
-                if let m = marquee ?? model.rightMarquee {
+                if let m = marquee {
                     Rectangle().fill(Theme.text.opacity(0.06))
                         .overlay(Rectangle().stroke(Theme.text.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
                         .frame(width: m.width, height: m.height)
@@ -251,8 +257,9 @@ struct PatchCanvasView: View {
             DragGesture(minimumDistance: panThreshold)
                 .onChanged { v in
                     if model.isZooming { panStart = nil; marquee = nil; return }
-                    // select tool (or ⇧-drag on Mac): draw a selection box instead of panning
-                    if marquee != nil || (panStart == nil && (model.selectMode || ModuleBox.shiftHeld)) {
+                    // a selection box: on Mac a left-drag always (the right button moves the view);
+                    // on iPad with the select tool
+                    if marquee != nil || (panStart == nil && (Self.leftDragSelects || model.selectMode || ModuleBox.shiftHeld)) {
                         marquee = CGRect(x: min(v.startLocation.x, v.location.x), y: min(v.startLocation.y, v.location.y),
                                          width: abs(v.location.x - v.startLocation.x), height: abs(v.location.y - v.startLocation.y))
                         return

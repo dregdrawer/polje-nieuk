@@ -1290,7 +1290,7 @@ public:
         }, [this, n, r, padsArea](GC& g, Pt) {
             for (int k = 0; k < n; ++k) {
                 auto pr = padRect(k, r).translated(-padsArea.getX(), -padsArea.getY());
-                if (padPlaying(k)) g.fill(pr, Theme::text().withMultipliedAlpha(0.3f));
+                if (padPlaying(k)) g.fill(pr, Theme::text().withMultipliedAlpha(0.14f));
             }
         }, 1);
         return { roll, pads };

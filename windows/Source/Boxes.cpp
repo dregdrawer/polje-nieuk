@@ -86,7 +86,7 @@ std::vector<BoxGeo::Port> BoxGeo::ports() const {
     for (int i = 0; i < int(p.ins.size()); ++i) r.push_back({ i, false, { 0, BoxLayout::inlet(n, s, hw, i).y - ny }, BoxLayout::port });
     for (int i = 0; i < int(p.outs.size()); ++i) {
         // rack pad outlets sit one per drum-roll row: a little smaller, so they don't touch
-        float size = n.kind == "rack" && i >= 2 ? std::min(BoxLayout::port, BoxLayout::padLaneHeight(n) - 3) : BoxLayout::port;
+        float size = BoxLayout::hasLaneOutlets(n.kind) && i >= 2 ? std::min(BoxLayout::port, BoxLayout::padLaneHeight(n) - 3) : BoxLayout::port;
         r.push_back({ i, true, { w, BoxLayout::outlet(n, s, hw, i).y - ny }, size });
     }
     for (int i : BoxLayout::rowParams(s, n)) if (auto y = BoxLayout::paramRowY(n, s, hw, i)) r.push_back({ kParamPortBase + i, false, { 0, *y }, BoxLayout::paramPort });

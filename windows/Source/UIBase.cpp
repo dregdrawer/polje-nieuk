@@ -269,6 +269,7 @@ float width(const PatchNode& n) {
     if (!n.w || !std::isfinite(*n.w)) return d;
     return std::clamp(float(*n.w), d, 1600.0f);
 }
+bool hasLaneOutlets(const std::string& k) { return k == "rack" || k == "drumsynth"; }
 float padLaneHeight(const PatchNode& n) {
     bool rack = n.kind == "rack";
     float base = rack ? 9.0f : 14.0f, lanes = rack ? 16.0f : 4.0f;
@@ -390,7 +391,7 @@ std::vector<int> rowParams(const ModuleSpec& s, const PatchNode& n) {
 
 int portRows(const PatchNode& n, const ModuleSpec& s, const HardwareCounts& hw) {
     auto p = ports(n, s, hw);
-    if (n.kind == "rack") return std::max(int(p.ins.size()), 2);     // the pad outlets sit beside the drum roll's rows
+    if (hasLaneOutlets(n.kind)) return std::max(int(p.ins.size()), 2);     // the pad / voice outlets sit beside the drum roll's rows
     return rowOutlets(n.kind) ? int(p.ins.size()) : int(std::max(p.ins.size(), p.outs.size()));
 }
 bool sideDisplay(const std::string& k) { return k == "slider" || k == "knob" || k == "drums" || k == "roll"; }
@@ -423,7 +424,7 @@ Pt inlet(const PatchNode& n, const ModuleSpec& s, const HardwareCounts&, int i) 
 Pt outlet(const PatchNode& n, const ModuleSpec& s, const HardwareCounts& hw, int i) {
     float y = header + 3 + float(i) * portRow + portRow / 2;
     if (!n.collapsed) { int pi = outletParam(n.kind, i); if (pi >= 0) if (auto ry = paramRowY(n, s, hw, pi)) y = *ry; }
-    if (!n.collapsed && n.kind == "rack" && i >= 2)    // rack: pad k's outlet is level with its row in the drum roll
+    if (!n.collapsed && hasLaneOutlets(n.kind) && i >= 2)    // rack: pad k's outlet is level with its row in the drum roll
         y = header + portsHeight(n, s, hw) + 4 + (float(i - 2) + 0.5f) * padLaneHeight(n);
     if (n.collapsed) {
         auto r = collapsedRight(n, s);
@@ -453,12 +454,12 @@ std::vector<VisiblePort> visiblePorts(const PatchNode& n, const ModuleSpec& s, c
     std::vector<VisiblePort> r;
     auto p = ports(n, s, hw);
     if (n.collapsed) {
-        for (int k : collapsedLeft(n, s)) if (auto pt = destination(n, s, hw, k)) r.push_back({ *pt, inletName(s, k), false });
-        for (int k : collapsedRight(n, s)) r.push_back({ outlet(n, s, hw, k), juce::String::fromUTF8(s.outputs[size_t(k)].c_str()), true });
+        for (int k : collapsedLeft(n, s)) if (auto pt = destination(n, s, hw, k)) r.push_back({ *pt, inletName(s, k), false, k });
+        for (int k : collapsedRight(n, s)) r.push_back({ outlet(n, s, hw, k), juce::String::fromUTF8(s.outputs[size_t(k)].c_str()), true, k });
     } else {
-        for (int k = 0; k < int(p.ins.size()); ++k) r.push_back({ inlet(n, s, hw, k), p.ins[size_t(k)], false });
-        for (int k = 0; k < int(p.outs.size()); ++k) r.push_back({ outlet(n, s, hw, k), p.outs[size_t(k)], true });
-        for (int k : rowParams(s, n)) if (auto pt = paramInlet(n, s, hw, k)) r.push_back({ *pt, juce::String::fromUTF8(s.params[size_t(k)].name.c_str()), false });
+        for (int k = 0; k < int(p.ins.size()); ++k) r.push_back({ inlet(n, s, hw, k), p.ins[size_t(k)], false, k });
+        for (int k = 0; k < int(p.outs.size()); ++k) r.push_back({ outlet(n, s, hw, k), p.outs[size_t(k)], true, k });
+        for (int k : rowParams(s, n)) if (auto pt = paramInlet(n, s, hw, k)) r.push_back({ *pt, juce::String::fromUTF8(s.params[size_t(k)].name.c_str()), false, kParamPortBase + k });
     }
     return r;
 }
