@@ -117,7 +117,7 @@ struct ModuleBox: View {
             }
         }
         .dropDestination(for: URL.self) { urls, _ in
-            // rack~: dropped outside its pads — into the selected pad (and the ones after it)
+            // rack: dropped outside its pads — into the selected pad (and the ones after it)
             if node.kind == "rack" {
                 return model.loadPads(node.id, from: Int((node.params["sel"] ?? 0).rounded()), urls)
             }
@@ -288,12 +288,12 @@ struct ModuleBox: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: Inlet / outlet label rows (with per-channel meters on in~/out~)
+    // MARK: Inlet / outlet label rows (with per-channel meters on in/out)
 
     @ViewBuilder private var portRows: some View {
         let p = BoxLayout.ports(node, spec, hw)
         let rows = BoxLayout.portRows(node, spec, hw)
-        let outLabels = !BoxLayout.rowOutlets(node.kind)      // div~: outlets live on their parameter rows
+        let outLabels = !BoxLayout.rowOutlets(node.kind)      // div: outlets live on their parameter rows
         if rows > 0 {
             VStack(spacing: 0) {
                 ForEach(0..<rows, id: \.self) { r in
@@ -410,7 +410,7 @@ struct ModuleBox: View {
     /// A small dot left of each outlet's label that lights with the signal leaving it
     /// (clock ticks, gates, LFO swings, audio). Only while audio runs.
     @ViewBuilder private func activityDots(_ outs: [Int]) -> some View {
-        if model.isRunning, !outs.isEmpty, node.kind != "in", let dsp = model.node(node.id) {   // in~ has meters
+        if model.isRunning, !outs.isEmpty, node.kind != "in", let dsp = model.node(node.id) {   // in has meters
             let ys = outs.map { BoxLayout.outlet(node, spec, hw, $0).y - node.y }
             let names = outs.map { $0 < spec.outputs.count ? spec.outputs[$0] : "" }
             // gates and triggers blink on / off; smooth signals (LFOs, envelopes, audio) fade with their level
@@ -429,7 +429,7 @@ struct ModuleBox: View {
                     // same steps as the redraw check: on / off for gates, 5 brightness steps otherwise
                     let a: CGFloat = !lv.isFinite ? 0 : gate[j] ? (lv * 4 > 0.1 ? 1 : 0) : CGFloat((min(max(lv * 4, 0), 1) * 4).rounded() / 4)
                     let lit = a > 0.02
-                    // beside the outlet's label — or, on div~, just after the row's name ("out 1"), clear of
+                    // beside the outlet's label — or, on div, just after the row's name ("out 1"), clear of
                     // the value (values like ÷25 are wide enough to run under a dot near the right edge)
                     let x = BoxLayout.rowOutlets(node.kind) && !node.collapsed ? 8 + 8 + 5 * 5.45 + 14 : w - 10 - CGFloat(names[j].count) * 5.45 - 8
                     let r = CGRect(x: x - 3, y: ys[j] - 3, width: 6, height: 6)

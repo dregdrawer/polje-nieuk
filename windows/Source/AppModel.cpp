@@ -1237,6 +1237,35 @@ void AppModel::scheduleAutosave() { autosaveAt = now() + 1; }
 
 void AppModel::checkpoint() { checkpointAt = 0; history.commit(patch); }
 
+namespace BackgroundPicture {
+static juce::File file() { return PatchStore::folder().getChildFile("background-picture"); }
+static juce::Image cached; static bool loaded = false;
+const juce::Image& image() {
+    if (!loaded) { loaded = true; cached = file().existsAsFile() ? juce::ImageFileFormat::loadFrom(file()) : juce::Image(); }
+    return cached;
+}
+bool set(const juce::File& f) {
+    if (!juce::ImageFileFormat::loadFrom(f).isValid()) return false;
+    if (!f.copyFileTo(file())) return false;
+    loaded = false; CustomColours::version++;
+    return true;
+}
+void remove() { file().deleteFile(); loaded = false; CustomColours::version++; }
+}
+
+const std::vector<AppModel::HighlightColour> AppModel::highlightColours {
+    { "red", "#e5484d" }, { "orange", "#f76b15" }, { "yellow", "#ffc53d" }, { "green", "#30a46c" },
+    { "teal", "#12a594" }, { "blue", "#0090ff" }, { "purple", "#8e4ec6" }, { "pink", "#e93d82" } };
+void AppModel::setHighlight(const juce::String& id, std::optional<juce::String> hex) {
+    int i = patch.index(id);
+    if (i < 0 || patch.nodes[size_t(i)].highlight == hex) return;
+    checkpoint();
+    patch.nodes[size_t(i)].highlight = hex;
+    checkpoint();
+    scheduleAutosave();
+    changed();
+}
+
 void AppModel::undo() { checkpoint(); if (auto p = history.undo()) restore(*p); }
 void AppModel::redo() { checkpoint(); if (auto p = history.redo()) restore(*p); }
 
@@ -1344,7 +1373,7 @@ void AppModel::loadIntoSelection(const juce::File& f) {
             return;
         }
     for (auto& id : selectedNodes) if (dynamic_cast<SampleBufferNode*>(node(id))) { loadAudio(f, id); return; }
-    audioError = juce::String::fromUTF8("Select a looper~, sampler~, stretch~ or rack~ first \xe2\x80\x94 or drag the file onto one (or onto a rack pad).");
+    audioError = juce::String::fromUTF8("Select a looper, sampler, stretch or rack first \xe2\x80\x94 or drag the file onto one (or onto a rack pad).");
     changed();
 }
 

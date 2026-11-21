@@ -1,4 +1,4 @@
-// rec~, looper~, grain~, sampler~ — ports of Recorder.swift, Looper.swift, Granulator.swift, Sampler.swift.
+// rec, looper, grain, sampler — ports of Recorder.swift, Looper.swift, Granulator.swift, Sampler.swift.
 #include "Modules.h"
 #include "Buffers.h"
 
@@ -95,7 +95,7 @@ std::vector<int> detectTransients(const float* buf, int count, double sampleRate
     return out;
 }
 
-// ---------------------------------------------------------------- rec~
+// ---------------------------------------------------------------- rec
 
 class RecorderNode : public DSPNode, private juce::Thread {
 public:
@@ -176,7 +176,7 @@ private:
     int fileSession = 0;
 };
 
-// ---------------------------------------------------------------- looper~
+// ---------------------------------------------------------------- looper
 
 class LooperNode : public DSPNode, public SampleBufferNode {
 public:
@@ -337,7 +337,7 @@ private:
     bool recGate = false, stopGate = false, quant = true;
 };
 
-// ---------------------------------------------------------------- grain~
+// ---------------------------------------------------------------- grain
 
 class GranulatorNode : public DSPNode {
 public:
@@ -425,7 +425,7 @@ private:
     XorShift rng { 0xC0FFEE11u };
 };
 
-// ---------------------------------------------------------------- sampler~
+// ---------------------------------------------------------------- sampler
 
 class SamplerNode : public DSPNode, public SampleBufferNode {
 public:

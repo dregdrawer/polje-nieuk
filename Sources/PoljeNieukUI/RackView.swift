@@ -1,7 +1,7 @@
 import SwiftUI
 import PoljeNieukCore
 
-/// rack~: the drum roll (one lane per pad) above a 4 × 4 pad grid, like a drum rack.
+/// rack: the drum roll (one lane per pad) above a 4 × 4 pad grid, like a drum rack.
 /// Pads: tap to play and select (its settings show as rows below), M / S mute and solo,
 /// drop an audio file on a pad to load it (right-click / long-press: back to the built-in sound).
 struct RackView: View {
@@ -159,7 +159,7 @@ struct RackView: View {
     }
 }
 
-/// drumsynth~: same look and handling as rack~ — a drum roll (one lane per voice) above a row of
+/// drumsynth: same look and handling as rack — a drum roll (one lane per voice) above a row of
 /// four pads with M ▶ S; tap a pad to play and select it (its settings show as rows below).
 struct DrumSynthView: View {
     let node: DrumSynthNode
@@ -216,7 +216,7 @@ struct DrumSynthView: View {
     }
 
     func drawRoll(_ ctx: LiveGC, _ size: CGSize) {
-        let cw = size.width / CGFloat(max(len, 1)), rh = Self.laneHeight
+        let cw = size.width / CGFloat(max(len, 1)), rh = size.height / CGFloat(DrumSynthLayout.voices)
         ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
         for lane in 0..<V where lane % 2 == 1 {
             ctx.fill(Path(CGRect(x: 0, y: CGFloat(lane) * rh, width: size.width, height: rh)), with: .color(Theme.shade))
@@ -289,7 +289,7 @@ struct DrumSynthView: View {
     }
 }
 
-/// The step grid for drum / piano rolls and seq~: a faint line on every step, a stronger one on each beat
+/// The step grid for drum / piano rolls and seq: a faint line on every step, a stronger one on each beat
 /// and the strongest on each bar — placed from the division, so 1/32 shows 8 steps per beat, 1/8 shows 2.
 func drawStepGrid(_ ctx: LiveGC, _ size: CGSize, steps len: Int, division: Float?) {
     let cw = size.width / CGFloat(max(len, 1))

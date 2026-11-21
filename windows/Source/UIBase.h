@@ -123,6 +123,7 @@ namespace BoxLayout {
     juce::Point<float> textSize(const PatchNode& n);
     float width(const PatchNode& n);
     float readoutHeight(const PatchNode& n);
+    float padLaneHeight(const PatchNode& n);   // rack / drumsynth: one drum-roll row (grows with the box)
     float readoutHeight(const std::string& kind);
     std::pair<bool, bool> resizable(const std::string& kind);
     bool hasReadout(const std::string& kind);

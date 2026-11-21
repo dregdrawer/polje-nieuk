@@ -49,7 +49,7 @@ enum Theme {
     static let barFontBold = Font.system(size: 10, weight: .semibold, design: .monospaced)
 }
 
-/// Hardware channel counts the in~/out~ boxes show ports for.
+/// Hardware channel counts the in/out boxes show ports for.
 struct HardwareCounts: Equatable {
     var inputs: Int
     var outputs: Int
@@ -132,7 +132,7 @@ enum BoxLayout {
     }
 
     /// Width as drawn: the user's resized width, never narrower than the module's default.
-    /// Default width for this box — slider~ / knob~ grow with their number of controls.
+    /// Default width for this box — slider / knob grow with their number of controls.
     static func defaultWidth(_ node: PatchNode) -> CGFloat {
         switch node.kind {
         case "slider": return max(width(node.kind), CGFloat(ControlsLayout.count(node.params["count"] ?? 2)) * 44 + 20 + sideOutletColumn)
@@ -141,7 +141,7 @@ enum BoxLayout {
         }
     }
 
-    /// Default display height — knob~ gets a second row of full-size knobs past four.
+    /// Default display height — knob gets a second row of full-size knobs past four.
     static func defaultReadoutHeight(_ node: PatchNode) -> CGFloat {
         if node.kind == "knob" && ControlsLayout.count(node.params["count"] ?? 2) > 4 { return readoutHeight(node.kind) * 2 - 10 }
         return readoutHeight(node.kind)
@@ -162,6 +162,13 @@ enum BoxLayout {
     }
 
     /// Display height as drawn: the user's resized height, never shorter than the default.
+    /// rack / drumsynth: one drum-roll row. Making the box taller makes the rows taller (the pads keep their size).
+    static func padLaneHeight(_ node: PatchNode) -> CGFloat {
+        let (base, lanes): (CGFloat, Int) = node.kind == "rack" ? (RackView.rollHeight / CGFloat(RackLayout.pads), RackLayout.pads)
+                                                                : (DrumSynthView.laneHeight, DrumSynthLayout.voices)
+        return base + max(readoutHeight(node) - defaultReadoutHeight(node), 0) / CGFloat(lanes)
+    }
+
     static func readoutHeight(_ node: PatchNode) -> CGFloat {
         let d = defaultReadoutHeight(node)
         guard d > 0, let h = node.dh, h.isFinite else { return d }
@@ -203,7 +210,7 @@ enum BoxLayout {
         }
     }
 
-    /// Visible inlet/outlet names. in~/out~ show as many ports as the interface has channels.
+    /// Visible inlet/outlet names. in/out show as many ports as the interface has channels.
     static func ports(_ node: PatchNode, _ spec: ModuleSpec, _ hw: HardwareCounts) -> (ins: [String], outs: [String]) {
         switch node.kind {
         // Show the interface's channels — and never hide a port that still has a cable
@@ -231,7 +238,7 @@ enum BoxLayout {
     static func hasTriggerRow(_ spec: ModuleSpec) -> Bool { spec.params.contains { $0.isTrigger } }
 
     /// Parameter indices drawn as rows (triggers share one button row above them).
-    /// eq~ only shows the bands that are switched on.
+    /// eq only shows the bands that are switched on.
     static func rowParams(_ spec: ModuleSpec, _ node: PatchNode) -> [Int] {
         var all = spec.params.indices.filter { !spec.params[$0].isTrigger }
         // the algorithm/type selector is stored last (so old cables keep their slots) but shown first
@@ -279,7 +286,7 @@ enum BoxLayout {
         return all.filter { $0 < 2 || ($0 - 2) / 3 < n }
     }
 
-    /// div~: each outlet sits on the right edge of its own "÷" parameter row, so the port rows above
+    /// div: each outlet sits on the right edge of its own "÷" parameter row, so the port rows above
     /// only hold the inlets (no dead space).
     static func rowOutlets(_ kind: String) -> Bool { kind == "div" }
     static func outletParam(_ kind: String, _ i: Int) -> Int? { kind == "div" ? DividerLayout.divIndex(i) : nil }
@@ -290,7 +297,7 @@ enum BoxLayout {
         return rowOutlets(node.kind) ? p.ins.count : max(p.ins.count, p.outs.count)
     }
 
-    /// slider~ / knob~: the display sits beside the outlet column instead of under the port rows.
+    /// slider / knob: the display sits beside the outlet column instead of under the port rows.
     static func sideDisplay(_ kind: String) -> Bool { ["slider", "knob", "drums", "roll"].contains(kind) }
     static let sideOutletColumn: CGFloat = 30
 
@@ -330,8 +337,8 @@ enum BoxLayout {
         var y = header + 3 + CGFloat(i) * portRow + portRow / 2
         if !node.collapsed, let pi = outletParam(node.kind, i), let ry = paramRowY(node, spec, hw, pi) { y = ry }
         if !node.collapsed && node.kind == "rack" && i >= 2 {
-            // rack~: pad k's outlet is level with its row in the drum roll
-            let lane = RackView.rollHeight / CGFloat(RackLayout.pads)
+            // rack: pad k's outlet is level with its row in the drum roll
+            let lane = padLaneHeight(node)
             y = header + portsHeight(node, spec, hw) + 4 + CGFloat(i - 2) * lane + lane / 2
         }
         if node.collapsed {

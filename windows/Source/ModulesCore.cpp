@@ -198,7 +198,7 @@ private:
     double beatZero = 0;
 };
 
-/// slider~ / knob~: 1–8 controls, each a CV outlet; patched into a parameter they set its position.
+/// slider / knob: 1–8 controls, each a CV outlet; patched into a parameter they set its position.
 class ControlsNode : public DSPNode {
 public:
     ControlsNode(const ModuleSpec& s, double sr) : DSPNode(s, sr), positions(8 * kMaxBlock, 0.5f) {}

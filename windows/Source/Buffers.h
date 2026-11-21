@@ -1,4 +1,4 @@
-// Buffers.swift: audio held by buffer modules (looper~, sampler~, stretch~ …), file I/O, shared helpers.
+// Buffers.swift: audio held by buffer modules (looper, sampler, stretch …), file I/O, shared helpers.
 #pragma once
 #include "Engine.h"
 #include <thread>
@@ -94,10 +94,10 @@ inline std::pair<std::vector<float>, int> patternRescale(const std::vector<float
     return { out, newLen };
 }
 
-/// Onset positions (sampler~ transient chop), main thread only.
+/// Onset positions (sampler transient chop), main thread only.
 std::vector<int> detectTransients(const float* buf, int count, double sampleRate, float sensitivity, int maxSlices = 128);
 
-/// Where rec~ writes (Documents/polje nieuk Recordings).
+/// Where rec writes (Documents/polje nieuk Recordings).
 juce::File recordingsDirectory();
 
 } // namespace pn

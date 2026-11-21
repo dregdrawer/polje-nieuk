@@ -4,7 +4,7 @@ import PoljeNieukCore
 
 /// The "tidy" layout: signal flows left → right in columns, each chain keeps its order all the way to the
 /// mixer, boxes are lined up with what they connect to so cables run as straight as possible, controllers
-/// (knob~ / slider~ / an LFO that only moves parameters) sit in a row above what they control, unpatched
+/// (knob / slider / an LFO that only moves parameters) sit in a row above what they control, unpatched
 /// boxes wait in a row underneath, and text notes travel with the box they were next to.
 @MainActor public enum TidyLayout {
     static let grid: CGFloat = 24

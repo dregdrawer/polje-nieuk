@@ -82,7 +82,7 @@ struct StepClock {
     }
 }
 
-// MARK: - keys~ : keyboard + arpeggiator
+// MARK: - keys : keyboard + arpeggiator
 
 public final class KeysNode: DSPNode {
     // 0 octave, 1 glide, 2 arp mode, 3 arp rate, 4 gate length, 5 arp octaves, 6 latch, 7 scale-free velocity
@@ -271,7 +271,7 @@ public final class KeysNode: DSPNode {
     }
 }
 
-// MARK: - seq~ : 16-step sequencer
+// MARK: - seq : 16-step sequencer
 
 public final class SeqNode: DSPNode {
     // 0 length, 1 division, 2 direction, 3 gate length, 4 scale, 5 transpose
@@ -356,7 +356,7 @@ public final class SeqNode: DSPNode {
     }
 }
 
-// MARK: - turing~ : looping random shift register
+// MARK: - turing : looping random shift register
 
 public final class TuringNode: DSPNode {
     // 0 change, 1 length, 2 range (octaves), 3 scale, 4 division, 5 gate length, 6 octave shift, 7 notes (density)
@@ -466,7 +466,7 @@ public final class TuringNode: DSPNode {
     }
 }
 
-// MARK: - roll~ : piano roll (monophonic)
+// MARK: - roll : piano roll (monophonic)
 
 public final class RollNode: DSPNode {
     // 0 length, 1 division, 2 lowest note, 3 gate length
@@ -545,7 +545,7 @@ public final class RollNode: DSPNode {
     }
 }
 
-// MARK: - drums~ : drum roll, 8 lanes of triggers
+// MARK: - drums : drum roll, 8 lanes of triggers
 
 public final class DrumsNode: DSPNode {
     // 0 length, 1 division, 2 trigger length (ms)
@@ -587,7 +587,7 @@ public final class DrumsNode: DSPNode {
     }
 }
 
-// MARK: - div~ : clock divider, 8 outputs
+// MARK: - div : clock divider, 8 outputs
 
 public enum DividerLayout {
     public static let outputs = 8

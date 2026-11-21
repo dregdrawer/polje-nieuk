@@ -10,7 +10,7 @@ final class CompiledGraph {
     struct Mod {
         let index: Int
         let sources: [UnsafePointer<Float>]
-        /// slider~ / knob~ outlets: they *set* the parameter's position (0…1 across its whole range)
+        /// slider / knob outlets: they *set* the parameter's position (0…1 across its whole range)
         /// instead of adding to it.
         var absolute: [UnsafePointer<Float>] = []
     }
@@ -160,7 +160,7 @@ public final class GraphHost {
         if let n = nodes[id] { n.bypassMix = 1 }
     }
 
-    /// Tempo used when the patch has no clock~ module.
+    /// Tempo used when the patch has no clock module.
     public var defaultBPM: Double = 120
 
     public func load(_ patch: Patch) {
@@ -278,7 +278,7 @@ public final class GraphHost {
                 c.fromNode == id && c.fromPort < 64 ? m | (1 << UInt64(c.fromPort)) : m
             }
             if let out = node as? HardwareOutNode {
-                // channels fed only by control voltages skip out~'s gain (1 V/oct stays 1 V/oct)
+                // channels fed only by control voltages skip out's gain (1 V/oct stays 1 V/oct)
                 var cv: UInt64 = 0
                 for p in 0..<min(nIn, 64) {
                     let srcs = cables.filter { $0.toNode == id && $0.toPort == p }
@@ -305,7 +305,7 @@ public final class GraphHost {
         return CompiledGraph(entries: entries, hasClock: hasClock, owned: owned)
     }
 
-    /// Is this outlet a control voltage? scope~ passes its inputs through, so it is whatever feeds it.
+    /// Is this outlet a control voltage? scope passes its inputs through, so it is whatever feeds it.
     private func isCV(_ id: UUID, _ port: Int, _ cables: [PatchCable], depth: Int) -> Bool {
         guard let n = nodes[id], depth < 8 else { return false }
         if n.spec.kind == "scope" {

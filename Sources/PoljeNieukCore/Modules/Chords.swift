@@ -1,9 +1,9 @@
 import Foundation
 
-/// chord~ : a chord generator. "in key": a degree (I–VII) of a scale in a key, stacked in thirds; "free": a
+/// chord : a chord generator. "in key": a degree (I–VII) of a scale in a key, stacked in thirds; "free": a
 /// chord type on the root. Voicing (inversion, spread, octave), voice leading (each chord takes the inversion
 /// closest to the last), strum. The whole chord leaves on one pitch / gate cable — a synth plays every note
-/// on it; a mono module (out~ to the modular) gets the lowest.
+/// on it; a mono module (out to the modular) gets the lowest.
 public final class ChordNode: DSPNode {
     // params: 0 mode, 1 key, 2 scale, 3 degree, 4 size (in key), 5 type (free), 6 voices, 7 inversion,
     //         8 spread, 9 voice leading, 10 octave, 11 strum, 12 strum direction

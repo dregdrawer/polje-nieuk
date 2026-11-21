@@ -41,7 +41,7 @@ public enum Transients {
     }
 }
 
-/// sampler~ : records or loads a sample, chops it (transients / equal slices / whole region),
+/// sampler : records or loads a sample, chops it (transients / equal slices / whole region),
 /// and plays slices on gates, clock divisions or CV — forward, reverse, random, ping-pong —
 /// through an ADSR, mono (choke) or 8-voice poly.
 public final class SamplerNode: DSPNode, SampleBufferNode {

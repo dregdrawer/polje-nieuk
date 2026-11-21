@@ -73,7 +73,7 @@ public:
     }
 };
 
-// ---------------------------------------------------------------- clock~
+// ---------------------------------------------------------------- clock
 
 class ClockDisplay : public NativeDisplay {
 public:
@@ -103,7 +103,7 @@ public:
     }
 };
 
-// ---------------------------------------------------------------- looper~ / sampler~ / stretch~
+// ---------------------------------------------------------------- looper / sampler / stretch
 
 class BufferDisplay : public NativeDisplay {
 public:
@@ -254,7 +254,7 @@ private:
     std::vector<float> cache;
 };
 
-// ---------------------------------------------------------------- keys~
+// ---------------------------------------------------------------- keys
 
 namespace KeysGeo {
 static const int whiteSemis[] = { 0, 2, 4, 5, 7, 9, 11 }, blackSemis[] = { 1, 3, 6, 8, 10 }, blackWhite[] = { 0, 1, 3, 4, 5 };
@@ -329,7 +329,7 @@ private:
     int lastKey = -1;
 };
 
-// ---------------------------------------------------------------- seq~
+// ---------------------------------------------------------------- seq
 
 class SeqDisplay : public NativeDisplay {
 public:
@@ -412,7 +412,7 @@ private:
     std::optional<float> paintGate;
 };
 
-// ---------------------------------------------------------------- turing~
+// ---------------------------------------------------------------- turing
 
 class TuringDisplay : public NativeDisplay {
 public:
@@ -454,7 +454,7 @@ public:
     }
 };
 
-// ---------------------------------------------------------------- roll~ / drums~
+// ---------------------------------------------------------------- roll / drums
 
 class GridDisplay : public NativeDisplay {
 public:
@@ -521,7 +521,7 @@ private:
     std::optional<float> paint;
 };
 
-// ---------------------------------------------------------------- comp~
+// ---------------------------------------------------------------- comp
 
 class CompDisplay : public NativeDisplay {
 public:
@@ -602,7 +602,7 @@ private:
     int head = 0; double last = 0;
 };
 
-// ---------------------------------------------------------------- lfo~
+// ---------------------------------------------------------------- lfo
 
 class LFODisplay : public NativeDisplay {
 public:
@@ -653,7 +653,7 @@ public:
     }
 };
 
-// ---------------------------------------------------------------- chord~
+// ---------------------------------------------------------------- chord
 
 class ChordDisplay : public NativeDisplay {
 public:
@@ -743,7 +743,7 @@ public:
     }
 };
 
-// ---------------------------------------------------------------- wave~
+// ---------------------------------------------------------------- wave
 
 class WaveDisplay : public NativeDisplay {
 public:
@@ -878,7 +878,7 @@ private:
     bool drawing = false;
 };
 
-// ---------------------------------------------------------------- scope~
+// ---------------------------------------------------------------- scope
 
 class ScopeDisplay : public NativeDisplay {
 public:
@@ -953,7 +953,7 @@ public:
     }
 };
 
-// ---------------------------------------------------------------- slider~ / knob~
+// ---------------------------------------------------------------- slider / knob
 
 class ControlsDisplay : public NativeDisplay {
 public:
@@ -1094,7 +1094,7 @@ private:
     int grabbed = -1; float startV = 0.5f;
 };
 
-// ---------------------------------------------------------------- peq~
+// ---------------------------------------------------------------- peq
 
 class EQDisplay : public NativeDisplay {
 public:
@@ -1214,7 +1214,7 @@ private:
     std::vector<std::complex<float>> fft;
 };
 
-// ---------------------------------------------------------------- rack~ / drumsynth~
+// ---------------------------------------------------------------- rack / drumsynth
 
 class PadsDisplay : public NativeDisplay {
 public:
@@ -1379,7 +1379,7 @@ public:
     using PadsDisplay::PadsDisplay;
     RackNode* rack() { return dynamic_cast<RackNode*>(dsp()); }
     int lanes() const override { return RackLayout::pads; }
-    float laneHeight() const override { return 9; }
+    float laneHeight() const override { return BoxLayout::padLaneHeight(node); }
     float labelWidth() const override { return 64; }
     float labelSize() const override { return 7.5f; }
     int padRows() const override { return 4; }
@@ -1405,7 +1405,7 @@ public:
     using PadsDisplay::PadsDisplay;
     DrumSynthNode* synth() { return dynamic_cast<DrumSynthNode*>(dsp()); }
     int lanes() const override { return DrumSynthLayout::voices; }
-    float laneHeight() const override { return 14; }
+    float laneHeight() const override { return BoxLayout::padLaneHeight(node); }
     float labelWidth() const override { return 52; }
     float labelSize() const override { return 8.5f; }
     int padRows() const override { return 1; }

@@ -1,6 +1,6 @@
 import Foundation
 
-// rack~ : a sampling drum machine. 16 pads (each a sample with tune / attack / decay / level / pan and
+// rack : a sampling drum machine. 16 pads (each a sample with tune / attack / decay / level / pan and
 // mute / solo), played by its own drum roll (16 lanes × up to 32 steps) on the app clock or a clock input.
 // Starts with a synthesized kit so it makes sound straight away; drop audio files onto pads to replace them.
 

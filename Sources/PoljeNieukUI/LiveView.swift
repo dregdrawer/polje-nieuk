@@ -204,7 +204,7 @@ struct LiveCanvas: View {
         var body: some View {
             let _ = configure()
             // drawn in place at every zoom. (A nested native view per display was cheaper, but native views
-            // don't scale properly inside the zoomed canvas: keys~ drew its keyboard shrunk into a corner.)
+            // don't scale properly inside the zoomed canvas: keys drew its keyboard shrunk into a corner.)
             Observing(slot: slot, draw: draw, zoom: zoom)
         }
         private func configure() {

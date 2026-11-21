@@ -1,6 +1,6 @@
 import Foundation
 
-/// eq~ : parametric EQ with 3, 5 or 8 bands. First band is a low shelf, last a high shelf,
+/// eq : parametric EQ with 3, 5 or 8 bands. First band is a low shelf, last a high shelf,
 /// the rest are peaking bells (RBJ biquads). Parameter layout:
 /// 0 bands (3/5/8), 1 output gain, then per band b: 2+3b freq, 3+3b gain, 4+3b Q.
 public enum ParametricEQ {

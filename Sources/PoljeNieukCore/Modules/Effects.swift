@@ -1,8 +1,8 @@
 import Foundation
 
-// MARK: - filter~
+// MARK: - filter
 
-/// filter~ : stereo filter with three models.
+/// filter : stereo filter with three models.
 ///  • svf    — clean zero-delay-feedback state-variable filter
 ///  • ladder — Moog-style 4-pole transistor ladder (24 dB/oct, saturating, self-oscillates)
 ///  • ms20   — Sallen-Key-ish screamer: 2-pole with a saturating resonance path
@@ -85,9 +85,9 @@ final class FilterNode: DSPNode {
     }
 }
 
-// MARK: - delay~
+// MARK: - delay
 
-/// delay~ : stereo delay, free or clock-locked, three characters:
+/// delay : stereo delay, free or clock-locked, three characters:
 ///  • digital — clean repeats
 ///  • tape    — wow & flutter, saturating record head, repeats lose lows and highs
 ///  • analog  — bucket-brigade: darker the longer the time, soft clipping, slow chorusy drift
@@ -180,9 +180,9 @@ final class DelayNode: DSPNode {
     }
 }
 
-// MARK: - drive~
+// MARK: - drive
 
-/// drive~ : stereo saturation with six curves.
+/// drive : stereo saturation with six curves.
 ///  soft (tanh) · tube (asymmetric, even harmonics) · hard clip · fold (wavefolder) · fuzz · rectify (octave-up)
 /// Params: 0 drive, 1 tone, 2 mix, 3 output, 4 type
 final class DriveNode: DSPNode {
@@ -222,7 +222,7 @@ final class DriveNode: DSPNode {
     }
 }
 
-// MARK: - reverb~
+// MARK: - reverb
 
 private struct Comb {
     let buf: UnsafeMutablePointer<Float>
@@ -277,7 +277,7 @@ private struct APLine {
     func free() { line.free() }
 }
 
-/// reverb~ : three algorithms.
+/// reverb : three algorithms.
 ///  • room  — Freeverb (8 combs + 4 allpasses per side), bright and dense
 ///  • plate — Dattorro plate: input diffusers into a modulated figure-eight tank, smooth and lush
 ///  • hall  — 8-line feedback delay network with Hadamard mixing, long natural decays (RT60 up to ~12 s)

@@ -205,7 +205,7 @@ struct Meter: View {
     }
 }
 
-/// Meter for one hardware channel of in~/out~.
+/// Meter for one hardware channel of in/out.
 struct ChannelMeter: View {
     let node: DSPNode?
     let channel: Int

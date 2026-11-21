@@ -72,7 +72,7 @@ enum PortHelp {
             let i = port - kParamPortBase
             let p = i < spec.params.count ? spec.params[i] : nil
             return ("\(spec.name) · \(p?.name ?? "parameter") (CV in)",
-                    "Patch any outlet here to move this parameter. ±1.0 (≈ ±10 V) sweeps its whole range; use atten~ to scale. A slider~ / knob~ patched here takes it over completely and moves with its row.")
+                    "Patch any outlet here to move this parameter. ±1.0 (≈ ±10 V) sweeps its whole range; use atten to scale. A slider / knob patched here takes it over completely and moves with its row.")
         }
         let names = output ? spec.outputs : spec.inputs
         let name = port < names.count ? names[port] : "?"
@@ -80,11 +80,11 @@ enum PortHelp {
         let kind = output ? "outlet" : "inlet"
         let what: String
         switch n {
-        case "l", "r", "in", "out": what = output ? "Audio out — patch to out~ or into another box." : "Audio in."
-        case "pitch": what = output ? "Pitch CV out, 1 V/oct (0.1 = one octave). Patch into a voice's pitch inlet or out~ to the modular." : "Pitch CV in, 1 V/oct (0.1 = one octave)."
+        case "l", "r", "in", "out": what = output ? "Audio out — patch to out or into another box." : "Audio in."
+        case "pitch": what = output ? "Pitch CV out, 1 V/oct (0.1 = one octave). Patch into a voice's pitch inlet or out to the modular." : "Pitch CV in, 1 V/oct (0.1 = one octave)."
         case "gate": what = output ? "Gate out: high while a note / step is on." : "Gate in: high starts, low releases."
         case "trig", "strum", "seed": what = output ? "Trigger pulses out." : "Trigger in: each rising edge fires it."
-        case "clock", "t clk", "x clk": what = output ? "Clock pulses out." : "Clock in: pulses from the modular or clock~ drive it."
+        case "clock", "t clk", "x clk": what = output ? "Clock pulses out." : "Clock in: pulses from the modular or clock drive it."
         case "reset": what = "Reset in: a pulse goes back to the start."
         case "sc": what = "Sidechain in: this signal drives the compression instead of the input."
         case "freeze": what = "Freeze in: high holds the current sound."

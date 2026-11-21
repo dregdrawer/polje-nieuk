@@ -1,4 +1,4 @@
-// keys~, seq~, turing~, roll~, drums~, div~, chord~ — ports of Sequencing.swift and Chords.swift.
+// keys, seq, turing, roll, drums, div, chord — ports of Sequencing.swift and Chords.swift.
 #include "Modules.h"
 #include "ModulesShared.h"
 
@@ -23,7 +23,7 @@ float quantize(float semis, int scale) {
 }
 }
 
-// ---------------------------------------------------------------- keys~
+// ---------------------------------------------------------------- keys
 
 KeysNode::KeysNode(const ModuleSpec& s, double sr) : DSPNode(s, sr) { keyLane.fill(-1); }
 
@@ -132,7 +132,7 @@ void KeysNode::process(int frames, const float* const*, uint64_t, ProcessContext
     readouts[0] = float(gOut[frames - 1] > 0 ? note : -1);
 }
 
-// ---------------------------------------------------------------- seq~
+// ---------------------------------------------------------------- seq
 
 void SeqNode::setData(const std::string& key, const std::vector<float>& values) {
     auto* dst = key == "pitch" ? &pitches : (key == "gate" ? &gates : nullptr);
@@ -177,7 +177,7 @@ void SeqNode::process(int frames, const float* const* in, uint64_t con, ProcessC
     readouts[0] = float(step);
 }
 
-// ---------------------------------------------------------------- turing~
+// ---------------------------------------------------------------- turing
 
 void TuringNode::process(int frames, const float* const* in, uint64_t con, ProcessContext& ctx) {
     float change = std::clamp(params[0], 0.0f, 1.0f);
@@ -229,7 +229,7 @@ void TuringNode::process(int frames, const float* const* in, uint64_t con, Proce
     }
 }
 
-// ---------------------------------------------------------------- roll~
+// ---------------------------------------------------------------- roll
 
 void RollNode::process(int frames, const float* const*, uint64_t, ProcessContext& ctx) {
     int len = clampIndex(params[0] - 1, steps) + 1;
@@ -263,7 +263,7 @@ void RollNode::process(int frames, const float* const*, uint64_t, ProcessContext
     readouts[0] = float(step);
 }
 
-// ---------------------------------------------------------------- drums~
+// ---------------------------------------------------------------- drums
 
 void DrumsNode::process(int frames, const float* const*, uint64_t, ProcessContext& ctx) {
     int len = clampIndex(params[0] - 1, steps) + 1;
@@ -279,7 +279,7 @@ void DrumsNode::process(int frames, const float* const*, uint64_t, ProcessContex
     readouts[0] = float(step);
 }
 
-// ---------------------------------------------------------------- div~
+// ---------------------------------------------------------------- div
 
 class DividerNode : public DSPNode {
 public:
@@ -338,7 +338,7 @@ private:
     int count = -1, sinceEdge = 0, period = 12000;
 };
 
-// ---------------------------------------------------------------- chord~
+// ---------------------------------------------------------------- chord
 
 namespace Chords {
 const std::vector<std::string> keys = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };

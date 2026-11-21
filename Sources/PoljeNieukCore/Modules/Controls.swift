@@ -1,6 +1,6 @@
 import Foundation
 
-// slider~ and knob~: hands-on CV for live playing. Each holds 1–8 controls; every control has its own
+// slider and knob: hands-on CV for live playing. Each holds 1–8 controls; every control has its own
 // outlet, and each control's value is also a parameter, so it can be modulated or saved with the patch.
 
 public enum ControlsLayout {
@@ -74,7 +74,7 @@ final class ControlsNode: DSPNode {
     }
 }
 
-/// slider~ / knob~ outlets patched into parameters are locked to them both ways.
+/// slider / knob outlets patched into parameters are locked to them both ways.
 public enum ControlLink {
     public struct Update: Equatable {
         public let node: UUID; public let index: Int; public let value: Float
@@ -86,7 +86,7 @@ public enum ControlLink {
         return n.kind == "slider" || n.kind == "knob"
     }
 
-    /// The patch with every parameter that a slider~ / knob~ drives set to that control's position
+    /// The patch with every parameter that a slider / knob drives set to that control's position
     /// (the engine plays the control's position, so the row must show it too).
     public static func reconciled(_ patch: Patch) -> Patch {
         var p = patch

@@ -193,7 +193,7 @@ open class DSPNode {
         outputs[k] + v * kMaxBlock
     }
 
-    /// Which outlets have a cable (bit k = outlet k); set when the patch is loaded. rack~ sends a pad to its
+    /// Which outlets have a cable (bit k = outlet k); set when the patch is loaded. rack sends a pad to its
     /// own outlet instead of the main mix while that outlet is patched.
     public internal(set) var patchedOutputs: UInt64 = 0
 

@@ -564,9 +564,9 @@ public final class AppModel: ObservableObject {
 
     // MARK: Tempo (top bar)
 
-    /// The clock~ box that sets the tempo, if any.
+    /// The clock box that sets the tempo, if any.
     private var clockNode: PatchNode? { patch.nodes.first { $0.kind == "clock" } }
-    /// The tempo can be set from the top bar unless a clock~ is following the modular.
+    /// The tempo can be set from the top bar unless a clock is following the modular.
     var tempoEditable: Bool {
         guard let c = clockNode else { return true }
         return (c.params["source"] ?? 0) > 0.5            // internal
@@ -921,7 +921,7 @@ public final class AppModel: ObservableObject {
               let spec = ModuleRegistry.spec(n.kind) else { return }
         let old = patch.cables.filter { insertCandidates.contains($0.id) }.sorted { $0.toPort < $1.toPort }
         guard !old.isEmpty else { return }
-        // L / R — or A / B (scope~): the second side of a stereo pair goes through the second channel
+        // L / R — or A / B (scope): the second side of a stereo pair goes through the second channel
         let lIn = spec.inputs.firstIndex(of: "L") ?? 0
         let rIn = spec.inputs.firstIndex(of: "R") ?? spec.inputs.firstIndex(of: "B")
         let lOut = spec.outputs.firstIndex { $0.hasSuffix("L") } ?? 0
@@ -931,7 +931,7 @@ public final class AppModel: ObservableObject {
                c.fromPort < sa.outputs.count, sa.outputs[c.fromPort].hasSuffix("R") { return true }
             if let b = patch.nodes.first(where: { $0.id == c.toNode }), let sb = ModuleRegistry.spec(b.kind),
                c.toPort < sb.inputs.count, sb.inputs[c.toPort] == "R" { return true }
-            return old.count > 1 && k > 0      // e.g. out~ 1 / 2: the second one is the right side
+            return old.count > 1 && k > 0      // e.g. out 1 / 2: the second one is the right side
         }
         patch.cables.removeAll { insertCandidates.contains($0.id) }
         var made = Set<String>()
@@ -1076,7 +1076,7 @@ public final class AppModel: ObservableObject {
     func startAutoRecord(_ id: UUID) {
         guard !autoRecording.contains(id), host.node(id) != nil else { return }
         autoRecording.insert(id)
-        (host.node(id) as? KeysNode)?.recordingKeys = true      // keys~: the notes you play are recorded too
+        (host.node(id) as? KeysNode)?.recordingKeys = true      // keys: the notes you play are recorded too
         autoTouched[id] = [:]
         if autoTimer == nil {
             let t = Timer(timeInterval: 1.0 / 120, repeats: true) { [weak self] _ in
@@ -1125,7 +1125,7 @@ public final class AppModel: ObservableObject {
         }
         patch.nodes[i].data = patch.nodes[i].data.filter { !$0.key.hasPrefix("auto.") }
         n?.loadAutomation(patch.nodes[i].data)
-        if let n { for (key, start) in n.defaultData where key.hasPrefix("auto.") { n.setData(key, start) } }   // keys~ notes
+        if let n { for (key, start) in n.defaultData where key.hasPrefix("auto.") { n.setData(key, start) } }   // keys notes
         scheduleAutosave()
     }
 
@@ -1212,6 +1212,18 @@ public final class AppModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
     }
 
+    /// The coloured frame around a box (nil = none). One undo step.
+    static let highlightColours: [(name: String, hex: String)] = [
+        ("red", "#e5484d"), ("orange", "#f76b15"), ("yellow", "#ffc53d"), ("green", "#30a46c"),
+        ("teal", "#12a594"), ("blue", "#0090ff"), ("purple", "#8e4ec6"), ("pink", "#e93d82")]
+    func setHighlight(_ id: UUID, _ hex: String?) {
+        guard let i = patch.index(of: id), patch.nodes[i].highlight != hex else { return }
+        checkpoint()
+        patch.nodes[i].highlight = hex
+        checkpoint()
+        scheduleAutosave()
+    }
+
     /// text boxes
     func setText(_ id: UUID, _ text: String) {
         guard let i = patch.index(of: id) else { return }
@@ -1219,7 +1231,7 @@ public final class AppModel: ObservableObject {
         scheduleAutosave()
     }
 
-    /// Boxes with sync / division / a free time or rate (delay~, lfo~, tremolo …): moving the division
+    /// Boxes with sync / division / a free time or rate (delay, lfo, tremolo …): moving the division
     /// switches sync on, moving the free time / rate switches it off — no separate trip to the sync row.
     static let freeTimingKeys: Set<String> = ["time", "rate"]
     private func followSync(_ i: Int, _ id: UUID, _ spec: ModuleSpec, _ key: String) {
@@ -1240,7 +1252,7 @@ public final class AppModel: ObservableObject {
         setData(id, [key: values], step: step)
     }
 
-    /// Several arrays from one edit (seq~ pitch + gate): one undo step.
+    /// Several arrays from one edit (seq pitch + gate): one undo step.
     func setData(_ id: UUID, _ entries: [String: [Float]], step: Bool = true) {
         guard let i = patch.index(of: id) else { return }
         if step && !restoringHistory { checkpoint() }
@@ -1260,7 +1272,7 @@ public final class AppModel: ObservableObject {
         host.node(id)?.base[index] = 1
     }
 
-    /// A parameter shows the modulation marker only for real modulation — a slider~ / knob~ patched into it
+    /// A parameter shows the modulation marker only for real modulation — a slider / knob patched into it
     /// is the same control as its own row, so the row itself moves instead.
     /// A fingerprint of what box `id` shows besides its own settings: its cables, selection, audio on / off.
     func boxRev(_ id: UUID) -> Int {
@@ -1278,7 +1290,7 @@ public final class AppModel: ObservableObject {
 
     private func isControlNode(_ id: UUID) -> Bool { ControlLink.isControl(patch, id) }
 
-    /// slider~ / knob~ and the parameters they're patched into are locked together, both ways
+    /// slider / knob and the parameters they're patched into are locked together, both ways
     /// (rules in ControlLink, which the self-test checks).
     private func syncLinked(_ id: UUID, _ spec: ModuleSpec, _ index: Int, _ value: Float) {
         for u in ControlLink.updates(patch, changed: id, index: index, value: value) {
@@ -1455,7 +1467,7 @@ public final class AppModel: ObservableObject {
         history.reset(to: patch, keepHistory: true)  // linked controls may normalise it: not a new step
     }
 
-    /// clock~: whether its clock inlet had a cable last time we looked.
+    /// clock: whether its clock inlet had a cable last time we looked.
     private var clockInletPatched: [UUID: Bool] = [:]
 
     /// Patching into a clock's clock inlet switches it to external; taking the cable out, back to internal.
@@ -1543,14 +1555,14 @@ public final class AppModel: ObservableObject {
 
     /// Loads an audio file into a looper / sampler / stretch (file picker, browser drag, or Finder drop).
     @discardableResult
-    // MARK: rack~ pads
+    // MARK: rack pads
 
     /// Where a rack's pad sample (and its name) is kept.
     private func padURL(_ id: UUID, _ k: Int) -> URL { Self.samplesDirectory.appendingPathComponent("\(id.uuidString)-pad\(k).caf") }
     private func padNameURL(_ id: UUID, _ k: Int) -> URL { Self.samplesDirectory.appendingPathComponent("\(id.uuidString)-pad\(k).txt") }
     private var restoredRacks: Set<ObjectIdentifier> = []
 
-    /// Load audio files into rack~ pads, from pad `k` on (several files fill the next pads). Reading, resampling
+    /// Load audio files into rack pads, from pad `k` on (several files fill the next pads). Reading, resampling
     /// and saving the copy happen in the background; the drop returns at once (it used to freeze the app until the
     /// file was decoded).
     @discardableResult
@@ -1591,7 +1603,7 @@ public final class AppModel: ObservableObject {
     }
     @discardableResult
     func loadPad(_ id: UUID, _ k: Int, from url: URL) -> Bool { loadPads(id, from: k, [url]) }
-    /// rack~ pads whose sample is being read (the pad shows "loading…").
+    /// rack pads whose sample is being read (the pad shows "loading…").
     @Published var loadingPads: [UUID: Set<Int>] = [:]
 
     /// Back to the built-in sound on pad `k`.
@@ -1657,7 +1669,7 @@ public final class AppModel: ObservableObject {
             return
         }
         guard let id = selectedNodes.first(where: { host.node($0) is SampleBufferNode }) else {
-            audioError = "Select a looper~, sampler~, stretch~ or rack~ first — or drag the file onto one (or onto a rack pad)."
+            audioError = "Select a looper, sampler, stretch or rack first — or drag the file onto one (or onto a rack pad)."
             return
         }
         loadAudio(url, into: id)
@@ -1681,7 +1693,7 @@ public final class AppModel: ObservableObject {
         b.load(audio.prefix(b.bufferCapacity))
     }
 
-    /// "looper~ 2" style names, for menus.
+    /// "looper 2" style names, for menus.
     func label(for n: PatchNode) -> String {
         let name = ModuleRegistry.spec(n.kind)?.name ?? n.kind
         let same = patch.nodes.filter { $0.kind == n.kind }

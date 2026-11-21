@@ -24,7 +24,7 @@
 
       ],
       "kind" : "in",
-      "name" : "in~",
+      "name" : "in",
       "outputs" : [
         "1",
         "2",
@@ -111,7 +111,7 @@
         "32"
       ],
       "kind" : "out",
-      "name" : "out~",
+      "name" : "out",
       "outputs" : [
 
       ],
@@ -146,7 +146,7 @@
         "R"
       ],
       "kind" : "rec",
-      "name" : "rec~",
+      "name" : "rec",
       "outputs" : [
 
       ],
@@ -278,7 +278,7 @@
         "reset"
       ],
       "kind" : "div",
-      "name" : "div~",
+      "name" : "div",
       "outputs" : [
         "1",
         "2",
@@ -1027,7 +1027,7 @@
         "stop"
       ],
       "kind" : "looper",
-      "name" : "looper~",
+      "name" : "looper",
       "outputs" : [
         "L",
         "R"
@@ -1224,7 +1224,7 @@
         "pos"
       ],
       "kind" : "grain",
-      "name" : "grain~",
+      "name" : "grain",
       "outputs" : [
         "L",
         "R"
@@ -1400,7 +1400,7 @@
         "R"
       ],
       "kind" : "delay",
-      "name" : "delay~",
+      "name" : "delay",
       "outputs" : [
         "L",
         "R"
@@ -1529,7 +1529,7 @@
         "R"
       ],
       "kind" : "reverb",
-      "name" : "reverb~",
+      "name" : "reverb",
       "outputs" : [
         "L",
         "R"
@@ -1628,7 +1628,7 @@
         "cv"
       ],
       "kind" : "filter",
-      "name" : "filter~",
+      "name" : "filter",
       "outputs" : [
         "L",
         "R"
@@ -1720,7 +1720,7 @@
         "R"
       ],
       "kind" : "drive",
-      "name" : "drive~",
+      "name" : "drive",
       "outputs" : [
         "L",
         "R"
@@ -1805,7 +1805,7 @@
         "hold"
       ],
       "kind" : "repeat",
-      "name" : "repeat~",
+      "name" : "repeat",
       "outputs" : [
         "L",
         "R"
@@ -1936,7 +1936,7 @@
         "play"
       ],
       "kind" : "sampler",
-      "name" : "sampler~",
+      "name" : "sampler",
       "outputs" : [
         "L",
         "R"
@@ -2272,7 +2272,7 @@
         "freeze"
       ],
       "kind" : "stretch",
-      "name" : "stretch~",
+      "name" : "stretch",
       "outputs" : [
         "L",
         "R"
@@ -2406,7 +2406,7 @@
         "R"
       ],
       "kind" : "freqshift",
-      "name" : "freqshift~",
+      "name" : "freqshift",
       "outputs" : [
         "up L",
         "up R",
@@ -2467,7 +2467,7 @@
         "R"
       ],
       "kind" : "peq",
-      "name" : "eq~",
+      "name" : "eq",
       "outputs" : [
         "L",
         "R"
@@ -2759,7 +2759,7 @@
 
       ],
       "kind" : "keys",
-      "name" : "keys~",
+      "name" : "keys",
       "outputs" : [
         "pitch",
         "gate",
@@ -2883,7 +2883,7 @@
         "reset"
       ],
       "kind" : "seq",
-      "name" : "seq~",
+      "name" : "seq",
       "outputs" : [
         "pitch",
         "gate"
@@ -3031,7 +3031,7 @@
         "gate"
       ],
       "kind" : "chord",
-      "name" : "chord~",
+      "name" : "chord",
       "outputs" : [
         "pitch",
         "gate"
@@ -3273,7 +3273,7 @@
         "reset"
       ],
       "kind" : "turing",
-      "name" : "turing~",
+      "name" : "turing",
       "outputs" : [
         "pitch",
         "gate",
@@ -3436,7 +3436,7 @@
         "reset"
       ],
       "kind" : "drumsynth",
-      "name" : "drumsynth~",
+      "name" : "drumsynth",
       "outputs" : [
         "L",
         "R"
@@ -4222,7 +4222,7 @@
         "reset"
       ],
       "kind" : "rack",
-      "name" : "rack~",
+      "name" : "rack",
       "outputs" : [
         "L",
         "R",
@@ -5473,7 +5473,7 @@
 
       ],
       "kind" : "roll",
-      "name" : "roll~",
+      "name" : "roll",
       "outputs" : [
         "pitch",
         "gate",
@@ -5562,7 +5562,7 @@
 
       ],
       "kind" : "drums",
-      "name" : "drums~",
+      "name" : "drums",
       "outputs" : [
         "1",
         "2",
@@ -5650,7 +5650,7 @@
         "freeze"
       ],
       "kind" : "haze",
-      "name" : "haze~",
+      "name" : "haze",
       "outputs" : [
         "L",
         "R"
@@ -5841,7 +5841,7 @@
         "freeze"
       ],
       "kind" : "texture",
-      "name" : "texture~",
+      "name" : "texture",
       "outputs" : [
         "L",
         "R"
@@ -6003,7 +6003,7 @@
         "strum"
       ],
       "kind" : "resonator",
-      "name" : "resonator~",
+      "name" : "resonator",
       "outputs" : [
         "L",
         "R"
@@ -6118,7 +6118,7 @@
         "level"
       ],
       "kind" : "macro",
-      "name" : "macro~",
+      "name" : "macro",
       "outputs" : [
         "out",
         "aux"
@@ -6265,7 +6265,7 @@
         "strike"
       ],
       "kind" : "modal",
-      "name" : "modal~",
+      "name" : "modal",
       "outputs" : [
         "L",
         "R"
@@ -6472,7 +6472,7 @@
         "pitch"
       ],
       "kind" : "xmod",
-      "name" : "xmod~",
+      "name" : "xmod",
       "outputs" : [
         "out",
         "aux"
@@ -6571,7 +6571,7 @@
         "trig"
       ],
       "kind" : "shapes",
-      "name" : "shapes~",
+      "name" : "shapes",
       "outputs" : [
         "out"
       ],
@@ -6722,7 +6722,7 @@
         "trig"
       ],
       "kind" : "wave",
-      "name" : "wave~",
+      "name" : "wave",
       "outputs" : [
         "out"
       ],
@@ -6822,7 +6822,7 @@
         "R"
       ],
       "kind" : "chorus",
-      "name" : "chorus~",
+      "name" : "chorus",
       "outputs" : [
         "L",
         "R"
@@ -6922,7 +6922,7 @@
         "R"
       ],
       "kind" : "phaser",
-      "name" : "phaser~",
+      "name" : "phaser",
       "outputs" : [
         "L",
         "R"
@@ -7061,7 +7061,7 @@
         "R"
       ],
       "kind" : "autopan",
-      "name" : "autopan~",
+      "name" : "autopan",
       "outputs" : [
         "L",
         "R"
@@ -7172,7 +7172,7 @@
         "R"
       ],
       "kind" : "redux",
-      "name" : "redux~",
+      "name" : "redux",
       "outputs" : [
         "L",
         "R"
@@ -7229,7 +7229,7 @@
         "R"
       ],
       "kind" : "shift",
-      "name" : "shift~",
+      "name" : "shift",
       "outputs" : [
         "L",
         "R"
@@ -7305,7 +7305,7 @@
         "R"
       ],
       "kind" : "eq",
-      "name" : "eq3~",
+      "name" : "eq3",
       "outputs" : [
         "L",
         "R"
@@ -7390,7 +7390,7 @@
         "sc"
       ],
       "kind" : "comp",
-      "name" : "comp~",
+      "name" : "comp",
       "outputs" : [
         "L",
         "R"
@@ -7475,7 +7475,7 @@
         "R"
       ],
       "kind" : "limit",
-      "name" : "limit~",
+      "name" : "limit",
       "outputs" : [
         "L",
         "R"
@@ -7531,7 +7531,7 @@
         "sc"
       ],
       "kind" : "gate",
-      "name" : "gate~",
+      "name" : "gate",
       "outputs" : [
         "L",
         "R"
@@ -7606,7 +7606,7 @@
         "in"
       ],
       "kind" : "env",
-      "name" : "env~",
+      "name" : "env",
       "outputs" : [
         "out"
       ],
@@ -7684,7 +7684,7 @@
         "in"
       ],
       "kind" : "atten",
-      "name" : "atten~",
+      "name" : "atten",
       "outputs" : [
         "out"
       ],
@@ -7742,7 +7742,7 @@
         "R"
       ],
       "kind" : "gain",
-      "name" : "gain~",
+      "name" : "gain",
       "outputs" : [
         "L",
         "R"
@@ -7854,7 +7854,7 @@
         "B"
       ],
       "kind" : "scope",
-      "name" : "scope~",
+      "name" : "scope",
       "outputs" : [
         "A",
         "B"
@@ -7975,7 +7975,7 @@
         "16"
       ],
       "kind" : "mix",
-      "name" : "mix~",
+      "name" : "mix",
       "outputs" : [
         "L",
         "R"
@@ -8362,7 +8362,7 @@
 
       ],
       "kind" : "slider",
-      "name" : "slider~",
+      "name" : "slider",
       "outputs" : [
         "1",
         "2",
@@ -8523,7 +8523,7 @@
 
       ],
       "kind" : "knob",
-      "name" : "knob~",
+      "name" : "knob",
       "outputs" : [
         "1",
         "2",
@@ -8682,7 +8682,7 @@
         "x clk"
       ],
       "kind" : "chance",
-      "name" : "chance~",
+      "name" : "chance",
       "outputs" : [
         "t1",
         "t2",
@@ -8937,7 +8937,7 @@
         "reset"
       ],
       "kind" : "lfo",
-      "name" : "lfo~",
+      "name" : "lfo",
       "outputs" : [
         "out"
       ],

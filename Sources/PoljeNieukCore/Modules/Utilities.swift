@@ -1,6 +1,6 @@
 import Foundation
 
-/// gain~ : Ableton-Utility-style gain, balance, width, mono, phase invert, mute, DC block.
+/// gain : Ableton-Utility-style gain, balance, width, mono, phase invert, mute, DC block.
 final class UtilityNode: DSPNode {
     // 0 gain, 1 balance, 2 width, 3 mono, 4 invert L, 5 invert R, 6 mute, 7 dc block
     private var g: Float = 1
@@ -33,7 +33,7 @@ final class UtilityNode: DSPNode {
     }
 }
 
-/// env~ : envelope follower — turns loudness into a control signal.
+/// env : envelope follower — turns loudness into a control signal.
 final class EnvelopeNode: DSPNode {
     // 0 attack, 1 release, 2 sensitivity, 3 amount, 4 offset
     private var env: Float = 0
@@ -51,7 +51,7 @@ final class EnvelopeNode: DSPNode {
     }
 }
 
-/// atten~ : attenuverter + offset + slew. With nothing patched in it is a constant (handy for CV).
+/// atten : attenuverter + offset + slew. With nothing patched in it is a constant (handy for CV).
 final class AttenNode: DSPNode {
     // 0 amount, 1 offset, 2 slew ms
     private var y: Float = 0

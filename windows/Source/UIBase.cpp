@@ -269,6 +269,11 @@ float width(const PatchNode& n) {
     if (!n.w || !std::isfinite(*n.w)) return d;
     return std::clamp(float(*n.w), d, 1600.0f);
 }
+float padLaneHeight(const PatchNode& n) {
+    bool rack = n.kind == "rack";
+    float base = rack ? 9.0f : 14.0f, lanes = rack ? 16.0f : 4.0f;
+    return base + std::max(readoutHeight(n) - defaultReadoutHeight(n), 0.0f) / lanes;
+}
 float readoutHeight(const PatchNode& n) {
     float d = defaultReadoutHeight(n);
     if (d <= 0 || !n.dh || !std::isfinite(*n.dh)) return d;
@@ -418,8 +423,8 @@ Pt inlet(const PatchNode& n, const ModuleSpec& s, const HardwareCounts&, int i) 
 Pt outlet(const PatchNode& n, const ModuleSpec& s, const HardwareCounts& hw, int i) {
     float y = header + 3 + float(i) * portRow + portRow / 2;
     if (!n.collapsed) { int pi = outletParam(n.kind, i); if (pi >= 0) if (auto ry = paramRowY(n, s, hw, pi)) y = *ry; }
-    if (!n.collapsed && n.kind == "rack" && i >= 2)    // rack~: pad k's outlet is level with its row in the drum roll
-        y = header + portsHeight(n, s, hw) + 4 + float(i - 2) * 9 + 4.5f;
+    if (!n.collapsed && n.kind == "rack" && i >= 2)    // rack: pad k's outlet is level with its row in the drum roll
+        y = header + portsHeight(n, s, hw) + 4 + (float(i - 2) + 0.5f) * padLaneHeight(n);
     if (n.collapsed) {
         auto r = collapsedRight(n, s);
         auto it = std::find(r.begin(), r.end(), i);

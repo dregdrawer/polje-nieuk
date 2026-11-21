@@ -1,14 +1,14 @@
 import Foundation
 import Synchronization
 
-/// wave~ : a wavetable synth with four waves you draw yourself, morphed by "position".
+/// wave : a wavetable synth with four waves you draw yourself, morphed by "position".
 ///
 /// A drawn wave has sharp corners, which would alias horribly at high notes. So every wave is kept as a set
 /// of band-limited tables, one per octave (the harmonics that fit under Nyquist at that pitch), rebuilt on
 /// the main thread whenever a wave changes, and handed to the audio thread through a double buffer.
 public final class WavetableNode: DSPNode {
     // params: 0 edit wave (UI only), 1 position (0…3), 2 frequency (st), 3 fine (ct), 4 attack, 5 decay (0 = drone), 6 level,
-    // inputs: 0 pitch (0.1 = 1 octave), 1 trig — a chord on these cables (roll~, chord~) plays every note
+    // inputs: 0 pitch (0.1 = 1 octave), 1 trig — a chord on these cables (roll, chord) plays every note
     // outputs: out (all notes mixed)   readouts: 0 position now
     public static let frames = 4
     /// points per drawn wave

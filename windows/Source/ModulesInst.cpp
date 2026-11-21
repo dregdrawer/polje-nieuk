@@ -1,4 +1,4 @@
-// rack~, drumsynth~, wave~ — ports of Rack.swift, Instruments.swift (DrumSynthNode) and Wavetable.swift.
+// rack, drumsynth, wave — ports of Rack.swift, Instruments.swift (DrumSynthNode) and Wavetable.swift.
 #include "Modules.h"
 #include "ModulesShared.h"
 #include <thread>
@@ -8,7 +8,7 @@ extern "C" {
 
 namespace pn {
 
-// ---------------------------------------------------------------- rack~
+// ---------------------------------------------------------------- rack
 
 namespace RackLayout {
 const std::vector<std::string> kitNames = { "kick", "snare", "closed hat", "open hat", "clap", "rim", "low tom", "mid tom",
@@ -198,7 +198,7 @@ void RackNode::process(int frames, const float* const* in, uint64_t con, Process
     for (int k = 0; k < RackLayout::pads; ++k) readouts[size_t(1 + k)] = active[k] ? env[k] : 0.0f;
 }
 
-// ---------------------------------------------------------------- drumsynth~
+// ---------------------------------------------------------------- drumsynth
 
 namespace DrumSynthLayout {
 const std::vector<std::string> names = { "kick", "snare", "hi-hat", "perc" };
@@ -319,7 +319,7 @@ void DrumSynthNode::process(int frames, const float* const* in, uint64_t con, Pr
     for (int v = 0; v < V; ++v) readouts[size_t(1 + v)] = std::min(m.level[v] * 2, 1.0f);
 }
 
-// ---------------------------------------------------------------- wave~
+// ---------------------------------------------------------------- wave
 
 const std::vector<std::string> WavetableNode::presets = { "sine", "tri", "saw", "square", "pulse", "noise" };
 

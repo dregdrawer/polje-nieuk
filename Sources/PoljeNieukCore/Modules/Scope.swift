@@ -1,6 +1,6 @@
 import Foundation
 
-/// scope~ : a two-channel oscilloscope for anything in the patch — audio, LFOs, envelopes, pitch CV, gates.
+/// scope : a two-channel oscilloscope for anything in the patch — audio, LFOs, envelopes, pitch CV, gates.
 /// Shows the waveform (min/max per pixel, so nothing between pixels is missed), and measures each channel:
 /// average, lowest, highest (in volts: 0.1 = 1 V) and frequency. A steady pitch CV also reads as a note.
 public final class ScopeNode: DSPNode {

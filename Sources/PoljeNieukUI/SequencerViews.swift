@@ -3,7 +3,7 @@ import PoljeNieukCore
 
 // Editable displays for the Sequencing modules. Finger, mouse or Apple Pencil; drag to paint.
 
-// MARK: - keys~
+// MARK: - keys
 
 struct KeysView: View {
     let node: KeysNode
@@ -95,7 +95,7 @@ struct KeysView: View {
     }
 }
 
-// MARK: - seq~
+// MARK: - seq
 
 struct SeqView: View {
     let node: SeqNode
@@ -202,7 +202,7 @@ struct SeqView: View {
     }
 }
 
-// MARK: - turing~
+// MARK: - turing
 
 struct TuringView: View {
     let node: TuringNode
@@ -258,7 +258,7 @@ struct TuringView: View {
     }
 }
 
-// MARK: - roll~ and drums~ grids
+// MARK: - roll and drums grids
 
 struct GridEditor: View {
     enum Kind { case roll(RollNode), drums(DrumsNode) }
@@ -320,7 +320,7 @@ struct GridEditor: View {
         }
     }
 
-    /// drums~: lane 1 at the top, beside outlet 1. roll~: low notes at the bottom, like a piano roll.
+    /// drums: lane 1 at the top, beside outlet 1. roll: low notes at the bottom, like a piano roll.
     var topDown: Bool { if case .drums = kind { return true } else { return false } }
     func rowY(_ r: Int, _ rh: CGFloat, _ h: CGFloat) -> CGFloat { topDown ? CGFloat(r) * rh : h - CGFloat(r + 1) * rh }
     func rowAt(_ y: CGFloat, _ rh: CGFloat) -> Int { let i = Int(floor(y / rh)); return topDown ? i : rows - 1 - i }

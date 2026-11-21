@@ -1,6 +1,6 @@
 import Foundation
 
-/// looper~ : stereo, clock-quantised looper with overdub, speed/reverse, gate inputs for rec/stop,
+/// looper : stereo, clock-quantised looper with overdub, speed/reverse, gate inputs for rec/stop,
 /// input monitoring while recording, loop-section selection (start/end) and a beat grid for snapping.
 final class LooperNode: DSPNode, SampleBufferNode {
     enum State: Int { case empty = 0, armed, recording, playing, overdub, stopped, closing }

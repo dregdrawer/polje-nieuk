@@ -33,8 +33,8 @@ struct BoxKey: Equatable {
     var look = 0                      // colours / light-dark
     var groupRect: CGRect?
     var groupName = ""
-    var padNames: [String] = []       // rack~: what each pad holds
-    var loading: Set<Int> = []        // rack~: pads still reading their file
+    var padNames: [String] = []       // rack: what each pad holds
+    var loading: Set<Int> = []        // rack: pads still reading their file
     var automationFlags = 0           // which rows are automated / modulated
 }
 
@@ -481,7 +481,7 @@ private enum Region: Equatable {
                     BoxPainter.liveRow(g, size, ps, base: m.value(n, i, spec), live: d.params[i], automated: automated)
                 })
             }
-            // meters: in~ / out~ channels, mixer inputs
+            // meters: in / out channels, mixer inputs
             let p = BoxLayout.ports(n, spec, geo.hw)
             if n.kind == "in" || n.kind == "out" || n.kind == "mix" {
                 let rows = n.kind == "mix" ? p.ins.count : BoxLayout.portRows(n, spec, geo.hw)
@@ -757,6 +757,20 @@ private enum Region: Equatable {
         return .nothing
     }
 
+    /// Right-click (or long-press) a box's title bar.
+    func titleMenu(_ id: UUID) -> [MenuItem] {
+        let m = model
+        let cur = m.patch.nodes.first { $0.id == id }?.highlight
+        var list = [MenuItem(title: "Duplicate", action: { m.duplicate(id) }),
+                    MenuItem(title: "Replace…", action: { m.beginReplace(id) }),
+                    .divider, .section("Highlight"),
+                    MenuItem(title: "none", checked: cur == nil, action: { m.setHighlight(id, nil) })]
+        for c in AppModel.highlightColours {
+            list.append(MenuItem(title: c.name, checked: cur == c.hex, swatch: c.hex, action: { m.setHighlight(id, c.hex) }))
+        }
+        return list
+    }
+
     // MARK: Pointer presses
 
     private var presses: [Int: Press] = [:]
@@ -781,12 +795,21 @@ private enum Region: Equatable {
             press.autoRecWasOn = m.autoRecording.contains(id)
             if !press.autoRecWasOn { m.startAutoRecord(id) }
         case .title, .text:
-            if info.right { break }
+            if info.right {
+                // right-click a box's title bar: duplicate, replace, highlight
+                if it.kind == .module {
+                    presentMenu(titleMenu(id), screen)
+                    presses[key] = nil
+                    return true
+                }
+                break
+            }
             press.longTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self, weak press] _ in
                 MainActor.assumeIsolated {
                     guard let self, let press, !press.dragging, !press.info.moved else { return }
                     press.longFired = true
-                    if press.item.kind == .module { self.model.beginReplace(press.item.id) }
+                    // a long press (iPad) = a right-click: duplicate, replace, highlight
+                    if press.item.kind == .module { self.presentMenu(self.titleMenu(press.item.id), press.startScreen) }
                 }
             }
         case .row(let i):
@@ -982,7 +1005,7 @@ private enum Region: Equatable {
     // MARK: Files dropped on boxes
 
     private var dropItem: Item?
-    /// A file is dragged over `screen`: light up the box (or rack~ pad) that would take it. True if one would.
+    /// A file is dragged over `screen`: light up the box (or rack pad) that would take it. True if one would.
     func dropHover(_ screen: CGPoint?) -> Bool {
         var target: Item?, pad: Int?
         if let s = screen, let it = item(at: s), it.kind == .module, let n = it.node {
@@ -1176,6 +1199,11 @@ final class NodesContainer: NSView, NSTextViewDelegate, NSTextFieldDelegate {
             }
             mi.state = it.checked ? .on : .off
             mi.isEnabled = it.enabled
+            if let hex = it.swatch, let c = Color(hex: hex) {
+                mi.image = NSImage(size: NSSize(width: 12, height: 12), flipped: false) { r in
+                    NSColor(c).setFill(); NSBezierPath(ovalIn: r.insetBy(dx: 1, dy: 1)).fill(); return true
+                }
+            }
             menu.addItem(mi)
         }
         menu.popUp(positioning: nil, at: p, in: self)
@@ -1380,7 +1408,7 @@ final class NodesContainer: UIView, UIGestureRecognizerDelegate, UITextViewDeleg
             i.touch = true
             let p = t.location(in: self), k = key(t)
             if canvas.began(k, at: p, i) {
-                // a long press on a display opens its menu (rack~ pads)
+                // a long press on a display opens its menu (rack pads)
                 longTimers[k] = Timer.scheduledTimer(withTimeInterval: 0.6, repeats: false) { [weak self] _ in
                     MainActor.assumeIsolated {
                         guard let self else { return }

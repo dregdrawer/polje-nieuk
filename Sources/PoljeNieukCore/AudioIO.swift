@@ -33,7 +33,7 @@ public enum AudioIOError: LocalizedError {
 /// Low-latency duplex audio straight through RemoteIO (iPadOS) or AUHAL (macOS).
 /// Input and output are handled in the same callback, so there is no extra buffering.
 /// Every hardware channel is exposed: with the disting NT over USB, its USB audio channels
-/// show up as in~/out~ channel numbers.
+/// show up as in/out channel numbers.
 public final class AudioIO {
     public let host: GraphHost
     public private(set) var isRunning = false
@@ -372,7 +372,7 @@ public final class AudioIO {
         // interfaces only give it stereo — a patcher should own the interface and all its channels.
         // With an interface plugged in (disting NT over USB): measurement mode, which switches off the
         // system's input processing — its gain control and DC filter turned clocks, gates and CV into
-        // brief spikes (the in~ meters still moved, but nothing downstream got the signal). The Mac never
+        // brief spikes (the in meters still moved, but nothing downstream got the signal). The Mac never
         // processes input. Without an interface: the default mode (normal speaker / mic levels).
         let usb = s.currentRoute.inputs.contains { $0.portType == .usbAudio }
             || s.currentRoute.outputs.contains { $0.portType == .usbAudio }

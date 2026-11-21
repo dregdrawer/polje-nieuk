@@ -61,7 +61,7 @@ struct PatchFile: FileDocument {
 }
 
 public enum DefaultPatch {
-    /// The starter patch (first launch, New, "Load starter patch"): in~, clock, mix~, out~ — nothing patched yet.
+    /// The starter patch (first launch, New, "Load starter patch"): in, clock, mix, out — nothing patched yet.
     /// What New starts from: your own default (more → Set as default) if you've set one, else the built-in one.
     public static func make() -> Patch {
         if let p = PatchStore.loadUserDefault() { return p.withFreshIDs().patch }
@@ -70,7 +70,7 @@ public enum DefaultPatch {
 
     public static func builtIn() -> Patch {
         var p = Patch()
-        // in~ grows with the interface's channel count, so it sits under the clock and has room below
+        // in grows with the interface's channel count, so it sits under the clock and has room below
         let clock = PatchNode(kind: "clock", x: 30, y: 40)
         let hwIn = PatchNode(kind: "in", x: 30, y: 260)
         let mix = PatchNode(kind: "mix", x: 230, y: 40)

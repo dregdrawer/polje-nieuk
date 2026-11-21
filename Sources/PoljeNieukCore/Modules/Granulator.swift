@@ -1,6 +1,6 @@
 import Foundation
 
-/// grain~ : live granulator over a 10 s rolling buffer, free-running or triggered by the clock.
+/// grain : live granulator over a 10 s rolling buffer, free-running or triggered by the clock.
 final class GranulatorNode: DSPNode {
     struct Grain {
         var active = false

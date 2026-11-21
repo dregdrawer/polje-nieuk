@@ -1,7 +1,7 @@
 import SwiftUI
 import PoljeNieukCore
 
-/// wave~'s screen: the four waves as tabs (tap one to draw on it; the marker shows where "position" is),
+/// wave's screen: the four waves as tabs (tap one to draw on it; the marker shows where "position" is),
 /// a big drawing area (Apple Pencil, finger or mouse — strokes are joined up, so quick lines stay solid),
 /// and ready-made shapes for the wave being drawn.
 struct WaveDrawView: View {
@@ -173,7 +173,7 @@ struct WaveDrawView: View {
     }
 }
 
-/// chord~'s screen: the chord's name and its notes on a little keyboard, each lit key labelled with its
+/// chord's screen: the chord's name and its notes on a little keyboard, each lit key labelled with its
 /// interval (R, ♭3, 3, 5 …) — worked out from the settings, so it changes as soon as you do (audio on or not).
 /// Click a key to make it the root.
 struct ChordView: View {

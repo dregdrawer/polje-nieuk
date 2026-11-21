@@ -136,6 +136,7 @@ struct ColourMenu: View {
                     .help("Back to the scheme's own \(slot.title) colour")
                 }
             }
+            BackgroundPictureRow(model: model)
             Divider()
             Button("Reset all to the scheme") { CustomColours.resetAll(); model.coloursChanged() }
                 .font(Theme.monoSmall)

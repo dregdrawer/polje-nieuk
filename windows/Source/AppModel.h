@@ -30,6 +30,14 @@ namespace PatchStore {
     Patch makeDefault();
 }
 
+/// A photo behind the whole canvas (colours panel -> background picture): fills the window, stays still while
+/// you pan and zoom. Copied into the app's folder.
+namespace BackgroundPicture {
+    const juce::Image& image();          // invalid when none is set
+    bool set(const juce::File& f);
+    void remove();
+}
+
 class AppModel : public juce::AudioIODeviceCallback, private juce::AsyncUpdater, private juce::Timer {
 public:
     AppModel();
@@ -138,6 +146,9 @@ public:
     bool isModulated(const juce::String& id, int param) const;
     bool isPortConnected(const juce::String& id, int port, bool output) const;
     void setText(const juce::String& id, const juce::String& text);
+    struct HighlightColour { const char* name; const char* hex; };
+    static const std::vector<HighlightColour> highlightColours;
+    void setHighlight(const juce::String& id, std::optional<juce::String> hex);
     void setData(const juce::String& id, const std::map<std::string, std::vector<float>>& entries, bool step = true);
     void setData(const juce::String& id, const std::string& key, const std::vector<float>& v, bool step = true) { setData(id, { { key, v } }, step); }
     static const std::set<std::string> patternKinds;

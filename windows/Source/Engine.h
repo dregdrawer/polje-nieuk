@@ -132,7 +132,7 @@ struct ParamSpec {
     ParamKind kind = ParamKind::continuous;
     ParamCurve curve = ParamCurve::linear;
     std::vector<std::string> options;   // choice
-    std::vector<float> allowed;         // only these values (ascending), e.g. seq~ length 1…16, 32, 64
+    std::vector<float> allowed;         // only these values (ascending), e.g. seq length 1…16, 32, 64
 
     static ParamSpec cont(std::string k, std::string n, float lo, float hi, float d, std::string unit = "",
                           ParamCurve c = ParamCurve::linear) {
@@ -250,8 +250,8 @@ public:
     std::vector<int> outVoices, inVoices;      // notes per outlet / inlet this block
     static const float* voice(const float* input, int v) { return input + v * kMaxBlock; }
     float* outVoice(int k, int v) { return outputs[size_t(k)].data() + v * kMaxBlock; }
-    uint64_t cvChannels = 0;                   // out~: channels fed only by control voltages
-    uint64_t patchedOutputs = 0;               // bit k: outlet k has a cable (rack~ sends a pad to its own outlet)
+    uint64_t cvChannels = 0;                   // out: channels fed only by control voltages
+    uint64_t patchedOutputs = 0;               // bit k: outlet k has a cable (rack sends a pad to its own outlet)
     virtual void clearState() {}
 
 private:
@@ -338,6 +338,7 @@ struct PatchNode {
     std::map<std::string, std::vector<float>> data;
     std::optional<double> w, dh, z;
     std::optional<juce::String> text;
+    std::optional<juce::String> highlight;   // a coloured frame around the box ("#rrggbb")
 };
 struct PatchCable {
     juce::String id, fromNode, toNode;

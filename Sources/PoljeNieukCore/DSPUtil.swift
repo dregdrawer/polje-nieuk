@@ -87,7 +87,7 @@ struct PeakMeter {
 public enum Divisions {
     public static let names = ["1/32", "1/16T", "1/16", "1/8T", "1/16D", "1/8", "1/4T", "1/8D",
                                "1/4", "1/2T", "1/4D", "1/2", "1/2D", "1 bar", "2 bars", "4 bars"]
-    /// lfo~ also goes slower: every 8 or 16 bars
+    /// lfo also goes slower: every 8 or 16 bars
     public static let longNames = names + ["8 bars", "16 bars"]
     static let beatValues: [Double] = [0.125, 1.0 / 6, 0.25, 1.0 / 3, 0.375, 0.5, 2.0 / 3, 0.75,
                                        1, 4.0 / 3, 1.5, 2, 3, 4, 8, 16, 32, 64]

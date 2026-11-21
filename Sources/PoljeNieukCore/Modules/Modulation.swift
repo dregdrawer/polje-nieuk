@@ -25,7 +25,7 @@ struct DelayLine {
     }
 }
 
-/// chorus~ : three characters.
+/// chorus : three characters.
 ///  • chorus   — one modulated voice per side, classic
 ///  • ensemble — three voices per side, slow + fast LFOs 120° apart (string-machine shimmer)
 ///  • vibrato  — wet only: pure pitch wobble
@@ -77,7 +77,7 @@ final class ChorusNode: DSPNode {
     }
 }
 
-/// phaser~ : phaser (allpass stages) or flanger, free or clock-synced.
+/// phaser : phaser (allpass stages) or flanger, free or clock-synced.
 final class PhaserNode: DSPNode {
     // 0 mode, 1 rate, 2 sync, 3 division, 4 depth, 5 freq, 6 feedback, 7 stages, 8 mix
     private var apL = [Float](repeating: 0, count: 12), apR = [Float](repeating: 0, count: 12)
@@ -127,7 +127,7 @@ final class PhaserNode: DSPNode {
     }
 }
 
-/// redux~ : bit and sample-rate reduction.
+/// redux : bit and sample-rate reduction.
 final class ReduxNode: DSPNode {
     // 0 bits, 1 rate, 2 mix
     private var phase: Float = 1
@@ -151,7 +151,7 @@ final class ReduxNode: DSPNode {
     }
 }
 
-/// shift~ : delay-line pitch shifter (two crossfading taps).
+/// shift : delay-line pitch shifter (two crossfading taps).
 final class ShifterNode: DSPNode {
     // 0 pitch, 1 fine, 2 window, 3 feedback, 4 mix
     private var dl: DelayLine, dr: DelayLine
@@ -184,7 +184,7 @@ final class ShifterNode: DSPNode {
     }
 }
 
-/// autopan~ : tremolo / auto-pan, free or clock-synced.
+/// autopan : tremolo / auto-pan, free or clock-synced.
 final class AutoPanNode: DSPNode {
     // 0 rate, 1 sync, 2 division, 3 amount, 4 shape, 5 phase (deg)
     private var clock = PhaseClock()
@@ -203,7 +203,7 @@ final class AutoPanNode: DSPNode {
     }
 }
 
-/// repeat~ : clock-synced beat repeat (stutter) in the spirit of Ableton's Beat Repeat.
+/// repeat : clock-synced beat repeat (stutter) in the spirit of Ableton's Beat Repeat.
 final class BeatRepeatNode: DSPNode {
     // 0 interval, 1 offset (16ths), 2 gate (16ths), 3 grid, 4 chance, 5 decay, 6 mode, 7 hold
     static let intervals: [Double] = [1, 2, 4, 8, 16]

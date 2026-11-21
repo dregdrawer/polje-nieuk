@@ -2,9 +2,9 @@ import Foundation
 import MutableDSP
 
 // Second batch of modules built on Emilie Gillet's open-source Eurorack DSP (MIT licence, see Vendor/mutable):
-// xmod~ (cross-modulator), chance~ (random gates and voltages).
+// xmod (cross-modulator), chance (random gates and voltages).
 
-// MARK: - xmod~ (cross / meta modulator)
+// MARK: - xmod (cross / meta modulator)
 
 final class XmodNode: DSPNode {
     // 0 algorithm, 1 timbre, 2 level 1, 3 level 2, 4 internal oscillator, 5 frequency
@@ -40,7 +40,7 @@ final class XmodNode: DSPNode {
     }
 }
 
-// MARK: - chance~ (random gates T1–T3 and voltages X1–X3, Y)
+// MARK: - chance (random gates T1–T3 and voltages X1–X3, Y)
 
 public enum ChanceNames {
     public static let models = ["coin toss", "clusters", "drums", "independent", "divider", "three states", "markov"]
@@ -98,7 +98,7 @@ final class ChanceNode: DSPNode {
     }
 }
 
-// MARK: - shapes~ (macro oscillator, 47 shapes)
+// MARK: - shapes (macro oscillator, 47 shapes)
 
 public enum ShapesNames {
     public static let names = ["csaw", "morph", "saw/square", "sine/triangle", "buzz", "square sub", "saw sub",
@@ -176,7 +176,7 @@ final class ShapesNode: DSPNode {
     }
 }
 
-// MARK: - haze~ (granular / delay texture with four "media")
+// MARK: - haze (granular / delay texture with four "media")
 
 final class HazeNode: DSPNode {
     // 0 media, 1 time, 2 size, 3 shape, 4 pitch, 5–8 time/size/shape/pitch randomness, 9 density,

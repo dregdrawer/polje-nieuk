@@ -1,4 +1,4 @@
-// Effects — port of Effects.swift (filter~, delay~, drive~, reverb~).
+// Effects — port of Effects.swift (filter, delay, drive, reverb).
 #include "Modules.h"
 
 namespace pn {

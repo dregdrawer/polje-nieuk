@@ -28,7 +28,7 @@ final class Trace {
 
 @inline(__always) private func toDB(_ x: Float) -> Float { 20 * log10f(max(fin(x), 1e-5)) }
 
-// MARK: - comp~: level / gain-reduction history + transfer curve
+// MARK: - comp: level / gain-reduction history + transfer curve
 
 struct CompView: View {
     let node: DSPNode
@@ -117,7 +117,7 @@ struct CompView: View {
     }
 }
 
-// MARK: - lfo~: the waveform with a moving playhead
+// MARK: - lfo: the waveform with a moving playhead
 
 struct LFOView: View {
     let node: DSPNode

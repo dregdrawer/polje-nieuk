@@ -130,9 +130,9 @@ void TopBar::layoutItems(juce::Graphics* g) {
         x += tw("polje nieuk", true) + 4 + spacing;
         add("audio", word("audio"), [this](Pt) { model.isRunning ? model.stopAudio() : model.restartAudio(); }, running ? "Stop audio" : "Start audio");
         add("in", tw("IN") + 4 + (compact ? 0 : tw(inLabel) + 4) + 10, [this](Pt p) { deviceMenu(true, p); },
-            u8("Chooses the audio interface you record from \xe2\x80\x94 e.g. the disting NT. Its channels become in~'s outlets."));
+            u8("Chooses the audio interface you record from \xe2\x80\x94 e.g. the disting NT. Its channels become in's outlets."));
         add("out", tw("OUT") + 4 + (compact ? 0 : tw(outLabel) + 4) + 10, [this](Pt p) { deviceMenu(false, p); },
-            "Chooses where sound goes. Its channels become out~'s inlets.");
+            "Chooses where sound goes. Its channels become out's inlets.");
         if (stats) add("status", tw(model.audioStatus), nullptr);
         // right side, laid out from the right edge
         float rx = float(getWidth()) - 12;
@@ -216,8 +216,8 @@ void TopBar::mouseMove(const juce::MouseEvent& e) {
     if (model.helpMode) {
         static std::map<juce::String, std::pair<const char*, const char*>> topics {
             { "audio", { "audio on / off", "Starts or stops the audio engine." } },
-            { "in", { "audio input", "Chooses the audio interface you record from \xe2\x80\x94 e.g. the disting NT. Its channels become in~'s outlets." } },
-            { "out", { "audio output", "Chooses where sound goes. Its channels become out~'s inlets. Changing it never changes the input." } },
+            { "in", { "audio input", "Chooses the audio interface you record from \xe2\x80\x94 e.g. the disting NT. Its channels become in's outlets." } },
+            { "out", { "audio output", "Chooses where sound goes. Its channels become out's inlets. Changing it never changes the input." } },
             { "tempo", { "tempo", "The internal clock's tempo. Drag up or down on it to change it, or double-click and type a value (20\xe2\x80\x93" "300 BPM)." } },
             { "cpu", { "cpu", "How much the app uses \xe2\x80\x94 sound and drawing the screen together. 100 % is one full core." } },
             { "undo", { "undo", "Steps back through your edits \xe2\x80\x94 moves, cables, knob turns, added or deleted boxes. Ctrl+Z." } },
@@ -229,7 +229,7 @@ void TopBar::mouseMove(const juce::MouseEvent& e) {
             { "group", { "group", "Puts the selected boxes on a shared backdrop. Drag the backdrop to move them all together." } },
             { "bypassSel", { "switch off / on", "Bypasses every selected box \xe2\x80\x94 or switches them all back on if they're all off." } },
             { "delete", { "delete", "Deletes the selected boxes or cable." } },
-            { "browser", { "browser", "Shows your audio files. Drag one onto a looper~, sampler~ or stretch~ to load it." } },
+            { "browser", { "browser", "Shows your audio files. Drag one onto a looper, sampler or stretch to load it." } },
             { "view", { "view", "How the patch is shown: hide the cables, colours, tidy, fold all boxes, reset the zoom." } },
         };
         for (auto& t : model.helpTopics) if (t.id.startsWith("tb-")) { model.hoverHelp(t, false); break; }
@@ -421,7 +421,7 @@ void FileBrowser::rebuild() {
     rows.push_back({ Row::section, {}, "collections" });
     for (auto& f : model.browserFolders) folder(f, f.getFileName(), 0, true);
     if (model.browserFolders.empty()) rows.push_back({ Row::add, {}, "+ add a folder" });
-    rows.push_back({ Row::note, {}, u8("Drag a file onto a looper~, sampler~ or stretch~ \xe2\x80\x94 or select one and click a file. \xe2\x96\xb6 previews."), 0 });
+    rows.push_back({ Row::note, {}, u8("Drag a file onto a looper, sampler or stretch \xe2\x80\x94 or select one and click a file. \xe2\x96\xb6 previews."), 0 });
     repaint();
 }
 
@@ -636,7 +636,7 @@ public:
     explicit ColourPanel(AppModel& m) : model(m), selector(juce::ColourSelector::showColourspace | juce::ColourSelector::showSliders) {
         selector.addChangeListener(this);
         addChildComponent(selector);
-        setSize(250, 130);
+        setSize(250, base);
     }
     juce::Colour current(CustomColours::Slot s) { return s == CustomColours::background ? Theme::bg() : s == CustomColours::windows ? Theme::box() : Theme::cable(); }
     void paint(juce::Graphics& g) override {
@@ -650,7 +650,11 @@ public:
             g.setColour(s == active ? Theme::text() : Theme::border()); g.drawRoundedRectangle(170, y - 8, 30, 16, 3, s == active ? 2.0f : 1.0f);
             gc.text(u8("\xe2\x86\xba"), { 222, y }, 12, CustomColours::colour(CustomColours::Slot(s)) ? Theme::dim() : Theme::faint());
         }
-        gc.textLeft("Reset all to the scheme", { 14, 114 }, 9, CustomColours::anyCustom() ? Theme::text() : Theme::faint());
+        bool pic = BackgroundPicture::image().isValid();
+        gc.textLeft("background picture", { 14, 112 }, 11, Theme::text());
+        gc.textLeft(pic ? u8("change\xe2\x80\xa6") : u8("choose\xe2\x80\xa6"), { 150, 112 }, 9, Theme::text());
+        gc.text(u8("\xe2\x86\xba"), { 222, 112 }, 12, pic ? Theme::dim() : Theme::faint());
+        gc.textLeft("Reset all to the scheme", { 14, 140 }, 9, CustomColours::anyCustom() ? Theme::text() : Theme::faint());
     }
     void mouseUp(const juce::MouseEvent& e) override {
         for (int s = 0; s < 3; ++s) {
@@ -659,16 +663,25 @@ public:
                 active = active == s ? -1 : s;
                 if (active >= 0) {
                     selector.setCurrentColour(current(CustomColours::Slot(s)), juce::dontSendNotification);
-                    selector.setBounds(10, 130, 230, 220);
+                    selector.setBounds(10, base, 230, 220);
                     selector.setVisible(true);
-                    setSize(250, 360);
-                } else { selector.setVisible(false); setSize(250, 130); }
+                    setSize(250, base + 230);
+                } else { selector.setVisible(false); setSize(250, base); }
                 repaint();
                 return;
             }
             if (Rect(212, y - 10, 20, 20).contains(e.position)) { CustomColours::set(CustomColours::Slot(s), std::nullopt); model.coloursChanged(); repaint(); return; }
         }
-        if (e.position.y > 104 && e.position.y < 124) { CustomColours::resetAll(); model.coloursChanged(); repaint(); }
+        if (Rect(146, 102, 60, 20).contains(e.position)) {
+            chooser = std::make_unique<juce::FileChooser>("A picture to fill the background", juce::File(), "*.jpg;*.jpeg;*.png;*.gif;*.bmp;*.heic");
+            chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles, [this](const juce::FileChooser& fc) {
+                auto f = fc.getResult();
+                if (f.existsAsFile() && BackgroundPicture::set(f)) { model.coloursChanged(); repaint(); }
+            });
+            return;
+        }
+        if (Rect(212, 102, 20, 20).contains(e.position)) { BackgroundPicture::remove(); model.coloursChanged(); repaint(); return; }
+        if (e.position.y > 130 && e.position.y < 150) { CustomColours::resetAll(); model.coloursChanged(); repaint(); }
     }
 private:
     void changeListenerCallback(juce::ChangeBroadcaster*) override {
@@ -680,6 +693,8 @@ private:
     AppModel& model;
     juce::ColourSelector selector;
     int active = -1;
+    static constexpr int base = 156;
+    std::unique_ptr<juce::FileChooser> chooser;
 };
 
 // ---------------------------------------------------------------- the window's content

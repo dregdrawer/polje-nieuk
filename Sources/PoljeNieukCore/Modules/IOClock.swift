@@ -2,7 +2,7 @@ import Foundation
 
 public let kMaxHardwareChannels = 32
 
-/// in~ : every hardware input channel as its own outlet (disting NT USB channels 1…N).
+/// in : every hardware input channel as its own outlet (disting NT USB channels 1…N).
 final class HardwareInNode: DSPNode {
     private var peaks = [Float](repeating: 0, count: kMaxHardwareChannels)
     private var zeroedFrom = 0
@@ -27,7 +27,7 @@ final class HardwareInNode: DSPNode {
     }
 }
 
-/// out~ : every hardware output channel as its own inlet.
+/// out : every hardware output channel as its own inlet.
 final class HardwareOutNode: DSPNode {
     private var peaks = [Float](repeating: 0, count: kMaxHardwareChannels)
     /// Channels fed only by control voltages (pitch, gates, LFOs …): the gain doesn't touch them, so a
@@ -157,7 +157,7 @@ final class ClockNode: DSPNode {
     }
 }
 
-/// mix~ : stereo mixer with 2, 4, 8 or 16 mono channels, each with level and pan, and a master level.
+/// mix : stereo mixer with 2, 4, 8 or 16 mono channels, each with level and pan, and a master level.
 /// Params: 0 channels, then per channel k: 1+2k level, 2+2k pan, then 33 master.
 public enum MixerLayout {
     public static let channelChoices = [2, 4, 8, 16]
@@ -212,7 +212,7 @@ final class MixerNode: DSPNode {
     }
 }
 
-/// lfo~ : free or clock-synced modulation source (also useful as CV back into the modular).
+/// lfo : free or clock-synced modulation source (also useful as CV back into the modular).
 /// A patched clock drives it instead (its pulses count as 1/16 notes, so the division still applies);
 /// reset starts the wave from the top.
 final class LFONode: DSPNode {

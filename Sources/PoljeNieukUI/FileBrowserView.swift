@@ -5,7 +5,7 @@ import PoljeNieukCore
 /// The file browser, like a DAW's: Places (your drive — home, Desktop, Documents, Downloads, Music,
 /// iCloud Drive, every mounted drive — on Mac; this iPad's folders on iPad), your own Collections, and a
 /// search box. Folders open as deep as you like; only audio files are listed. ▶ previews a file;
-/// drag it onto a looper~ / sampler~ / stretch~, or select one of those and click the file.
+/// drag it onto a looper / sampler / stretch, or select one of those and click the file.
 struct FileBrowserView: View {
     @ObservedObject var model: AppModel
     @State private var refresh = 0
@@ -64,7 +64,7 @@ struct FileBrowserView: View {
                             }
                             .buttonStyle(.plain).padding(.horizontal, 10).padding(.vertical, 3)
                         }
-                        Text("Drag a file onto a looper~, sampler~ or stretch~ — or select one and click a file. ▶ previews.")
+                        Text("Drag a file onto a looper, sampler or stretch — or select one and click a file. ▶ previews.")
                             .font(Theme.monoSmall).foregroundStyle(Theme.faint)
                             .padding(10)
                     }
@@ -330,6 +330,6 @@ private struct FileRow: View {
             Label(url.lastPathComponent, systemImage: "waveform").font(Theme.mono).padding(6)
                 .background(Theme.box).foregroundStyle(Theme.text)
         }
-        .help("Drag onto a looper~ / sampler~ / stretch~, or click to load into the selected one. ▶ previews.")
+        .help("Drag onto a looper / sampler / stretch, or click to load into the selected one. ▶ previews.")
     }
 }

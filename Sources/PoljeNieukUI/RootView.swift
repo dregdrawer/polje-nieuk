@@ -130,7 +130,7 @@ struct TempoField: View {
         .help(editable ? "Tempo: drag up / down to change, double-click to type" : "Tempo from the modular's clock")
         .helpTopic(model, "tb-tempo", "tempo",
                    editable ? "The internal clock's tempo. Drag up or down on it to change it, or double-click and type a value (20–300 BPM)."
-                            : "The tempo measured from the modular's clock (clock~ on external). Switch clock~ to internal to set it here.")
+                            : "The tempo measured from the modular's clock (clock on external). Switch clock to internal to set it here.")
     }
 
     private func commit() {
@@ -205,8 +205,8 @@ struct TopBar: View, Equatable {
         .menuIndicator(.hidden)
         .fixedSize()
         .helpTopic(model, "tb-\(label)", label == "IN" ? "audio input" : "audio output",
-                   label == "IN" ? "Chooses the audio interface you record from — e.g. the disting NT. Its channels become in~'s outlets."
-                                 : "Chooses where sound goes. Its channels become out~'s inlets. Changing it never changes the input.")
+                   label == "IN" ? "Chooses the audio interface you record from — e.g. the disting NT. Its channels become in's outlets."
+                                 : "Chooses where sound goes. Its channels become out's inlets. Changing it never changes the input.")
     }
 
     /// The full bar when the window is wide enough; then one without the status / cpu text; then a compact
@@ -377,7 +377,7 @@ struct TopBar: View, Equatable {
             Button { model.showFiles.toggle() } label: { word("browser", on: model.showFiles) }
                 .buttonStyle(.plain)
                 .help("Show / hide the browser")
-                .helpTopic(model, "tb-files", "browser", "Shows your audio files. Drag one onto a looper~, sampler~ or stretch~ to load it.")
+                .helpTopic(model, "tb-files", "browser", "Shows your audio files. Drag one onto a looper, sampler or stretch to load it.")
 
             Menu {
                 // real toggles: the system draws the tick in its own column, so every label lines up

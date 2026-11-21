@@ -106,7 +106,7 @@ final class RateBridge {
 /// For the self-test: the same conversion every pitch inlet uses.
 public func cvSemitonesForTest(_ v: Float) -> Float { cvSemitones(v) }
 
-// MARK: - texture~ (granular texture processor)
+// MARK: - texture (granular texture processor)
 
 final class TextureNode: DSPNode {
     // 0 mode, 1 position, 2 size, 3 pitch, 4 density, 5 texture, 6 mix, 7 spread, 8 feedback, 9 reverb, 10 freeze, 11 quality
@@ -148,7 +148,7 @@ final class TextureNode: DSPNode {
     }
 }
 
-// MARK: - resonator~ (modal / string resonator)
+// MARK: - resonator (modal / string resonator)
 
 final class ResonatorNode: DSPNode {
     // 0 model, 1 polyphony, 2 note, 3 structure, 4 brightness, 5 damping, 6 position
@@ -190,7 +190,7 @@ final class ResonatorNode: DSPNode {
     }
 }
 
-// MARK: - macro~ (macro oscillator, 24 engines)
+// MARK: - macro (macro oscillator, 24 engines)
 
 public enum MacroEngines {
     public static let names = ["va + filter", "phase distortion", "6-op fm 1", "6-op fm 2", "6-op fm 3",
@@ -267,7 +267,7 @@ final class MacroNode: DSPNode {
     }
 }
 
-// MARK: - modal~ (bow / blow / strike modal voice)
+// MARK: - modal (bow / blow / strike modal voice)
 
 final class ModalNode: DSPNode {
     // 0 model, 1 note, 2 strength, 3 contour, 4 bow, 5 blow, 6 strike, 7 bow timbre, 8 flow, 9 blow timbre,
@@ -312,7 +312,7 @@ final class ModalNode: DSPNode {
     }
 }
 
-// MARK: - drumsynth~ (four synthesized drum voices with their own drum roll)
+// MARK: - drumsynth (four synthesized drum voices with their own drum roll)
 
 public enum DrumSynthLayout {
     public static let voices = 4

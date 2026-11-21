@@ -1,7 +1,7 @@
 import SwiftUI
 import PoljeNieukCore
 
-// Big touch controls for slider~ and knob~. Every control is its own view with its own gesture,
+// Big touch controls for slider and knob. Every control is its own view with its own gesture,
 // so several fingers can move several controls at once. Drag is relative (no jumps when you grab one);
 // double-tap returns a control to the middle.
 

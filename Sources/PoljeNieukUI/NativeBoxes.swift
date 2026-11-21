@@ -30,6 +30,7 @@ struct MenuItem {
     var enabled = true
     var header = false          // a section title
     var separator = false
+    var swatch: String? = nil   // "#rrggbb": a colour dot beside the title
     var action: (() -> Void)?
     static let divider = MenuItem(title: "", separator: true)
     static func section(_ t: String) -> MenuItem { MenuItem(title: t, enabled: false, header: true) }
@@ -178,7 +179,9 @@ struct LivePart {
             r.append(Port(port: i, output: false, center: CGPoint(x: 0, y: BoxLayout.inlet(node, spec, hw, i).y - node.y), size: BoxLayout.port))
         }
         for i in p.outs.indices {
-            r.append(Port(port: i, output: true, center: CGPoint(x: w, y: BoxLayout.outlet(node, spec, hw, i).y - node.y), size: BoxLayout.port))
+            // rack pad outlets sit one per drum-roll row: a little smaller, so they don't touch
+            let size = node.kind == "rack" && i >= 2 ? min(BoxLayout.port, BoxLayout.padLaneHeight(node) - 3) : BoxLayout.port
+            r.append(Port(port: i, output: true, center: CGPoint(x: w, y: BoxLayout.outlet(node, spec, hw, i).y - node.y), size: size))
         }
         for i in BoxLayout.rowParams(spec, node) {
             if let y = BoxLayout.paramRowY(node, spec, hw, i) {
@@ -205,6 +208,11 @@ struct LivePart {
         let box = CGRect(x: 0, y: 0, width: w, height: h)
         g.fill(Path(roundedRect: box, cornerRadius: 3), with: .color(Theme.box))
         g.stroke(Path(roundedRect: box.insetBy(dx: 0.5, dy: 0.5), cornerRadius: 3), with: .color(selected ? Theme.selected : Theme.border), lineWidth: 1)
+        if let hex = node.highlight, let c = Color(hex: hex) {
+            // the highlight: a coloured frame just inside the edge
+            g.stroke(Path(roundedRect: box.insetBy(dx: 1.25, dy: 1.25), cornerRadius: 3), with: .color(c), lineWidth: 2.5)
+            if selected { g.stroke(Path(roundedRect: box.insetBy(dx: 3, dy: 3), cornerRadius: 2), with: .color(Theme.selected), lineWidth: 1) }
+        }
         header(g, geo, model: model)
         if !node.collapsed {
             g.fill(Path(CGRect(x: 0, y: BoxLayout.header - 1, width: w, height: 1)), with: .color(Theme.border.opacity(0.6)))
@@ -278,7 +286,7 @@ struct LivePart {
         }
     }
 
-    /// Where the meter sits in port row `r` (in~ / out~ channels, mixer inputs).
+    /// Where the meter sits in port row `r` (in / out channels, mixer inputs).
     static func meterRect(_ geo: BoxGeo, _ r: Int) -> CGRect {
         let p = BoxLayout.ports(geo.node, geo.spec, geo.hw)
         let y = BoxLayout.header + 3 + CGFloat(r) * BoxLayout.portRow + BoxLayout.portRow / 2
@@ -464,5 +472,15 @@ extension LiveGC {
         body(self)
         cg.endTransparencyLayer()
         cg.restoreGState()
+    }
+}
+
+extension Color {
+    /// "#rrggbb"
+    init?(hex: String) {
+        var t = hex.trimmingCharacters(in: .whitespaces)
+        if t.hasPrefix("#") { t.removeFirst() }
+        guard t.count == 6, let v = UInt32(t, radix: 16) else { return nil }
+        self.init(red: Double((v >> 16) & 0xff) / 255, green: Double((v >> 8) & 0xff) / 255, blue: Double(v & 0xff) / 255)
     }
 }

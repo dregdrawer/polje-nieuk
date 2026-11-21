@@ -11,7 +11,7 @@ namespace Divisions {
 const std::vector<std::string> names = { "1/32", "1/16T", "1/16", "1/8T", "1/16D", "1/8", "1/4T", "1/8D",
                                          "1/4", "1/2T", "1/4D", "1/2", "1/2D", "1 bar", "2 bars", "4 bars" };
 static const double beatValues[] = { 0.125, 1.0 / 6, 0.25, 1.0 / 3, 0.375, 0.5, 2.0 / 3, 0.75,
-                                     1, 4.0 / 3, 1.5, 2, 3, 4, 8, 16, 32, 64 };   // the last two: lfo~ only (8 / 16 bars)
+                                     1, 4.0 / 3, 1.5, 2, 3, 4, 8, 16, 32, 64 };   // the last two: lfo only (8 / 16 bars)
 double beats(float v) { return beatValues[clampIndex(v, 18)]; }
 int index(const std::string& n) {
     auto it = std::find(names.begin(), names.end(), n);
@@ -309,6 +309,7 @@ std::optional<Patch> Patch::fromJSON(const juce::String& json) {
             if (no->hasProperty("dh")) n.dh = double(no->getProperty("dh"));
             if (no->hasProperty("z")) n.z = double(no->getProperty("z"));
             if (no->hasProperty("text")) n.text = no->getProperty("text").toString();
+            if (no->hasProperty("highlight")) n.highlight = no->getProperty("highlight").toString();
             p.nodes.push_back(std::move(n));
         }
     }
@@ -360,6 +361,7 @@ juce::String Patch::toJSON() const {
         if (n.dh) o->setProperty("dh", *n.dh);
         if (n.z) o->setProperty("z", *n.z);
         if (n.text) o->setProperty("text", *n.text);
+        if (n.highlight) o->setProperty("highlight", *n.highlight);
         ns.add(juce::var(o));
     }
     root->setProperty("nodes", ns);
@@ -515,10 +517,10 @@ Patch Patch::migrated() const {
         }), p.cables.end());
         for (auto& n : p.nodes) if (n.kind == "wave" || n.kind == "shapes" || n.kind == "macro") n.params.erase("voices");
     }
-    if (version < 13)   // lfo~ lost its s&h shape; s&h (4) and random (5) both become random (now 4)
+    if (version < 13)   // lfo lost its s&h shape; s&h (4) and random (5) both become random (now 4)
         for (auto& n : p.nodes)
             if (n.kind == "lfo" && n.params.count("shape") && std::isfinite(n.params["shape"]) && n.params["shape"] >= 3.5f) n.params["shape"] = 4;
-    if (version < 13) {   // rand~, slopes~ and segments~ are gone (lfo~ covers them): their boxes and cables go too
+    if (version < 13) {   // rand, slopes and segments are gone (lfo covers them): their boxes and cables go too
         std::set<juce::String> gone;
         for (auto& n : p.nodes) if (n.kind == "rand" || n.kind == "slopes" || n.kind == "segments") gone.insert(n.id);
         if (!gone.empty()) {
@@ -775,7 +777,7 @@ static std::vector<juce::String> topo(const std::vector<juce::String>& ids, cons
     return out;
 }
 
-// slider~ / knob~ outlets set a parameter's position; the node publishes it here (Modules_Core.cpp)
+// slider / knob outlets set a parameter's position; the node publishes it here (Modules_Core.cpp)
 const float* controlPosition(DSPNode* node, int port);
 
 std::shared_ptr<CompiledGraph> GraphHost::compile(const Patch& patch) {

@@ -1,7 +1,7 @@
 import SwiftUI
 import PoljeNieukCore
 
-/// scope~'s screen: both channels' waveforms (A bright, B dim) on a volt grid, with each channel's
+/// scope's screen: both channels' waveforms (A bright, B dim) on a volt grid, with each channel's
 /// average, range and frequency — and, for a steady signal, the note it would play at 1 V/oct.
 struct ScopeView: View {
     let node: ScopeNode

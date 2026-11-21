@@ -15,6 +15,7 @@ struct PointerInfo {
 struct MenuItem {
     juce::String title;
     bool checked = false, enabled = true, header = false, separator = false;
+    juce::String swatch;          // "#rrggbb": a colour dot beside the title
     std::function<void()> action;
     static MenuItem divider() { MenuItem m; m.separator = true; return m; }
     static MenuItem section(const juce::String& t) { MenuItem m; m.title = t; m.enabled = false; m.header = true; return m; }

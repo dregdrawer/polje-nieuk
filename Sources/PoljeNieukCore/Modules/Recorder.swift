@@ -2,7 +2,7 @@ import Foundation
 import AVFoundation
 import Synchronization
 
-/// rec~ : records its two inlets to a 32-bit float stereo WAV file.
+/// rec : records its two inlets to a 32-bit float stereo WAV file.
 /// The audio thread only copies into a lock-free ring; a background queue writes the file.
 final class RecorderNode: DSPNode {
     public static var directory: URL {

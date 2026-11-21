@@ -1,7 +1,7 @@
 import Foundation
 import Accelerate
 
-/// stretch~ : Paulstretch-style extreme time stretching.
+/// stretch : Paulstretch-style extreme time stretching.
 /// Records (or loads) a buffer, then walks through it very slowly: every hop it takes a windowed
 /// FFT frame, keeps the magnitudes, throws away the phases (random ones instead), and overlap-adds
 /// the result. Left and right get different random phases, so the drone comes out wide.
@@ -183,7 +183,7 @@ final class PaulStretchNode: DSPNode, SampleBufferNode {
     }
 }
 
-/// freqshift~ : stereo Bode-style frequency shifter. A Hilbert transformer (two allpass chains 90° apart)
+/// freqshift : stereo Bode-style frequency shifter. A Hilbert transformer (two allpass chains 90° apart)
 /// makes a complex signal that is multiplied by a complex oscillator: every frequency moves by the
 /// same number of Hz, so harmonics go inharmonic — metallic, bell-like, or barber-pole with feedback.
 /// Outputs: up L, up R, down L, down R. Params: 0 shift (Hz), 1 feedback, 2 mix

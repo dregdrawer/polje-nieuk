@@ -18,6 +18,8 @@ public struct PatchNode: Codable, Identifiable, Equatable, Sendable {
     public var text: String?
     /// 3D mode: how high the box floats above the board (canvas units; nil = on the board).
     public var z: Double?
+    /// A coloured frame around the box ("#rrggbb"; nil = none).
+    public var highlight: String?
 
     public init(id: UUID = UUID(), kind: String, x: Double, y: Double,
                 params: [String: Float] = [:], collapsed: Bool = false, bypassed: Bool = false,
@@ -40,6 +42,7 @@ public struct PatchNode: Codable, Identifiable, Equatable, Sendable {
         dh = try c.decodeIfPresent(Double.self, forKey: .dh)
         text = try c.decodeIfPresent(String.self, forKey: .text)
         z = try c.decodeIfPresent(Double.self, forKey: .z)
+        highlight = try c.decodeIfPresent(String.self, forKey: .highlight)
     }
 }
 
@@ -69,7 +72,7 @@ public struct Patch: Codable, Equatable, Sendable {
     public var version: Int = Patch.currentVersion
     public var nodes: [PatchNode] = []
     public var cables: [PatchCable] = []
-    /// Tempo when there's no clock~ module (nil = 120 BPM).
+    /// Tempo when there's no clock module (nil = 120 BPM).
     public var tempo: Double?
     /// Groups of boxes that move together on a shared backdrop.
     public var groups: [PatchGroup]?
@@ -79,7 +82,7 @@ public struct Patch: Codable, Equatable, Sendable {
 }
 
 public extension Patch {
-    /// Upgrades older patches. v1 had single-channel in~/out~ boxes with channel parameters;
+    /// Upgrades older patches. v1 had single-channel in/out boxes with channel parameters;
     /// v2 boxes expose every hardware channel as its own port, so cables move to the matching port.
     func migrated() -> Patch {
         guard version < Patch.currentVersion else { return self }
@@ -101,7 +104,7 @@ public extension Patch {
             }
         }
         }
-        // v4: comp~ became an LA-3A-style compressor with different controls.
+        // v4: comp became an LA-3A-style compressor with different controls.
         if version < 4 {
             for (i, n) in p.nodes.enumerated() where n.kind == "comp" {
                 p.nodes[i].params = [:]
@@ -120,7 +123,7 @@ public extension Patch {
                 // freqshift outlets: up, down → up L, up R, down L, down R
                 if kinds[c.fromNode] == "freqshift" && c.fromPort == 1 { p.cables[k].fromPort = 2 }
             }
-            // Mono outlets that became L/R: a source feeding two out~ channels now sends L to the first, R to the second.
+            // Mono outlets that became L/R: a source feeding two out channels now sends L to the first, R to the second.
             let nowStereo: Set<String> = ["looper", "filter", "drive"]
             for n in p.nodes where nowStereo.contains(n.kind) {
                 let toOut = p.cables.indices.filter {
@@ -129,7 +132,7 @@ public extension Patch {
                 if toOut.count >= 2 { p.cables[toOut[1]].fromPort = 1 }
             }
         }
-        // v6: mix~ became a stereo 2–16 channel mixer. Old param slots 0–3 (g1–g4) and 4 (master) moved;
+        // v6: mix became a stereo 2–16 channel mixer. Old param slots 0–3 (g1–g4) and 4 (master) moved;
         // its single "out" became L/R.
         if version < 6 {
             let kinds = Dictionary(p.nodes.map { ($0.id, $0.kind) }, uniquingKeysWith: { a, _ in a })
@@ -157,20 +160,20 @@ public extension Patch {
             }
         }
         if version < 8 {
-            // v8: div~'s internal clock list gained 1/64 at the front.
+            // v8: div's internal clock list gained 1/64 at the front.
             for i in p.nodes.indices where p.nodes[i].kind == "div" {
                 if let b = p.nodes[i].params["base"] { p.nodes[i].params["base"] = b + 1 }
             }
         }
         if version < 10 {
-            // v10: clock~ starts internal (was external); one whose clock inlet is patched stays external
+            // v10: clock starts internal (was external); one whose clock inlet is patched stays external
             for i in p.nodes.indices where p.nodes[i].kind == "clock" && p.nodes[i].params["source"] == nil {
                 let id = p.nodes[i].id
                 if p.cables.contains(where: { $0.toNode == id && $0.toPort == 0 }) { p.nodes[i].params["source"] = 0 }
             }
         }
         if version < 11 {
-            // v11: roll~ holds chords — its one-note-per-step "notes" became a note grid
+            // v11: roll holds chords — its one-note-per-step "notes" became a note grid
             for i in p.nodes.indices where p.nodes[i].kind == "roll" {
                 if let old = p.nodes[i].data["notes"], p.nodes[i].data["grid"] == nil {
                     p.nodes[i].data["grid"] = RollNode.grid(fromNotes: old)
@@ -179,8 +182,8 @@ public extension Patch {
             }
         }
         if version < 12 {
-            // v12: a chord travels on one pitch / gate cable. 0.3's extra voice outlets (roll~ pitch 2 …,
-            // chord~ pitch 2 …) and the synths' extra voice inlets / "voices" setting are gone.
+            // v12: a chord travels on one pitch / gate cable. 0.3's extra voice outlets (roll pitch 2 …,
+            // chord pitch 2 …) and the synths' extra voice inlets / "voices" setting are gone.
             let kinds = Dictionary(p.nodes.map { ($0.id, $0.kind) }, uniquingKeysWith: { a, _ in a })
             p.cables.removeAll { c in
                 switch kinds[c.fromNode] {
@@ -197,11 +200,11 @@ public extension Patch {
             for i in p.nodes.indices where ["wave", "shapes", "macro"].contains(p.nodes[i].kind) { p.nodes[i].params["voices"] = nil }
         }
         if version < 13 {
-            // v13: lfo~ lost its s&h shape; s&h (4) and random (5) both become random (now 4)
+            // v13: lfo lost its s&h shape; s&h (4) and random (5) both become random (now 4)
             for i in p.nodes.indices where p.nodes[i].kind == "lfo" {
                 if let s = p.nodes[i].params["shape"], s.isFinite, s >= 3.5 { p.nodes[i].params["shape"] = 4 }
             }
-            // rand~, slopes~ and segments~ are gone (lfo~ covers them): their boxes and cables go too
+            // rand, slopes and segments are gone (lfo covers them): their boxes and cables go too
             let gone = Set(p.nodes.filter { ["rand", "slopes", "segments"].contains($0.kind) }.map(\.id))
             if !gone.isEmpty {
                 p.nodes.removeAll { gone.contains($0.id) }
@@ -210,7 +213,7 @@ public extension Patch {
             }
         }
         if version < 9 {
-            // v9: div~ outlets became a ×16 … ÷64 list; old ÷n (default ÷k on outlet k) keeps its meaning.
+            // v9: div outlets became a ×16 … ÷64 list; old ÷n (default ÷k on outlet k) keeps its meaning.
             for i in p.nodes.indices where p.nodes[i].kind == "div" {
                 for k in 1...DividerLayout.outputs {
                     let old = p.nodes[i].params["d\(k)"] ?? Float(k)

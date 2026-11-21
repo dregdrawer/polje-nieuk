@@ -237,7 +237,7 @@ struct PatchCanvasView: View {
                 .offset(x: (ox > 0 ? ox - step : ox), y: (oy > 0 ? oy - step : oy))
         }
         .clipped()
-        .background(Theme.bg)
+        .background(CanvasBackground().id(CustomColours.version))     // colour, and the picture if one is set
         .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: panThreshold)

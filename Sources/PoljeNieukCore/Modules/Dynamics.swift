@@ -1,6 +1,6 @@
 import Foundation
 
-/// comp~ : LA-3A-style optical compressor.
+/// comp : LA-3A-style optical compressor.
 /// Two knobs (Peak Reduction, Gain) and a Compress/Limit switch. Like a T4 opto cell:
 /// attack is program-dependent (~10 ms, faster on big transients) and release is two-stage —
 /// a quick ~60 ms recovery for most of the reduction, then a slow 0.5–5 s tail that gets
@@ -116,7 +116,7 @@ final class CompressorNode: DSPNode {
     }
 }
 
-/// limit~ : brickwall-style limiter with 1.3 ms lookahead.
+/// limit : brickwall-style limiter with 1.3 ms lookahead.
 final class LimiterNode: DSPNode {
     // 0 input gain, 1 ceiling, 2 release
     private static let look = 64
@@ -149,7 +149,7 @@ final class LimiterNode: DSPNode {
     }
 }
 
-/// gate~ : noise gate with hold, floor, and sidechain inlet.
+/// gate : noise gate with hold, floor, and sidechain inlet.
 final class GateNode: DSPNode {
     // 0 threshold, 1 attack, 2 hold, 3 release, 4 floor
     private var g: Float = 0
@@ -178,7 +178,7 @@ final class GateNode: DSPNode {
     }
 }
 
-/// eq~ : three-band DJ-style EQ (perfect reconstruction when flat).
+/// eq : three-band DJ-style EQ (perfect reconstruction when flat).
 final class EQ3Node: DSPNode {
     // 0 low, 1 mid, 2 high, 3 low freq, 4 high freq
     private var lowL = SVF(), lowR = SVF(), highL = SVF(), highR = SVF()

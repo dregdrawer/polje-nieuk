@@ -10,7 +10,7 @@ import PoljeNieukCore
     var node: PatchNode
     let spec: ModuleSpec
     var dsp: DSPNode? { model.node(id) }
-    /// a file is being dragged over this pad (rack~)
+    /// a file is being dragged over this pad (rack)
     var dropPad: Int?
 
     init(model: AppModel, node: PatchNode, spec: ModuleSpec) {
@@ -27,7 +27,7 @@ import PoljeNieukCore
     func release(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) {}
     /// Right-click / long-press menu.
     func menu(_ p: CGPoint, _ r: CGRect) -> [MenuItem]? { nil }
-    /// rack~: the pad under a dropped file (nil: the box takes it)
+    /// rack: the pad under a dropped file (nil: the box takes it)
     func pad(at p: CGPoint, _ r: CGRect) -> Int? { nil }
 
     func param(_ key: String) -> Int? { spec.paramIndex(key) }
@@ -80,7 +80,7 @@ final class TextReadout: NativeDisplay {
     }
 }
 
-// MARK: - clock~: the tempo line and ▶ ❚❚ ■
+// MARK: - clock: the tempo line and ▶ ❚❚ ■
 
 final class ClockDisplay: NativeDisplay {
     private func buttons(_ r: CGRect) -> [(GraphHost.Transport, CGRect)] {
@@ -116,7 +116,7 @@ final class ClockDisplay: NativeDisplay {
     }
 }
 
-// MARK: - looper~ / sampler~ / stretch~: status line and waveform
+// MARK: - looper / sampler / stretch: status line and waveform
 
 final class BufferDisplay: NativeDisplay {
     private var view: WaveformView?
@@ -200,7 +200,7 @@ final class BufferDisplay: NativeDisplay {
     }
 }
 
-// MARK: - keys~
+// MARK: - keys
 
 final class KeysDisplay: NativeDisplay {
     private var lastKey = -1
@@ -241,7 +241,7 @@ final class KeysDisplay: NativeDisplay {
     }
 }
 
-// MARK: - seq~
+// MARK: - seq
 
 final class SeqDisplay: NativeDisplay {
     private var paintGate: Float?
@@ -288,7 +288,7 @@ final class SeqDisplay: NativeDisplay {
     }
 }
 
-// MARK: - turing~
+// MARK: - turing
 
 final class TuringDisplay: NativeDisplay {
     override func parts(_ r: CGRect) -> [LivePart] {
@@ -300,7 +300,7 @@ final class TuringDisplay: NativeDisplay {
     }
 }
 
-// MARK: - roll~ / drums~
+// MARK: - roll / drums
 
 final class GridDisplay: NativeDisplay {
     private var paint: Float?
@@ -348,7 +348,7 @@ final class GridDisplay: NativeDisplay {
     }
 }
 
-// MARK: - comp~
+// MARK: - comp
 
 final class CompDisplay: NativeDisplay {
     private var view: CompView?
@@ -364,7 +364,7 @@ final class CompDisplay: NativeDisplay {
     }
 }
 
-// MARK: - lfo~
+// MARK: - lfo
 
 final class LFODisplay: NativeDisplay {
     override func parts(_ r: CGRect) -> [LivePart] {
@@ -376,7 +376,7 @@ final class LFODisplay: NativeDisplay {
     }
 }
 
-// MARK: - chord~
+// MARK: - chord
 
 final class ChordDisplay: NativeDisplay {
     private func inner(_ r: CGRect) -> CGRect { r.insetBy(dx: 0, dy: 4) }
@@ -396,7 +396,7 @@ final class ChordDisplay: NativeDisplay {
     }
 }
 
-// MARK: - wave~: tabs, drawing area, ready-made shapes
+// MARK: - wave: tabs, drawing area, ready-made shapes
 
 final class WaveDisplay: NativeDisplay {
     private var last: (index: Int, value: Float)?
@@ -477,7 +477,7 @@ final class WaveDisplay: NativeDisplay {
     }
 }
 
-// MARK: - scope~
+// MARK: - scope
 
 final class ScopeDisplay: NativeDisplay {
     override func parts(_ r: CGRect) -> [LivePart] {
@@ -496,7 +496,7 @@ final class ScopeDisplay: NativeDisplay {
     }
 }
 
-// MARK: - slider~ / knob~
+// MARK: - slider / knob
 
 final class ControlsDisplay: NativeDisplay {
     private var start: [Int: Float] = [:]
@@ -563,7 +563,7 @@ final class ControlsDisplay: NativeDisplay {
     }
 }
 
-// MARK: - eq~: response curve with draggable bands
+// MARK: - eq: response curve with draggable bands
 
 final class EQDisplay: NativeDisplay {
     private var view: EQCurveView?
@@ -598,7 +598,7 @@ final class EQDisplay: NativeDisplay {
     override func release(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) { band = nil }
 }
 
-// MARK: - rack~ and drumsynth~: a drum roll (lane names on the left) above pads with M ▶ S
+// MARK: - rack and drumsynth: a drum roll (lane names on the left) above pads with M ▶ S
 
 class PadsDisplay: NativeDisplay {
     var lanes: Int { 0 }
@@ -756,7 +756,7 @@ class PadsDisplay: NativeDisplay {
 final class RackDisplay: PadsDisplay {
     private var rack: RackNode? { dsp as? RackNode }
     override var lanes: Int { RackLayout.pads }
-    override var laneHeight: CGFloat { RackView.rollHeight / 16 }
+    override var laneHeight: CGFloat { BoxLayout.padLaneHeight(node) }
     override var labelWidth: CGFloat { RackView.label }
     override var labelSize: CGFloat { 7.5 }
     override var padRows: Int { 4 }
@@ -786,7 +786,7 @@ final class RackDisplay: PadsDisplay {
 final class DrumSynthDisplay: PadsDisplay {
     private var synth: DrumSynthNode? { dsp as? DrumSynthNode }
     override var lanes: Int { DrumSynthLayout.voices }
-    override var laneHeight: CGFloat { DrumSynthView.laneHeight }
+    override var laneHeight: CGFloat { BoxLayout.padLaneHeight(node) }
     override var labelWidth: CGFloat { DrumSynthView.label }
     override var labelSize: CGFloat { 8.5 }
     override var padRows: Int { 1 }

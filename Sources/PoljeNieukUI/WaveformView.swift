@@ -194,7 +194,7 @@ final class SpectrumAnalyzer {
     }
 }
 
-/// eq~ display: live spectrum (when something is patched in), the response curve, and band points
+/// eq display: live spectrum (when something is patched in), the response curve, and band points
 /// you can drag with a finger, mouse or Apple Pencil — left/right = frequency, up/down = gain.
 /// Double-tap a point to flatten that band.
 struct EQCurveView: View {

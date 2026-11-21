@@ -38,6 +38,7 @@ int64_t Canvas::keyFor(const PatchNode& n, const std::vector<const PatchCable*>&
     LiveSig::mix(h, int64_t(n.x * 8)); LiveSig::mix(h, int64_t(n.y * 8));
     LiveSig::mix(h, n.bypassed ? 1 : 0); LiveSig::mix(h, n.text ? n.text->hashCode64() : 7);
     LiveSig::mix(h, int64_t(n.z.value_or(-1) * 8));
+    LiveSig::mix(h, n.highlight ? n.highlight->hashCode64() : 3);
     for (auto* c : cables) { LiveSig::mix(h, c->id.hashCode64()); LiveSig::mix(h, c->fromPort * 7919 + c->toPort); }
     for (auto* r : related) { LiveSig::mix(h, LiveSig::patch(*r)); LiveSig::mix(h, r->id.hashCode64()); }
     LiveSig::mix(h, int64_t(model.patch.nodes.size()));
@@ -334,6 +335,19 @@ void Canvas::paint(juce::Graphics& g) {
     Pt o = model.viewOffset;
     auto clip = g.getClipBounds().toFloat();
     g.fillAll(Theme::bg());
+    // the background picture: scaled once to fill the window (cropped, centred), then just drawn
+    if (auto& pic = BackgroundPicture::image(); pic.isValid()) {
+        int w = getWidth(), h = getHeight();
+        if (bgImage.isNull() || bgW != w || bgH != h || bgPx != px || bgVersion != CustomColours::version) {
+            bgW = w; bgH = h; bgPx = px; bgVersion = CustomColours::version;
+            int iw = std::max(1, int(std::ceil(float(w) * px))), ih = std::max(1, int(std::ceil(float(h) * px)));
+            bgImage = juce::Image(juce::Image::RGB, iw, ih, true);
+            juce::Graphics ig(bgImage);
+            ig.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
+            ig.drawImageWithin(pic, 0, 0, iw, ih, juce::RectanglePlacement::centred | juce::RectanglePlacement::fillDestination);
+        }
+        g.drawImageTransformed(bgImage, juce::AffineTransform::scale(1 / px));
+    } else bgImage = {};
     // dot grid: zoomed far out every 4th dot (then every 16th), so it stays visible but calm. Drawn once per zoom /
     // window size into a picture one step bigger than the window, then only slid along while panning.
     {
@@ -503,7 +517,8 @@ void Canvas::timerCallback() {
     }
     if (press && longPressAt > 0 && t >= longPressAt) {
         longPressAt = 0;
-        if (!press->dragging && !press->info.moved && press->item->kind == Item::module) { press->longFired = true; model.beginReplace(press->item->id); }
+        // a long press = a right-click: duplicate, replace, highlight
+        if (!press->dragging && !press->info.moved && press->item->kind == Item::module) { press->longFired = true; showMenu(titleMenu(press->item->id), press->startScreen); }
     }
     // live parts: gliding ones at 30 fps, the rest at 20 fps (slower still with audio off). In 3D they hold still.
     if (model.threeD) return;
@@ -660,6 +675,11 @@ bool Canvas::began(Pt screen, const juce::MouseEvent& e) {
             if (hit.button == BoxGeo::autoRec) { press->autoRecWasOn = model.autoRecording.count(id) > 0; if (!press->autoRecWasOn) model.startAutoRecord(id); }
             break;
         case Region::title: case Region::text:
+            if (info.right && it->kind == Item::module) {
+                press.reset();
+                showMenu(titleMenu(id), screen);
+                return true;
+            }
             if (!info.right) longPressAt = now() + 0.5;
             break;
         case Region::row:
@@ -833,6 +853,24 @@ void Canvas::ended(Pt screen, bool cancelled) {
     }
 }
 
+std::vector<MenuItem> Canvas::titleMenu(const juce::String& id) {
+    int i = model.patch.index(id);
+    std::optional<juce::String> cur = i >= 0 ? model.patch.nodes[size_t(i)].highlight : std::nullopt;
+    std::vector<MenuItem> list;
+    auto item = [](juce::String t, bool checked, std::function<void()> f) { MenuItem m; m.title = t; m.checked = checked; m.action = f; return m; };
+    list.push_back(item("Duplicate", false, [this, id] { model.duplicate(id); }));
+    list.push_back(item(juce::String::fromUTF8("Replace\xe2\x80\xa6"), false, [this, id] { model.beginReplace(id); }));
+    list.push_back(MenuItem::divider()); list.push_back(MenuItem::section("Highlight"));
+    list.push_back(item("none", !cur, [this, id] { model.setHighlight(id, std::nullopt); }));
+    for (auto& c : AppModel::highlightColours) {
+        juce::String hex(c.hex);
+        auto mi = item(c.name, cur && *cur == hex, [this, id, hex] { model.setHighlight(id, hex); });
+        mi.swatch = hex;
+        list.push_back(mi);
+    }
+    return list;
+}
+
 void Canvas::showMenu(const std::vector<MenuItem>& list, Pt screen) {
     juce::PopupMenu menu;
     menu.setLookAndFeel(&getLookAndFeel());
@@ -842,7 +880,12 @@ void Canvas::showMenu(const std::vector<MenuItem>& list, Pt screen) {
         if (it.separator) { menu.addSeparator(); continue; }
         if (it.header) { menu.addSectionHeader(it.title); continue; }
         actions[idn] = it.action;
-        menu.addItem(idn++, it.title, it.enabled, it.checked);
+        if (it.swatch.isNotEmpty()) {
+            juce::PopupMenu::Item mi(it.title);
+            mi.itemID = idn++; mi.isEnabled = it.enabled; mi.isTicked = it.checked;
+            mi.colour = juce::Colour::fromString("ff" + it.swatch.substring(1));
+            menu.addItem(mi);
+        } else menu.addItem(idn++, it.title, it.enabled, it.checked);
     }
     auto p = localPointToGlobal(screen.toInt());
     menu.showMenuAsync(juce::PopupMenu::Options().withTargetScreenArea({ p.x, p.y, 1, 1 }), [actions](int r) {
@@ -975,16 +1018,16 @@ void Canvas::hovered(std::optional<Pt> screen) {
                 if (port >= kParamPortBase) {
                     int i = port - kParamPortBase;
                     title = nameOf(spec.name) + u8(" \xc2\xb7 ") + (i < int(spec.params.size()) ? nameOf(spec.params[size_t(i)].name) : juce::String("parameter")) + " (CV in)";
-                    what = u8("Patch any outlet here to move this parameter. \xc2\xb1" "1.0 (\xe2\x89\x88 \xc2\xb1" "10 V) sweeps its whole range; use atten~ to scale. A slider~ / knob~ patched here takes it over completely and moves with its row.");
+                    what = u8("Patch any outlet here to move this parameter. \xc2\xb1" "1.0 (\xe2\x89\x88 \xc2\xb1" "10 V) sweeps its whole range; use atten to scale. A slider / knob patched here takes it over completely and moves with its row.");
                 } else {
                     auto& names = output ? spec.outputs : spec.inputs;
                     juce::String name = port < int(names.size()) ? nameOf(names[size_t(port)]) : "?";
                     auto n = name.toLowerCase();
-                    if (n == "l" || n == "r" || n == "in" || n == "out") what = output ? u8("Audio out \xe2\x80\x94 patch to out~ or into another box.") : juce::String("Audio in.");
-                    else if (n == "pitch") what = output ? "Pitch CV out, 1 V/oct (0.1 = one octave). Patch into a voice's pitch inlet or out~ to the modular." : "Pitch CV in, 1 V/oct (0.1 = one octave).";
+                    if (n == "l" || n == "r" || n == "in" || n == "out") what = output ? u8("Audio out \xe2\x80\x94 patch to out or into another box.") : juce::String("Audio in.");
+                    else if (n == "pitch") what = output ? "Pitch CV out, 1 V/oct (0.1 = one octave). Patch into a voice's pitch inlet or out to the modular." : "Pitch CV in, 1 V/oct (0.1 = one octave).";
                     else if (n == "gate") what = output ? "Gate out: high while a note / step is on." : "Gate in: high starts, low releases.";
                     else if (n == "trig" || n == "strum" || n == "seed") what = output ? "Trigger pulses out." : "Trigger in: each rising edge fires it.";
-                    else if (n == "clock" || n == "t clk" || n == "x clk") what = output ? "Clock pulses out." : "Clock in: pulses from the modular or clock~ drive it.";
+                    else if (n == "clock" || n == "t clk" || n == "x clk") what = output ? "Clock pulses out." : "Clock in: pulses from the modular or clock drive it.";
                     else if (n == "reset") what = "Reset in: a pulse goes back to the start.";
                     else if (n == "sc") what = "Sidechain in: this signal drives the compression instead of the input.";
                     else if (n == "freeze") what = "Freeze in: high holds the current sound.";

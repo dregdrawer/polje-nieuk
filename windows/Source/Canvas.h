@@ -96,6 +96,7 @@ private:
     void moved(Pt screen);
     void ended(Pt screen, bool cancelled = false);
     void showMenu(const std::vector<MenuItem>& items, Pt screen);
+    std::vector<MenuItem> titleMenu(const juce::String& id);   // right-click / long-press a box's title bar
     std::optional<juce::String> hitCable(Pt screen);
     std::optional<std::pair<Pt, Pt>> cableEnds(const PatchCable& c);
     void hovered(std::optional<Pt> screen);
@@ -149,6 +150,7 @@ private:
     enum class Mode3D { none, pan, lift, orbit, box } mode3D = Mode3D::none;
     Pt start3D, startOffset3D, startBoard3D; double startZ3D = 0, pitch3D = 0, yaw3D = 0, pressH3D = 0; juce::String lift3D;
     juce::Image gridImage;
+    juce::Image bgImage; int bgW = 0, bgH = 0, bgVersion = -1; float bgPx = 0;   // the background picture, scaled to fill the window
     juce::Path cablePlain, cableDashed, cableSel, cableDashedStroke;
     bool cablesDirty = true; float dashedFor = 0;
     void rebuildCables();

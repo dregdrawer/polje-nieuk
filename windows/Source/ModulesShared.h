@@ -5,14 +5,14 @@
 
 namespace pn {
 
-/// Modules that can feed a spectrum display (peq~).
+/// Modules that can feed a spectrum display (peq).
 class SpectrumSource {
 public:
     virtual ~SpectrumSource() = default;
     virtual void copyRecent(float* out, int count) const = 0;
 };
 
-/// scope~: the last finished sweep per channel (points × min / max).
+/// scope: the last finished sweep per channel (points × min / max).
 class ScopeNode : public DSPNode {
 public:
     static constexpr int points = 256;
@@ -277,7 +277,7 @@ private:
     EdgeDetector trigEdge[kMaxVoices];
 };
 
-// sampler~ helpers for the UI
+// sampler helpers for the UI
 void samplerAnalyze(DSPNode* n);
 void samplerAudition(DSPNode* n, int slice);
 int samplerSliceAt(DSPNode* n, double x);

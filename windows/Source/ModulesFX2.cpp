@@ -1,4 +1,4 @@
-// stretch~, freqshift~, chorus~, phaser~, redux~, shift~, autopan~, repeat~, comp~, limit~, gate~, eq~, peq~, scope~
+// stretch, freqshift, chorus, phaser, redux, shift, autopan, repeat, comp, limit, gate, eq, peq, scope
 // — ports of Spectral.swift, Modulation.swift, Dynamics.swift, ParametricEQ.swift, Scope.swift.
 #include "Modules.h"
 #include "Buffers.h"
@@ -38,7 +38,7 @@ private:
     std::vector<int> rev;
 };
 
-// ---------------------------------------------------------------- stretch~
+// ---------------------------------------------------------------- stretch
 
 class PaulStretchNode : public DSPNode, public SampleBufferNode {
 public:
@@ -161,7 +161,7 @@ private:
     EdgeDetector recGate;
 };
 
-// ---------------------------------------------------------------- freqshift~
+// ---------------------------------------------------------------- freqshift
 
 class FreqShiftNode : public DSPNode {
 public:
@@ -577,7 +577,7 @@ private:
     SVF lowL, lowR, highL, highR;
 };
 
-// ---------------------------------------------------------------- peq~
+// ---------------------------------------------------------------- peq
 
 namespace ParametricEQ {
 int bandCount(float c) { static const int ch[] = { 3, 5, 8 }; return ch[clampIndex(c, 3)]; }
@@ -663,7 +663,7 @@ private:
     int ringW = 0;
 };
 
-// ---------------------------------------------------------------- scope~
+// ---------------------------------------------------------------- scope
 
 class ScopeNodeImpl : public ScopeNode {
 public:

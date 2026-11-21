@@ -19,7 +19,7 @@ public struct ParamSpec: Sendable {
     public let unit: String
     public let kind: ParamKind
     public let curve: ParamCurve
-    /// Only these values (ascending): the row slides through them evenly (seq~ length: 1…16, 32, 64).
+    /// Only these values (ascending): the row slides through them evenly (seq length: 1…16, 32, 64).
     public var allowed: [Float]? = nil
 
     public init(_ key: String, _ name: String, _ min: Float, _ max: Float, _ def: Float,
@@ -133,7 +133,7 @@ public struct ParamSpec: Sendable {
 public enum BypassMode: Sendable {
     case through   // bypassed: audio passes straight through
     case silent    // bypassed: outputs silence (modulation sources)
-    case none      // no bypass button (in~, out~, clock, rec~, mix~)
+    case none      // no bypass button (in, out, clock, rec, mix)
 }
 
 public struct ModuleSpec {
@@ -146,7 +146,7 @@ public struct ModuleSpec {
     public let outputs: [String]
     public let params: [ParamSpec]
     public let factory: (ModuleSpec, Double) -> DSPNode
-    /// Outlets whose cable can carry several notes at once (a chord from roll~ / chord~). Note 1 (the lowest)
+    /// Outlets whose cable can carry several notes at once (a chord from roll / chord). Note 1 (the lowest)
     /// is what a mono module reads, so they work as before anywhere else.
     public var polyOutputs: [Int] = []
 
@@ -162,7 +162,7 @@ public struct ModuleSpec {
         }
     }
 
-    /// Control voltages (pitch, gates, clocks, LFOs, envelopes …) rather than audio: out~'s gain leaves
+    /// Control voltages (pitch, gates, clocks, LFOs, envelopes …) rather than audio: out's gain leaves
     /// these alone, so pitch stays exactly 1 V/oct and gates keep their level.
     public var outputsAreCV: Bool { ["Sequencing", "Modulation", "Clock"].contains(category) }
 
