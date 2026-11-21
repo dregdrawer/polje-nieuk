@@ -55,7 +55,7 @@ public:
     float viewScale = 1;
     bool isZooming = false;
     Pt viewSize;
-    bool selectMode = false, helpMode = false, showFiles = false, showColours = false, hideCables = false, lightScheme = false;
+    bool selectMode = false, helpMode = false, showFiles = false, showColours = false, hideCables = false, lightScheme = false, showMap = false;
     std::vector<HelpTopic> helpTopics;
     // view > Select type: every box of the ticked sections gets a frame in that section's colour (several at once).
     // Independent of a box's own highlight (both frames show). Remembered between launches.

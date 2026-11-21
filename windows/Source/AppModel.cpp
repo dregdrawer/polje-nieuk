@@ -347,6 +347,7 @@ AppModel::AppModel() {
     auto& s = settings();
     lightScheme = Theme::light = s.getBoolValue("lightScheme", false);
     hideCables = s.getBoolValue("hideCables", false);
+    showMap = s.getBoolValue("showMap", false);
     for (auto& c : juce::StringArray::fromLines(s.getValue("typeHighlights"))) if (c.isNotEmpty()) typeHighlights.insert(c.toStdString());
     hw.inputs = s.getIntValue("hwInputs", 12);
     hw.outputs = s.getIntValue("hwOutputs", 8);

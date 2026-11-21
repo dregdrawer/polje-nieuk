@@ -310,6 +310,11 @@ void TopBar::addMenu(Pt) {
 
 void TopBar::viewMenu(Pt at) {
     juce::PopupMenu m;
+    m.addItem("Patch map", true, model.showMap, [this] {
+        model.showMap = !model.showMap;
+        settings().setValue("showMap", model.showMap);
+        model.changed();
+    });
     m.addItem("Hide cables", true, model.hideCables, [this] {
         model.hideCables = !model.hideCables;
         settings().setValue("hideCables", model.hideCables);

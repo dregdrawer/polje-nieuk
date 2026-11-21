@@ -157,7 +157,7 @@ struct TempoField: View {
 
 /// What the top bar shows. The bar redraws only when this changes (not on every change to the patch).
 struct BarState: Equatable {
-    var running, lightScheme, helpMode, selectMode, showFiles, hideCables, hasUserDefault: Bool
+    var running, lightScheme, helpMode, selectMode, showFiles, hideCables, showMap, hasUserDefault: Bool
     var canUndo, canRedo, allCollapsed, groupsSelected, cableSelected: Bool
     var selected: Int
     var inputUID, outputUID: String?
@@ -169,7 +169,7 @@ struct BarState: Equatable {
     var barMenu: String?
     @MainActor init(_ m: AppModel) {
         running = m.isRunning; lightScheme = m.lightScheme; helpMode = m.helpMode; selectMode = m.selectMode
-        showFiles = m.showFiles; hideCables = m.hideCables; hasUserDefault = m.hasUserDefault
+        showFiles = m.showFiles; hideCables = m.hideCables; showMap = m.showMap; hasUserDefault = m.hasUserDefault
         canUndo = m.canUndo; canRedo = m.canRedo; allCollapsed = m.allCollapsed
         groupsSelected = !m.selectedGroups.isEmpty; cableSelected = m.selectedCable != nil
         selected = m.selectedNodes.count
@@ -227,8 +227,8 @@ struct TopBar: View, Equatable {
             .overlay(alignment: alignRight ? .topTrailing : .topLeading) {
                 if state.barMenu == key {
                     PanelMenuView(items: items(), maxHeight: 640) { model.barMenu = nil }
-                        .offset(y: 30)
                         .menuFrame("barMenu")
+                        .padding(.top, 30)
                 }
             }
     }
@@ -403,6 +403,7 @@ struct TopBar: View, Equatable {
 
             barMenu("view", alignRight: true, items: {
                 var list = [MenuItem(title: "Hide cables", checked: state.hideCables, action: { model.hideCables.toggle() }),
+                            MenuItem(title: "Patch map", checked: state.showMap, action: { model.showMap.toggle() }),
                             MenuItem(title: "Colours…", action: { model.showColours.toggle() }),
                             .divider,
                             MenuItem(title: "Tidy", action: { model.tidy() }),

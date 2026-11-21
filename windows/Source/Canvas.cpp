@@ -472,6 +472,26 @@ void Canvas::paint(juce::Graphics& g) {
             GC gc(g); gc.text(name, box.getCentre(), 11, Theme::inverse());
         }
     }
+    // the patch map (bottom right)
+    if (model.showMap) {
+        auto mr = mapRect(); auto e = mapExtent();
+        float sc = std::min(mr.getWidth() / std::max(e.getWidth(), 1.0f), mr.getHeight() / std::max(e.getHeight(), 1.0f));
+        Pt o { mr.getX() + (mr.getWidth() - e.getWidth() * sc) / 2, mr.getY() + (mr.getHeight() - e.getHeight() * sc) / 2 };
+        auto map = [&](Rect r) { return Rect(o.x + (r.getX() - e.getX()) * sc, o.y + (r.getY() - e.getY()) * sc, r.getWidth() * sc, r.getHeight() * sc); };
+        g.setColour(Theme::box().withAlpha(0.92f)); g.fillRoundedRectangle(mr, 3);
+        g.setColour(Theme::border()); g.drawRoundedRectangle(mr, 3, 1);
+        for (auto& n : model.patch.nodes) {
+            auto* sp = Registry::spec(n.kind);
+            if (!sp) continue;
+            auto r = map(Rect(float(n.x), float(n.y), BoxLayout::width(n), BoxLayout::height(n, *sp, model.hw)));
+            auto hex = n.highlight ? n.highlight : model.typeColour(n);
+            g.setColour(hex && hex->length() == 7 ? juce::Colour::fromString("ff" + hex->substring(1))
+                                                  : Theme::text().withMultipliedAlpha(model.selectedNodes.count(n.id) ? 0.7f : 0.35f));
+            g.fillRect(r.reduced(0.25f));
+        }
+        auto a = model.toCanvas({ 0, 0 }), b = model.toCanvas({ float(getWidth()), float(getHeight()) });
+        g.setColour(Theme::text()); g.drawRect(map(Rect(a, b)), 1.0f);
+    }
     // help panel (bottom left)
     if (model.helpMode) {
         juce::String title = model.helpTopics.empty() ? juce::String("help") : model.helpTopics.back().title;
@@ -931,6 +951,30 @@ void Canvas::showMenu(const std::vector<MenuItem>& list, Pt screen) {
 
 // ---------------------------------------------------------------- mouse
 
+Rect Canvas::mapRect() const { return Rect(float(getWidth()) - 12 - 220, float(getHeight()) - 12 - 150, 220, 150); }
+Rect Canvas::mapExtent() const {
+    if (mapHeld) return *mapHeld;
+    Rect r; bool any = false;
+    for (auto& n : model.patch.nodes) {
+        auto* sp = Registry::spec(n.kind);
+        if (!sp) continue;
+        Rect b(float(n.x), float(n.y), BoxLayout::width(n), BoxLayout::height(n, *sp, model.hw));
+        r = any ? r.getUnion(b) : b; any = true;
+    }
+    auto a = model.toCanvas({ 0, 0 }), b = model.toCanvas({ float(getWidth()), float(getHeight()) });
+    Rect v(a, b);
+    r = any ? r.getUnion(v) : v;
+    return r.expanded(60);
+}
+void Canvas::mapGo(Pt p) {
+    auto mr = mapRect(); auto e = mapExtent();
+    float sc = std::min(mr.getWidth() / std::max(e.getWidth(), 1.0f), mr.getHeight() / std::max(e.getHeight(), 1.0f));
+    Pt o { mr.getX() + (mr.getWidth() - e.getWidth() * sc) / 2, mr.getY() + (mr.getHeight() - e.getHeight() * sc) / 2 };
+    Pt c { e.getX() + (p.x - o.x) / sc, e.getY() + (p.y - o.y) / sc };     // centre the view on that point of the patch
+    float s = model.viewScale;
+    model.setView({ float(getWidth()) / 2 - c.x * s, float(getHeight()) / 2 - c.y * s }, s);
+}
+
 void Canvas::mouseDown(const juce::MouseEvent& e) {
     grabKeyboardFocus();
     Pt p = e.position;
@@ -942,6 +986,7 @@ void Canvas::mouseDown(const juce::MouseEvent& e) {
         if (p.x > 300 && p.y > float(getHeight()) - 200) { }
     }
     if (!deleteButton.isEmpty() && deleteButton.toFloat().contains(p)) { model.removeCable(model.selectedCable); return; }
+    if (model.showMap && mapRect().contains(p)) { mapDragging = true; mapHeld = mapExtent(); mapGo(p); return; }
     if (began(p, e)) return;
     bgPressed = true; panning = false; marquee.reset();
     bgRight = e.mods.isPopupMenu();          // right-click and drag: a selection box
@@ -951,6 +996,7 @@ void Canvas::mouseDown(const juce::MouseEvent& e) {
 
 void Canvas::mouseDrag(const juce::MouseEvent& e) {
     Pt p = e.position;
+    if (mapDragging) { mapGo(p); return; }
     if (press) { moved(p); return; }
     if (!bgPressed) return;
     if (!panning && !marquee && p.getDistanceFrom(bgStart) < 3) return;
@@ -965,6 +1011,7 @@ void Canvas::mouseDrag(const juce::MouseEvent& e) {
 
 void Canvas::mouseUp(const juce::MouseEvent& e) {
     Pt p = e.position;
+    if (mapDragging) { mapDragging = false; mapHeld.reset(); repaint(); return; }
     if (press) { ended(p); return; }
     if (!bgPressed) return;
     bgPressed = false;

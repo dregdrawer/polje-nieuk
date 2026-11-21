@@ -129,6 +129,12 @@ private:
     juce::Rectangle<int> deleteButton;
     juce::Image gridImage;
     bool bgRight = false;
+    // view > Patch map: every box small, the view as a frame; click / drag it to go there
+    Rect mapRect() const;
+    Rect mapExtent() const;
+    void mapGo(Pt p);
+    bool mapDragging = false;
+    std::optional<Rect> mapHeld;              // the extent, kept still while you drag on the map
     juce::Image bgImage; int bgW = 0, bgH = 0, bgVersion = -1; float bgPx = 0;   // the background picture, scaled to fill the window
     juce::Path cablePlain, cableDashed, cableSel, cableDashedStroke;
     bool cablesDirty = true; float dashedFor = 0;

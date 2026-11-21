@@ -1119,7 +1119,8 @@ final class NodesContainer: NSView, NSTextViewDelegate, NSTextFieldDelegate {
                 guard let self, e.window === self.window, self.model.anyMenuOpen, let content = self.window?.contentView else { return e }
                 var p = content.convert(e.locationInWindow, from: nil)
                 if !content.isFlipped { p.y = content.bounds.height - p.y }
-                if !MenuFrames.shared.contains(p) { self.model.closeMenus() }
+                // (events with no real position — synthetic ones — leave menus alone)
+                if content.bounds.contains(p) && !MenuFrames.shared.contains(p) { self.model.closeMenus() }
                 return e
             }
             rightMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .rightMouseDragged, .rightMouseUp]) { [weak self] e in

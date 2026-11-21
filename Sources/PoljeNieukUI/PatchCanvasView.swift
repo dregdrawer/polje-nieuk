@@ -73,6 +73,11 @@ struct PatchCanvasView: View {
                         .allowsHitTesting(false)
                 }
                 cableDeleteButton
+                if model.showMap {
+                    PatchMap(model: model, viewport: model.viewport)
+                        .padding(12)
+                        .frame(width: geo.size.width, height: geo.size.height, alignment: .bottomTrailing)
+                }
                 PortHoverOverlay(model: model, hover: hover)
                 if Self.tapClosesMenus && (model.finderAt != nil || model.showColours || model.boxMenu != nil || model.panelMenu != nil) {
                     // a menu is open: the first touch anywhere else closes it — straight away, without
@@ -88,15 +93,17 @@ struct PatchCanvasView: View {
                     let h = min(PanelMenuView.estimatedHeight(pm.items), maxH)
                     let x = min(max(pm.at.x, 8), max(geo.size.width - 240, 8))
                     let y = min(max(pm.at.y, 8), max(geo.size.height - h - 8, 8))
+                    // (placed with padding, not offset: an offset doesn't move the frame the menu reports,
+                    // and a click on the menu would then count as outside it and close it first)
                     PanelMenuView(items: pm.items, maxHeight: maxH) { model.panelMenu = nil }
                         .id(pm.id)
-                        .offset(x: x, y: y)
                         .menuFrame("panel")
+                        .padding(.leading, x).padding(.top, y)
                 }
                 if let bm = model.boxMenu {
                     let x = min(max(bm.at.x, 8), max(geo.size.width - BoxMenuView.width - 8, 8))
                     let y = min(max(bm.at.y, 8), max(geo.size.height - 110, 8))
-                    BoxMenuView(model: model, id: bm.id).offset(x: x, y: y).menuFrame("box")
+                    BoxMenuView(model: model, id: bm.id).menuFrame("box").padding(.leading, x).padding(.top, y)
                 }
                 if let at = model.finderAt {
                     // keep the whole list on screen: open it where you tapped, but shift it up/left
@@ -107,8 +114,8 @@ struct PatchCanvasView: View {
                     let x = min(max(s.x, 8), max(geo.size.width - ObjectFinder.size.width - 8, 8))
                     let y = min(max(s.y, 8), max(geo.size.height - h - 8, 8))
                     ObjectFinder(model: model, canvasPoint: at, maxHeight: maxH, contentHeight: $finderHeight)
-                        .offset(x: x, y: y)
                         .menuFrame("finder")
+                        .padding(.leading, x).padding(.top, y)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
@@ -432,6 +439,67 @@ struct ObjectFinder: View {
             model.addNode(kind: s.kind, at: canvasPoint)
         }
         model.finderAt = nil
+    }
+}
+
+/// view ▸ Patch map: every box as a small block (in its highlight colour, if it has one) and a frame for the
+/// part you're looking at. Click or drag on it to move the view there.
+struct PatchMap: View {
+    @ObservedObject var model: AppModel
+    @ObservedObject var viewport: Viewport
+    static let size = CGSize(width: 220, height: 150)
+    @State private var held: CGRect?          // the extent, kept still while you drag on the map
+
+    /// The patch's extent (canvas points), with room around it, and the view's too so it always shows.
+    private func extent() -> CGRect {
+        var r = CGRect.null
+        for n in model.patch.nodes {
+            guard let s = ModuleRegistry.spec(n.kind) else { continue }
+            r = r.union(CGRect(x: n.x, y: n.y, width: BoxLayout.width(n), height: BoxLayout.height(n, s, model.hw)))
+        }
+        r = r.union(visible())
+        return r.isNull ? CGRect(x: 0, y: 0, width: 1000, height: 700) : r.insetBy(dx: -60, dy: -60)
+    }
+    private func visible() -> CGRect {
+        let a = model.toCanvas(.zero), b = model.toCanvas(CGPoint(x: model.viewSize.width, y: model.viewSize.height))
+        return CGRect(x: a.x, y: a.y, width: b.x - a.x, height: b.y - a.y)
+    }
+    private func fit(_ e: CGRect) -> (scale: CGFloat, origin: CGPoint) {
+        let s = min(Self.size.width / max(e.width, 1), Self.size.height / max(e.height, 1))
+        return (s, CGPoint(x: (Self.size.width - e.width * s) / 2, y: (Self.size.height - e.height * s) / 2))
+    }
+
+    private static func map(_ r: CGRect, _ e: CGRect, _ f: (scale: CGFloat, origin: CGPoint)) -> CGRect {
+        CGRect(x: f.origin.x + (r.minX - e.minX) * f.scale, y: f.origin.y + (r.minY - e.minY) * f.scale,
+               width: r.width * f.scale, height: r.height * f.scale)
+    }
+
+    var body: some View {
+        let e = held ?? extent(), f = fit(e)
+        let map = { (r: CGRect) in Self.map(r, e, f) }
+        return Canvas { ctx, _ in
+            for n in model.patch.nodes {
+                guard let s = ModuleRegistry.spec(n.kind) else { continue }
+                let r = map(CGRect(x: n.x, y: n.y, width: BoxLayout.width(n), height: BoxLayout.height(n, s, model.hw)))
+                let hex = n.highlight ?? model.typeColour(n)
+                let c = hex.flatMap { Color(hex: $0) } ?? Theme.text.opacity(model.selectedNodes.contains(n.id) ? 0.7 : 0.35)
+                ctx.fill(Path(r.insetBy(dx: 0.25, dy: 0.25)), with: .color(c))
+            }
+            let v = map(visible())
+            ctx.stroke(Path(v), with: .color(Theme.text), lineWidth: 1)
+        }
+        .frame(width: Self.size.width, height: Self.size.height)
+        .background(RoundedRectangle(cornerRadius: 3).fill(Theme.box.opacity(0.92)))
+        .overlay(RoundedRectangle(cornerRadius: 3).stroke(Theme.border, lineWidth: 1))
+        .contentShape(Rectangle())
+        .gesture(DragGesture(minimumDistance: 0).onChanged { g in
+            if held == nil { held = e }
+            // centre the view on that point of the patch
+            let c = CGPoint(x: e.minX + (g.location.x - f.origin.x) / f.scale, y: e.minY + (g.location.y - f.origin.y) / f.scale)
+            let s = model.viewScale
+            model.viewOffset = CGSize(width: model.viewSize.width / 2 - c.x * s, height: model.viewSize.height / 2 - c.y * s)
+        }.onEnded { _ in held = nil })
+        .menuFrame("map")
     }
 }
 

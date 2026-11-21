@@ -231,6 +231,10 @@ public final class AppModel: ObservableObject {
     /// The colours panel (palette button) is open.
     @Published var showColours = false
     /// View ▸ Hide cables: the patch cords aren't drawn (and can't be picked); patching still shows the one you drag.
+    /// view ▸ Patch map: a small overview of the whole patch in the corner (click / drag it to go there).
+    @Published var showMap = UserDefaults.standard.bool(forKey: "showMap") {
+        didSet { UserDefaults.standard.set(showMap, forKey: "showMap") }
+    }
     @Published var hideCables = UserDefaults.standard.bool(forKey: "hideCables") {
         didSet {
             UserDefaults.standard.set(hideCables, forKey: "hideCables")
