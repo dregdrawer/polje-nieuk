@@ -77,6 +77,14 @@ public struct PoljeNieukRootView: View {
                 if case .success(let url) = result { model.loadAudio(from: url) } else { model.audioImportTarget = nil }
             }
         )
+        .background(
+            // fm: a DX7 sysex bank
+            Color.clear.fileImporter(isPresented: Binding(get: { model.sysexImportTarget != nil },
+                                                          set: { if !$0 { model.sysexImportTarget = nil } }),
+                                     allowedContentTypes: [UTType(filenameExtension: "syx") ?? .data, .data]) { result in
+                if case .success(let url) = result { model.loadSysex(from: url) } else { model.sysexImportTarget = nil }
+            }
+        )
         .confirmationDialog("Clear the canvas?", isPresented: $confirmNew) {
             Button(model.hasUserDefault ? "New patch (your default)" : "New patch", role: .destructive) { model.newPatch() }
             Button("Empty canvas", role: .destructive) { model.load(Patch()) }

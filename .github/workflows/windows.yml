@@ -23,6 +23,8 @@ jobs:
           python windows/tests/compare.py windows/tests/every-device.mac.txt every.txt
           & $r.FullName windows/tests/stress-95.json 8 > stress.txt
           python windows/tests/compare.py windows/tests/stress-95.mac.txt stress.txt
+          & $r.FullName windows/tests/fm.json 6 > fm.txt
+          python windows/tests/compare.py windows/tests/fm.mac.txt fm.txt
       - name: Package
         shell: pwsh
         run: |

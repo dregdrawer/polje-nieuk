@@ -27,5 +27,6 @@ Factory factoryFX2(const std::string& kind);
 Factory factoryBuffers(const std::string& kind);
 Factory factorySeq(const std::string& kind);
 Factory factoryInst(const std::string& kind);
+Factory factoryFM(const std::string& kind);
 
 } // namespace pn

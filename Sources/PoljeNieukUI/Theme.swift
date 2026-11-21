@@ -121,6 +121,7 @@ enum BoxLayout {
         case "roll", "drums": return 410            // grid + outlet column beside it
         case "rack": return 480
         case "drumsynth": return 420
+        case "fm": return 300
         case "slider": return 200
         case "knob": return 240
         case "comp": return 240
@@ -185,7 +186,7 @@ enum BoxLayout {
 
     static func hasReadout(_ kind: String) -> Bool {
         ["clock", "looper", "grain", "rec", "comp", "limit", "repeat", "gain", "mix",
-         "sampler", "stretch", "peq", "keys", "seq", "turing", "roll", "drums", "slider", "knob", "lfo", "rack", "drumsynth", "scope", "wave", "chord"].contains(kind)
+         "sampler", "stretch", "peq", "keys", "seq", "turing", "roll", "drums", "slider", "knob", "lfo", "rack", "drumsynth", "scope", "wave", "chord", "fm"].contains(kind)
     }
 
     /// Height of the live area under the ports (waveforms and curves are taller).
@@ -205,6 +206,7 @@ enum BoxLayout {
         case "drumsynth": return 4 * 14 + 8 + 42 + 8
         case "comp": return 92
         case "lfo": return 56
+        case "fm": return 104                 // voice name, operators, the selected one's envelope
         case "clock": return 40               // tempo line + ▶ ❚❚ ■
         case "scope": return 160
         case "wave": return 170
@@ -272,6 +274,14 @@ enum BoxLayout {
             let patched = usage[node.id]?.ins ?? []
             return (0..<RackLayout.globals).map { $0 } + (b..<b + 5).map { $0 }
                 + all.filter { $0 >= RackLayout.globals && !($0 >= b && $0 < b + 5) && patched.contains(kParamPortBase + $0) }
+        }
+        if spec.kind == "fm" {
+            // the main rows, then the selected operator's (the rest still play: a sysex voice sets them)
+            let sel = min(max(Int((node.params["sel"] ?? 0).rounded()), 0), FMLayout.ops - 1)
+            let b = FMLayout.base(sel)
+            let patched = usage[node.id]?.ins ?? []
+            let shown = FMLayout.shownGlobals + FMLayout.shownOp.map { b + $0 }
+            return shown + all.filter { !shown.contains($0) && patched.contains(kParamPortBase + $0) }
         }
         if spec.kind == "drumsynth" {
             let sel = Int((node.params["sel"] ?? 0).rounded())

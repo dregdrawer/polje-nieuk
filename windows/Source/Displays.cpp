@@ -1,4 +1,5 @@
 #include "Displays.h"
+#include "ModulesFM.h"
 #include <complex>
 
 namespace pn {
@@ -551,6 +552,124 @@ public:
 private:
     std::optional<float> paint;
     bool scrolling = false;
+};
+
+// ---------------------------------------------------------------- fm: the voice (< name >, bank, load a sysex), six operators, the selected one's envelope
+
+class FMDisplay : public NativeDisplay {
+public:
+    using NativeDisplay::NativeDisplay;
+    Rect inner(Rect r) const { return r.reduced(0, 4); }
+    Rect nameRow(Rect r) const { auto i = inner(r); return Rect(i.getX(), i.getY(), i.getWidth(), 20); }
+    Rect prevRect(Rect r) const { auto n = nameRow(r); return Rect(n.getX(), n.getY(), 18, n.getHeight()); }
+    Rect syxRect(Rect r) const { auto n = nameRow(r); return Rect(n.getRight() - 36, n.getY(), 36, n.getHeight()); }
+    Rect nextRect(Rect r) const { auto s = syxRect(r); return Rect(s.getX() - 22, s.getY(), 18, s.getHeight()); }
+    Rect nameRect(Rect r) const { auto a = prevRect(r), b = nextRect(r); return Rect(a.getRight() + 4, a.getY(), std::max(b.getX() - 4 - a.getRight() - 4, 10.0f), a.getHeight()); }
+    Rect tab(int k, Rect r) const { auto i = inner(r); float gap = 4, w = (i.getWidth() - gap * 5) / 6; return Rect(i.getX() + float(k) * (w + gap), i.getY() + 26, w, 24); }
+    Rect envRect(Rect r) const { auto i = inner(r); return Rect(i.getX(), i.getY() + 56, i.getWidth(), std::max(i.getHeight() - 56, 10.0f)); }
+    int sel() const { return std::clamp(int(std::round(p("sel", 0))), 0, 5); }
+    const FMAlgorithm& alg() const { return fmAlgorithms()[size_t(std::clamp(int(std::round(p("algo", 1))) - 1, 0, 31))]; }
+    float val(int i) { return model.value(node, i, spec); }
+    int voiceIndex() const { auto it = node.data.find("voice"); return it == node.data.end() || it->second.empty() ? 0 : int(it->second[0]); }
+
+    void paintStatic(GC& g, Rect r) override {
+        for (auto pr : { std::make_pair(prevRect(r), "<"), std::make_pair(nextRect(r), ">") }) {
+            g.fillRounded(pr.first, 2, Theme::row());
+            g.text(pr.second, pr.first.getCentre(), 9, Theme::dim());
+        }
+        auto n = nameRect(r);
+        g.fillRounded(n, 2, Theme::row());
+        auto bank = model.fmVoices(id).first;
+        g.textLeft(fitText(model.fmVoiceName(node), 11, n.getWidth() - 70, true), { n.getX() + 6, n.getCentreY() }, 11, Theme::text(), true);
+        g.textRight(fitText(bank + " " + juce::String(voiceIndex() + 1), 9, 64), { n.getRight() - 6, n.getCentreY() }, 9, Theme::dim());
+        auto sy = syxRect(r);
+        g.strokeRounded(sy.reduced(0.5f), 2, Theme::border(), 1);
+        g.text(juce::String::fromUTF8("syx\xe2\x80\xa6"), sy.getCentre(), 9, Theme::dim());
+        auto& a = alg();
+        for (int op = 0; op < 6; ++op) {
+            auto t = tab(op, r);
+            bool car = std::find(a.carriers.begin(), a.carriers.end(), op) != a.carriers.end();
+            g.fillRounded(t, 2, car ? Theme::text().withMultipliedAlpha(0.16f) : Theme::row());
+            if (op == sel()) g.strokeRounded(t.reduced(0.75f), 2, Theme::text(), 1.5f);
+            int lvl = int(std::round(val(FMLayout::base(op) + FMLayout::OL)));
+            g.textLeft(juce::String(op + 1), { t.getX() + 5, t.getY() + 8 }, 10, Theme::text(), true);
+            g.textRight(juce::String(lvl), { t.getRight() - 4, t.getY() + 8 }, 8, Theme::dim());
+        }
+        auto e = envRect(r);
+        int b = FMLayout::base(sel());
+        g.fill(e, Theme::row());
+        float rates[4], levels[4];
+        for (int k = 0; k < 4; ++k) { rates[k] = val(b + FMLayout::R + k); levels[k] = val(b + FMLayout::L + k); }
+        auto len = [](float rate) { return 1.2f - rate / 99; };
+        float segs[5] = { len(rates[0]), len(rates[1]), len(rates[2]), 0.6f, len(rates[3]) };
+        float total = 0; for (float s : segs) total += s;
+        auto y = [&](float l) { return e.getBottom() - 3 - l / 99 * (e.getHeight() - 6); };
+        float pts[5] = { levels[0], levels[1], levels[2], levels[2], levels[3] };
+        juce::Path path; float x = e.getX();
+        path.startNewSubPath(x, y(levels[3]));
+        for (int k = 0; k < 5; ++k) { x += segs[k] / total * e.getWidth(); path.lineTo(x, y(pts[k])); }
+        g.stroke(path, Theme::text().withMultipliedAlpha(0.8f), 1);
+        g.textRight("op " + juce::String(sel() + 1) + " envelope", { e.getRight() - 4, e.getY() + 7 }, 8, Theme::faint());
+    }
+
+    std::vector<LivePart> parts(Rect r) override {
+        auto* d = dsp();
+        if (!d) return {};
+        auto first = tab(0, r), last = tab(5, r);
+        Rect area(first.getX(), first.getBottom() - 4, last.getRight() - first.getX(), 3);
+        return { part("levels", area, [d] {
+                int64_t h = 0;
+                for (int op = 0; op < 6; ++op) LiveSig::mix(h, LiveSig::q(std::clamp(d->readouts[size_t(op)], 0.0f, 1.0f), 12));
+                return h;
+            }, [this, d, r, area](GC& g, Pt size) {
+                for (int op = 0; op < 6; ++op) {
+                    auto t = tab(op, r);
+                    float w = std::clamp(d->readouts[size_t(op)], 0.0f, 1.0f) * (t.getWidth() - 6);
+                    g.fill(Rect(t.getX() - area.getX() + 3, 0, w, size.y), Theme::text().withMultipliedAlpha(0.6f));
+                }
+            }, 2) };
+    }
+
+    void chooseSysex() {
+        static std::unique_ptr<juce::FileChooser> chooser;
+        chooser = std::make_unique<juce::FileChooser>("A DX7 sysex bank", juce::File(), "*.syx;*.SYX");
+        auto* m = &model; auto nid = id;
+        chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles, [m, nid](const juce::FileChooser& fc) {
+            auto f = fc.getResult();
+            if (!f.existsAsFile()) return;
+            juce::MemoryBlock mb;
+            if (!f.loadFileAsData(mb)) return;
+            auto* b = static_cast<const uint8_t*>(mb.getData());
+            m->loadSysex(nid, std::vector<uint8_t>(b, b + mb.getSize()), f.getFileNameWithoutExtension());
+        });
+    }
+    void showVoices() {
+        auto list = model.fmVoices(id);
+        juce::PopupMenu menu;
+        menu.addSectionHeader(list.first);
+        int cur = voiceIndex();
+        auto* m = &model; auto nid = id;
+        for (int k = 0; k < int(list.second.size()); ++k) {
+            auto nm = list.second[size_t(k)].first;
+            menu.addItem(juce::String(k + 1) + "  " + (nm.isEmpty() ? "voice " + juce::String(k + 1) : nm), true, k == cur, [m, nid, k] { m->loadFMVoice(nid, k); });
+        }
+        menu.addSeparator();
+        menu.addItem(juce::String::fromUTF8("Load sysex bank\xe2\x80\xa6"), [this] { chooseSysex(); });
+        if (list.first != "built-in") menu.addItem("Built-in voices", [m, nid] { m->resetFMBank(nid); });
+        menu.showMenuAsync(juce::PopupMenu::Options().withMousePosition());
+    }
+
+    bool press(Pt pt, Rect r, const PointerInfo&) override { return inner(r).contains(pt); }
+    void release(Pt pt, Rect r, const PointerInfo& info) override {
+        if (info.moved) return;
+        int count = std::max(int(model.fmVoices(id).second.size()), 1);
+        int k = voiceIndex();
+        if (prevRect(r).contains(pt)) { model.loadFMVoice(id, (k - 1 + count) % count); return; }
+        if (nextRect(r).contains(pt)) { model.loadFMVoice(id, (k + 1) % count); return; }
+        if (syxRect(r).contains(pt)) { chooseSysex(); return; }
+        if (nameRect(r).contains(pt)) { showVoices(); return; }
+        for (int op = 0; op < 6; ++op) if (tab(op, r).contains(pt)) { setParam("sel", float(op)); return; }
+    }
 };
 
 // ---------------------------------------------------------------- comp
@@ -1466,6 +1585,7 @@ std::unique_ptr<NativeDisplay> NativeDisplay::make(AppModel& m, const PatchNode&
     if (k == "lfo") return std::make_unique<LFODisplay>(m, n, s);
     if (k == "chord") return std::make_unique<ChordDisplay>(m, n, s);
     if (k == "wave") return std::make_unique<WaveDisplay>(m, n, s);
+    if (k == "fm") return std::make_unique<FMDisplay>(m, n, s);
     if (k == "scope") return std::make_unique<ScopeDisplay>(m, n, s);
     if (k == "drumsynth") return std::make_unique<DrumSynthDisplay>(m, n, s);
     if (k == "rack") return std::make_unique<RackDisplay>(m, n, s);

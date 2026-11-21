@@ -36,7 +36,10 @@ if let i = CommandLine.arguments.firstIndex(of: "--dump-specs"), i + 1 < Command
     let doc: [String: Any] = ["categories": ModuleRegistry.categories, "modules": modules]
     let data = try! JSONSerialization.data(withJSONObject: doc, options: [.prettyPrinted, .sortedKeys])
     try! data.write(to: URL(fileURLWithPath: CommandLine.arguments[i + 1]))
-    print("wrote \(ModuleRegistry.all.count) module specs")
+    // fm's built-in voices, next to it (155 bytes each), so the Windows version has exactly the same ones
+    let fm = URL(fileURLWithPath: CommandLine.arguments[i + 1]).deletingLastPathComponent().appendingPathComponent("fmpresets.bin")
+    try! Data(FMPresets.all.flatMap(\.vced)).write(to: fm)
+    print("wrote \(ModuleRegistry.all.count) module specs and \(FMPresets.all.count) fm voices")
     exit(0)
 }
 
@@ -1165,6 +1168,61 @@ do {
     let a = play(patched: true), b = play(patched: false)
     check(a.own > 0.005 && a.main < 1e-3, "voice 1's outlet patched: it plays only there (own \(a.own), main \(a.main))")
     check(b.main > 0.005 && b.own < 1e-6, "unpatched: voice 1 is back in the main L / R (main \(b.main))")
+}
+
+print("fm")
+do {
+    check(FMAlgorithms.all.count == 32 && FMAlgorithms.all.allSatisfy { !$0.carriers.isEmpty }, "fm: 32 algorithms, each with carriers")
+    check(FMPresets.all.count == 32, "fm: 32 built-in voices")
+    // sysex: a bank of the built-in voices packs, wraps and reads back exactly
+    let bank = FMVoice.bankSysex(FMPresets.all.map(\.vced))
+    let back = FMVoice.parseSysex(bank)
+    check(bank.count == 4104 && back.count == 32 && zip(back, FMPresets.all).allSatisfy { $0 == $1.vced },
+          "fm: a 32-voice sysex bank round-trips (\(bank.count) bytes)")
+    check(FMVoice.toParams(FMPresets.all[3].vced).count == FMLayout.count
+          && FMVoice.fromParams(FMVoice.toParams(FMPresets.all[3].vced), name: FMVoice.name(FMPresets.all[3].vced)) == FMPresets.all[3].vced,
+          "fm: voice → parameters → voice is lossless")
+    // every voice sounds from a gate, stays finite, and fades after the gate closes
+    // (the gate: a square LFO — high for the first half of each cycle)
+    func play(_ vced: [UInt8], seconds: Double, gateHz: Float) -> [Float] {
+        var p = Patch()
+        let spec = ModuleRegistry.spec("fm")!
+        let vals = FMVoice.toParams(vced)
+        var params: [String: Float] = [:]
+        for (k, ps) in spec.params.enumerated() where k != FMLayout.sel { params[ps.key] = vals[k] }
+        let fm = PatchNode(kind: "fm", x: 0, y: 0, params: params)
+        let g = PatchNode(kind: "lfo", x: 0, y: 0, params: ["shape": 3, "rate": gateHz, "depth": 0.25, "offset": 0.25])
+        p.nodes = [g, fm]
+        p.cables = [PatchCable(fromNode: g.id, fromPort: 0, toNode: fm.id, toPort: 1)]
+        let h = GraphHost(sampleRate: sr); h.load(p); h.prepareForStart()
+        let ins = UnsafeMutablePointer<UnsafeMutablePointer<Float>>.allocate(capacity: 1); ins[0] = .allocate(capacity: kMaxBlock); ins[0].update(repeating: 0, count: kMaxBlock)
+        let outs = UnsafeMutablePointer<UnsafeMutablePointer<Float>>.allocate(capacity: 1); outs[0] = .allocate(capacity: kMaxBlock)
+        var y: [Float] = []
+        for _ in 0..<Int(seconds * sr / Double(kMaxBlock)) {
+            h.process(frames: kMaxBlock, inputs: ins, inputCount: 0, outputs: outs, outputCount: 1)
+            y += UnsafeBufferPointer(start: h.node(fm.id)!.outputs[0], count: kMaxBlock)
+        }
+        return y
+    }
+    var loud: [String] = [], silent: [String] = [], stuck: [String] = []
+    for v in FMPresets.all {
+        let y = play(v.vced, seconds: 4, gateHz: 0.25)            // gate on for 2 s, off for 2 s
+        let on = rms(y[Int(0.05 * sr)..<Int(1.9 * sr)])
+        let tail = rms(y[(y.count - Int(0.2 * sr))...])
+        if !y.allSatisfy({ $0.isFinite }) || (y.map(abs).max() ?? 0) > 2 { loud.append(v.name) }
+        if on < 0.005 { silent.append(v.name) }
+        if tail > on * 0.25 { stuck.append(v.name) }
+    }
+    check(loud.isEmpty && silent.isEmpty, "fm: every built-in voice sounds and stays in range (silent \(silent), too loud \(loud))")
+    check(stuck.isEmpty, "fm: every voice fades once the gate closes (still sounding: \(stuck))")
+    // pitch: one sine operator at ratio 1 plays middle C
+    var sine = FMPresets.all[0].vced
+    sine[134] = 31                                               // algorithm 32: all carriers
+    for o in 0..<6 { sine[o * 21 + 16] = o == 5 ? 99 : 0 }       // op 1 (stored last) at full level, the rest off
+    sine[135] = 0                                                // no feedback
+    let y = play(sine, seconds: 0.5, gateHz: 0.25)
+    let ups = upCrossings(Array(y[Int(0.1 * sr)..<Int(0.4 * sr)]))
+    check(abs(Double(ups) / 0.3 - 261.63) < 6, "fm: one operator at ratio 1 plays middle C (\(Double(ups) / 0.3) Hz)")
 }
 
 print("lfo~")

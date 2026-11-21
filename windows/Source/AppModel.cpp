@@ -1,4 +1,5 @@
 #include "AppModel.h"
+#include "ModulesFM.h"
 #if JUCE_WINDOWS
  #include <windows.h>
 #else
@@ -1134,6 +1135,82 @@ std::optional<juce::String> AppModel::outletName(const PatchNode& n, int port) {
         return juce::String::fromUTF8(DrumSynthLayout::label(k, e).c_str());
     }
     return std::nullopt;
+}
+
+// ---------------------------------------------------------------- fm voices and sysex banks
+
+static juce::String textOf(const std::map<std::string, std::vector<float>>& data, const std::string& key) {
+    auto it = data.find(key);
+    if (it == data.end() || it->second.empty()) return {};
+    std::string s;
+    for (float f : it->second) if (std::isfinite(f) && f >= 32 && f < 127) s += char(int(f));
+    return juce::String(s);
+}
+static std::vector<float> codesOf(const juce::String& s) {
+    std::vector<float> v;
+    for (auto c : s.toStdString()) { if (v.size() >= 40) break; v.push_back(float((unsigned char) c)); }
+    return v;
+}
+std::pair<juce::String, std::vector<std::pair<juce::String, std::vector<uint8_t>>>> AppModel::fmVoices(const juce::String& id) const {
+    std::vector<std::pair<juce::String, std::vector<uint8_t>>> list;
+    int i = patch.index(id);
+    if (i >= 0) {
+        auto& n = patch.nodes[size_t(i)];
+        auto it = n.data.find("bank");
+        if (it != n.data.end() && it->second.size() >= 155 && it->second.size() % 155 == 0) {
+            for (size_t k = 0; k < it->second.size(); k += 155) {
+                std::vector<uint8_t> v;
+                for (size_t j = k; j < k + 155; ++j) { float f = it->second[j]; v.push_back(uint8_t(std::clamp(std::isfinite(f) ? f : 0.0f, 0.0f, 127.0f))); }
+                list.push_back({ juce::String(FMVoice::name(v)), v });
+            }
+            auto b = textOf(n.data, "bankName");
+            return { b.isEmpty() ? juce::String("bank") : b, list };
+        }
+    }
+    for (auto& p : fmPresets()) list.push_back({ juce::String(p.name), p.vced });
+    return { "built-in", list };
+}
+juce::String AppModel::fmVoiceName(const PatchNode& n) const {
+    auto s = textOf(n.data, "name");
+    return s.isEmpty() && !fmPresets().empty() ? juce::String(fmPresets()[0].name) : s;
+}
+void AppModel::loadFMVoice(const juce::String& id, int k) {
+    auto list = fmVoices(id).second;
+    int i = patch.index(id);
+    auto* spec = Registry::spec("fm");
+    if (i < 0 || k < 0 || k >= int(list.size()) || !spec) return;
+    checkpoint();
+    auto p = FMVoice::toParams(list[size_t(k)].second);
+    auto& n = patch.nodes[size_t(i)];
+    for (int j = 0; j < int(spec->params.size()) && j < int(p.size()); ++j) {
+        if (j == FMLayout::sel || j == FMLayout::level) continue;
+        n.params[spec->params[size_t(j)].key] = p[size_t(j)];
+        if (auto* d = node(id)) d->base[size_t(j)] = p[size_t(j)];
+    }
+    auto name = list[size_t(k)].first;
+    n.data["name"] = codesOf(name.isEmpty() ? "voice " + juce::String(k + 1) : name);
+    n.data["voice"] = { float(k) };
+    checkpoint(); scheduleAutosave(); changed();
+}
+bool AppModel::loadSysex(const juce::String& id, const std::vector<uint8_t>& bytes, const juce::String& fileName) {
+    int i = patch.index(id);
+    if (i < 0) return false;
+    auto voices = FMVoice::parseSysex(bytes);
+    if (voices.empty()) { audioError = "That isn't a DX7 sysex file (a 32-voice bank or a single voice)."; changed(); return false; }
+    checkpoint();
+    std::vector<float> flat;
+    for (auto& v : voices) for (auto b : v) flat.push_back(float(b));
+    patch.nodes[size_t(i)].data["bank"] = flat;
+    patch.nodes[size_t(i)].data["bankName"] = codesOf(fileName);
+    loadFMVoice(id, 0);
+    return true;
+}
+void AppModel::resetFMBank(const juce::String& id) {
+    int i = patch.index(id);
+    if (i < 0) return;
+    checkpoint();
+    patch.nodes[size_t(i)].data.erase("bank"); patch.nodes[size_t(i)].data.erase("bankName");
+    loadFMVoice(id, 0);
 }
 
 int AppModel::topBox(Pt p) const {

@@ -6819,6 +6819,1623 @@
     },
     {
       "aliases" : [
+        "fm",
+        "dx7",
+        "dx",
+        "dexed",
+        "yamaha",
+        "operator",
+        "epiano",
+        "e.piano",
+        "bells",
+        "synth",
+        "voice",
+        "sysex"
+      ],
+      "bypass" : "through",
+      "category" : "Instruments",
+      "inputs" : [
+        "pitch",
+        "gate",
+        "vel"
+      ],
+      "kind" : "fm",
+      "name" : "fm",
+      "outputs" : [
+        "out"
+      ],
+      "outputsAreCV" : false,
+      "params" : [
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "sel",
+          "kind" : "choice",
+          "max" : 5,
+          "min" : 0,
+          "name" : "operator",
+          "options" : [
+            "op 1",
+            "op 2",
+            "op 3",
+            "op 4",
+            "op 5",
+            "op 6"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 5,
+          "key" : "algo",
+          "kind" : "integer",
+          "max" : 32,
+          "min" : 1,
+          "name" : "algorithm",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 6,
+          "key" : "fb",
+          "kind" : "integer",
+          "max" : 7,
+          "min" : 0,
+          "name" : "feedback",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "transpose",
+          "kind" : "integer",
+          "max" : 24,
+          "min" : -24,
+          "name" : "transpose",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0.80000001192092896,
+          "key" : "level",
+          "kind" : "continuous",
+          "max" : 1.5,
+          "min" : 0,
+          "name" : "level",
+          "unit" : "%"
+        },
+        {
+          "curve" : "linear",
+          "def" : 1,
+          "key" : "oks",
+          "kind" : "toggle",
+          "max" : 1,
+          "min" : 0,
+          "name" : "osc key sync",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 34,
+          "key" : "lfs",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "lfo speed",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "lfd",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "lfo delay",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "lpmd",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "lfo pitch depth",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "lamd",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "lfo amp depth",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "lks",
+          "kind" : "toggle",
+          "max" : 1,
+          "min" : 0,
+          "name" : "lfo key sync",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "lfw",
+          "kind" : "choice",
+          "max" : 5,
+          "min" : 0,
+          "name" : "lfo wave",
+          "options" : [
+            "triangle",
+            "saw down",
+            "saw up",
+            "square",
+            "sine",
+            "s&h"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 3,
+          "key" : "lpms",
+          "kind" : "integer",
+          "max" : 7,
+          "min" : 0,
+          "name" : "pitch mod sens",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 99,
+          "key" : "pr1",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "pitch rate 1",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 99,
+          "key" : "pr2",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "pitch rate 2",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 99,
+          "key" : "pr3",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "pitch rate 3",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 99,
+          "key" : "pr4",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "pitch rate 4",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 50,
+          "key" : "pl1",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "pitch level 1",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 50,
+          "key" : "pl2",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "pitch level 2",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 50,
+          "key" : "pl3",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "pitch level 3",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 50,
+          "key" : "pl4",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "pitch level 4",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 96,
+          "key" : "o1r1",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 1",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 25,
+          "key" : "o1r2",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 2",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 25,
+          "key" : "o1r3",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 3",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 67,
+          "key" : "o1r4",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 4",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 99,
+          "key" : "o1l1",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 1",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 75,
+          "key" : "o1l2",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 2",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o1l3",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 3",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o1l4",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 4",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 39,
+          "key" : "o1bp",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "break point",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o1ld",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "left depth",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o1rd",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "right depth",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o1lc",
+          "kind" : "choice",
+          "max" : 3,
+          "min" : 0,
+          "name" : "left curve",
+          "options" : [
+            "-lin",
+            "-exp",
+            "+exp",
+            "+lin"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o1rc",
+          "kind" : "choice",
+          "max" : 3,
+          "min" : 0,
+          "name" : "right curve",
+          "options" : [
+            "-lin",
+            "-exp",
+            "+exp",
+            "+lin"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 3,
+          "key" : "o1rs",
+          "kind" : "integer",
+          "max" : 7,
+          "min" : 0,
+          "name" : "rate scaling",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o1ams",
+          "kind" : "integer",
+          "max" : 3,
+          "min" : 0,
+          "name" : "amp mod sens",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 2,
+          "key" : "o1kvs",
+          "kind" : "integer",
+          "max" : 7,
+          "min" : 0,
+          "name" : "velocity",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 99,
+          "key" : "o1ol",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "op 1 level",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o1om",
+          "kind" : "choice",
+          "max" : 1,
+          "min" : 0,
+          "name" : "mode",
+          "options" : [
+            "ratio",
+            "fixed"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 1,
+          "key" : "o1fc",
+          "kind" : "integer",
+          "max" : 31,
+          "min" : 0,
+          "name" : "coarse",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o1ff",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "fine",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 3,
+          "key" : "o1dt",
+          "kind" : "integer",
+          "max" : 7,
+          "min" : -7,
+          "name" : "detune",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 95,
+          "key" : "o2r1",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 1",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 50,
+          "key" : "o2r2",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 2",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 35,
+          "key" : "o2r3",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 3",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 78,
+          "key" : "o2r4",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 4",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 99,
+          "key" : "o2l1",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 1",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 75,
+          "key" : "o2l2",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 2",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o2l3",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 3",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o2l4",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 4",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 39,
+          "key" : "o2bp",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "break point",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o2ld",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "left depth",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o2rd",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "right depth",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o2lc",
+          "kind" : "choice",
+          "max" : 3,
+          "min" : 0,
+          "name" : "left curve",
+          "options" : [
+            "-lin",
+            "-exp",
+            "+exp",
+            "+lin"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o2rc",
+          "kind" : "choice",
+          "max" : 3,
+          "min" : 0,
+          "name" : "right curve",
+          "options" : [
+            "-lin",
+            "-exp",
+            "+exp",
+            "+lin"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 3,
+          "key" : "o2rs",
+          "kind" : "integer",
+          "max" : 7,
+          "min" : 0,
+          "name" : "rate scaling",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o2ams",
+          "kind" : "integer",
+          "max" : 3,
+          "min" : 0,
+          "name" : "amp mod sens",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 7,
+          "key" : "o2kvs",
+          "kind" : "integer",
+          "max" : 7,
+          "min" : 0,
+          "name" : "velocity",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 58,
+          "key" : "o2ol",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "op 2 level",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o2om",
+          "kind" : "choice",
+          "max" : 1,
+          "min" : 0,
+          "name" : "mode",
+          "options" : [
+            "ratio",
+            "fixed"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 1,
+          "key" : "o2fc",
+          "kind" : "integer",
+          "max" : 31,
+          "min" : 0,
+          "name" : "coarse",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o2ff",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "fine",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o2dt",
+          "kind" : "integer",
+          "max" : 7,
+          "min" : -7,
+          "name" : "detune",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 95,
+          "key" : "o3r1",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 1",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 20,
+          "key" : "o3r2",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 2",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 20,
+          "key" : "o3r3",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 3",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 50,
+          "key" : "o3r4",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 4",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 99,
+          "key" : "o3l1",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 1",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 95,
+          "key" : "o3l2",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 2",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o3l3",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 3",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o3l4",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 4",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 39,
+          "key" : "o3bp",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "break point",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o3ld",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "left depth",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o3rd",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "right depth",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o3lc",
+          "kind" : "choice",
+          "max" : 3,
+          "min" : 0,
+          "name" : "left curve",
+          "options" : [
+            "-lin",
+            "-exp",
+            "+exp",
+            "+lin"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o3rc",
+          "kind" : "choice",
+          "max" : 3,
+          "min" : 0,
+          "name" : "right curve",
+          "options" : [
+            "-lin",
+            "-exp",
+            "+exp",
+            "+lin"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 3,
+          "key" : "o3rs",
+          "kind" : "integer",
+          "max" : 7,
+          "min" : 0,
+          "name" : "rate scaling",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o3ams",
+          "kind" : "integer",
+          "max" : 3,
+          "min" : 0,
+          "name" : "amp mod sens",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 2,
+          "key" : "o3kvs",
+          "kind" : "integer",
+          "max" : 7,
+          "min" : 0,
+          "name" : "velocity",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 99,
+          "key" : "o3ol",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "op 3 level",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o3om",
+          "kind" : "choice",
+          "max" : 1,
+          "min" : 0,
+          "name" : "mode",
+          "options" : [
+            "ratio",
+            "fixed"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 1,
+          "key" : "o3fc",
+          "kind" : "integer",
+          "max" : 31,
+          "min" : 0,
+          "name" : "coarse",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o3ff",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "fine",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : -3,
+          "key" : "o3dt",
+          "kind" : "integer",
+          "max" : 7,
+          "min" : -7,
+          "name" : "detune",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 95,
+          "key" : "o4r1",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 1",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 29,
+          "key" : "o4r2",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 2",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 20,
+          "key" : "o4r3",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 3",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 50,
+          "key" : "o4r4",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 4",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 99,
+          "key" : "o4l1",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 1",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 95,
+          "key" : "o4l2",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 2",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o4l3",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 3",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o4l4",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 4",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 39,
+          "key" : "o4bp",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "break point",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o4ld",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "left depth",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o4rd",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "right depth",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o4lc",
+          "kind" : "choice",
+          "max" : 3,
+          "min" : 0,
+          "name" : "left curve",
+          "options" : [
+            "-lin",
+            "-exp",
+            "+exp",
+            "+lin"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o4rc",
+          "kind" : "choice",
+          "max" : 3,
+          "min" : 0,
+          "name" : "right curve",
+          "options" : [
+            "-lin",
+            "-exp",
+            "+exp",
+            "+lin"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 3,
+          "key" : "o4rs",
+          "kind" : "integer",
+          "max" : 7,
+          "min" : 0,
+          "name" : "rate scaling",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o4ams",
+          "kind" : "integer",
+          "max" : 3,
+          "min" : 0,
+          "name" : "amp mod sens",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 7,
+          "key" : "o4kvs",
+          "kind" : "integer",
+          "max" : 7,
+          "min" : 0,
+          "name" : "velocity",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 89,
+          "key" : "o4ol",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "op 4 level",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o4om",
+          "kind" : "choice",
+          "max" : 1,
+          "min" : 0,
+          "name" : "mode",
+          "options" : [
+            "ratio",
+            "fixed"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 14,
+          "key" : "o4fc",
+          "kind" : "integer",
+          "max" : 31,
+          "min" : 0,
+          "name" : "coarse",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o4ff",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "fine",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o4dt",
+          "kind" : "integer",
+          "max" : 7,
+          "min" : -7,
+          "name" : "detune",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 95,
+          "key" : "o5r1",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 1",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 20,
+          "key" : "o5r2",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 2",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 20,
+          "key" : "o5r3",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 3",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 50,
+          "key" : "o5r4",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 4",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 99,
+          "key" : "o5l1",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 1",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 95,
+          "key" : "o5l2",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 2",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o5l3",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 3",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o5l4",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 4",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 39,
+          "key" : "o5bp",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "break point",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o5ld",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "left depth",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o5rd",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "right depth",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o5lc",
+          "kind" : "choice",
+          "max" : 3,
+          "min" : 0,
+          "name" : "left curve",
+          "options" : [
+            "-lin",
+            "-exp",
+            "+exp",
+            "+lin"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o5rc",
+          "kind" : "choice",
+          "max" : 3,
+          "min" : 0,
+          "name" : "right curve",
+          "options" : [
+            "-lin",
+            "-exp",
+            "+exp",
+            "+lin"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 3,
+          "key" : "o5rs",
+          "kind" : "integer",
+          "max" : 7,
+          "min" : 0,
+          "name" : "rate scaling",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o5ams",
+          "kind" : "integer",
+          "max" : 3,
+          "min" : 0,
+          "name" : "amp mod sens",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 2,
+          "key" : "o5kvs",
+          "kind" : "integer",
+          "max" : 7,
+          "min" : 0,
+          "name" : "velocity",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 92,
+          "key" : "o5ol",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "op 5 level",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o5om",
+          "kind" : "choice",
+          "max" : 1,
+          "min" : 0,
+          "name" : "mode",
+          "options" : [
+            "ratio",
+            "fixed"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 1,
+          "key" : "o5fc",
+          "kind" : "integer",
+          "max" : 31,
+          "min" : 0,
+          "name" : "coarse",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o5ff",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "fine",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o5dt",
+          "kind" : "integer",
+          "max" : 7,
+          "min" : -7,
+          "name" : "detune",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 95,
+          "key" : "o6r1",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 1",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 29,
+          "key" : "o6r2",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 2",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 20,
+          "key" : "o6r3",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 3",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 50,
+          "key" : "o6r4",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "rate 4",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 99,
+          "key" : "o6l1",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 1",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 95,
+          "key" : "o6l2",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 2",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o6l3",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 3",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o6l4",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "level 4",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 39,
+          "key" : "o6bp",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "break point",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o6ld",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "left depth",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o6rd",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "right depth",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o6lc",
+          "kind" : "choice",
+          "max" : 3,
+          "min" : 0,
+          "name" : "left curve",
+          "options" : [
+            "-lin",
+            "-exp",
+            "+exp",
+            "+lin"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o6rc",
+          "kind" : "choice",
+          "max" : 3,
+          "min" : 0,
+          "name" : "right curve",
+          "options" : [
+            "-lin",
+            "-exp",
+            "+exp",
+            "+lin"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 3,
+          "key" : "o6rs",
+          "kind" : "integer",
+          "max" : 7,
+          "min" : 0,
+          "name" : "rate scaling",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o6ams",
+          "kind" : "integer",
+          "max" : 3,
+          "min" : 0,
+          "name" : "amp mod sens",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 6,
+          "key" : "o6kvs",
+          "kind" : "integer",
+          "max" : 7,
+          "min" : 0,
+          "name" : "velocity",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 72,
+          "key" : "o6ol",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "op 6 level",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o6om",
+          "kind" : "choice",
+          "max" : 1,
+          "min" : 0,
+          "name" : "mode",
+          "options" : [
+            "ratio",
+            "fixed"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 1,
+          "key" : "o6fc",
+          "kind" : "integer",
+          "max" : 31,
+          "min" : 0,
+          "name" : "coarse",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o6ff",
+          "kind" : "integer",
+          "max" : 99,
+          "min" : 0,
+          "name" : "fine",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "o6dt",
+          "kind" : "integer",
+          "max" : 7,
+          "min" : -7,
+          "name" : "detune",
+          "unit" : ""
+        }
+      ],
+      "polyOutputs" : [
+
+      ],
+      "summary" : "6-operator FM synth in the style of the DX7: 32 algorithms, 32 voices to start from, loads DX7 sysex banks"
+    },
+    {
+      "aliases" : [
         "ensemble",
         "dimension"
       ],

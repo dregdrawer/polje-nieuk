@@ -316,6 +316,7 @@ Factory factoryFor(const std::string& kind) {
     if (auto f = factoryBuffers(kind)) return f;
     if (auto f = factorySeq(kind)) return f;
     if (auto f = factoryInst(kind)) return f;
+    if (auto f = factoryFM(kind)) return f;
     return nullptr;
 }
 

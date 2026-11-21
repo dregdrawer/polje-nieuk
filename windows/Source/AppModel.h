@@ -166,6 +166,12 @@ public:
     // cables
     void finishCable(Pt screen);
     int topBox(Pt canvasPoint) const;
+    // fm: voices (a loaded sysex bank kept with the patch, else the 32 built-in ones), loading, sysex
+    std::pair<juce::String, std::vector<std::pair<juce::String, std::vector<uint8_t>>>> fmVoices(const juce::String& id) const;
+    juce::String fmVoiceName(const PatchNode& n) const;
+    void loadFMVoice(const juce::String& id, int k);
+    bool loadSysex(const juce::String& id, const std::vector<uint8_t>& bytes, const juce::String& fileName);
+    void resetFMBank(const juce::String& id);
     std::optional<juce::String> outletName(const PatchNode& n, int port);   // samplerack / drumsynth pad outlet: the sample (voice)           // the box drawn on top there (index), or -1
     void connect(const juce::String& a, int ap, const juce::String& b, int bp);
     bool pickUpCable(const juce::String& node, int port, Pt point);

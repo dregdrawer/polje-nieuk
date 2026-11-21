@@ -380,6 +380,13 @@ public enum ModuleRegistry {
                             ParamSpec("level", "level", 0, 1.5, 0.8, unit: "%")],
                    factory: { WavetableNode(spec: $0, sampleRate: $1) }),
 
+        ModuleSpec(kind: "fm", name: "fm", category: "Instruments",
+                   summary: "6-operator FM synth in the style of the DX7: 32 algorithms, 32 voices to start from, loads DX7 sysex banks",
+                   aliases: ["fm", "dx7", "dx", "dexed", "yamaha", "operator", "epiano", "e.piano", "bells", "synth", "voice", "sysex"],
+                   inputs: ["pitch", "gate", "vel"], outputs: ["out"],
+                   params: FMLayout.params(),
+                   factory: { FMNode(spec: $0, sampleRate: $1) }),
+
         ModuleSpec(kind: "chorus", name: "chorus", category: "Effects",
                    summary: "Stereo chorus / ensemble",
                    aliases: ["ensemble", "dimension"], inputs: ["L", "R"], outputs: ["L", "R"],

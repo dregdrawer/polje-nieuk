@@ -1,4 +1,5 @@
 #include "UIBase.h"
+#include "ModulesFM.h"
 #include <unordered_map>
 
 namespace pn {
@@ -246,6 +247,7 @@ float width(const std::string& k) {
     if (k == "scope") return 320;
     if (k == "wave") return 300;
     if (k == "chord") return 220;
+    if (k == "fm") return 300;
     return 186;
 }
 float defaultWidth(const PatchNode& n) {
@@ -283,10 +285,11 @@ float readoutHeight(const PatchNode& n) {
 std::pair<bool, bool> resizable(const std::string& k) { return { k != "in" && k != "out", readoutHeight(k) > 0 }; }
 bool hasReadout(const std::string& k) {
     static const std::set<std::string> s { "clock", "looper", "grain", "rec", "comp", "limit", "repeat", "gain", "mix", "sampler", "stretch", "peq",
-        "keys", "seq", "turing", "roll", "drums", "slider", "knob", "lfo", "rack", "drumsynth", "scope", "wave", "chord" };
+        "keys", "seq", "turing", "roll", "drums", "slider", "knob", "lfo", "rack", "drumsynth", "scope", "wave", "chord", "fm" };
     return s.count(k) > 0;
 }
 float readoutHeight(const std::string& k) {
+    if (k == "fm") return 104;                // voice name, operators, the selected one's envelope
     if (k == "looper" || k == "stretch") return 104;
     if (k == "sampler") return 122;
     if (k == "peq") return 150;
@@ -365,6 +368,16 @@ std::vector<int> rowParams(const ModuleSpec& s, const PatchNode& n) {
         for (int k = 0; k < ch; ++k) r.push_back(1 + 2 * k);
         r.push_back(MixerLayout::masterIndex); r.push_back(MixerLayout::showPansIndex);
         for (int k = 0; k < ch; ++k) if (showPans || patched.count(kParamPortBase + 2 + 2 * k)) r.push_back(2 + 2 * k);
+        return r;
+    }
+    if (s.kind == "fm") {
+        // the main rows, then the selected operator's (the rest still play: a sysex voice sets them)
+        int sel = std::clamp(int(std::round(param(n, "sel", 0))), 0, FMLayout::ops - 1);
+        int b = FMLayout::base(sel);
+        std::vector<int> r(FMLayout::shownGlobals.begin(), FMLayout::shownGlobals.end());
+        for (int f : FMLayout::shownOp) r.push_back(b + f);
+        auto patched = usage.count(n.id) ? usage[n.id].ins : std::set<int>();
+        for (int i : all) if (std::find(r.begin(), r.end(), i) == r.end() && patched.count(kParamPortBase + i)) r.push_back(i);
         return r;
     }
     if (s.kind == "rack" || s.kind == "drumsynth") {

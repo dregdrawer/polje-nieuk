@@ -44,6 +44,7 @@ import PoljeNieukCore
         case "seq": return SeqDisplay(model: model, node: node, spec: spec)
         case "turing": return TuringDisplay(model: model, node: node, spec: spec)
         case "roll", "drums": return GridDisplay(model: model, node: node, spec: spec)
+        case "fm": return FMDisplay(model: model, node: node, spec: spec)
         case "comp": return CompDisplay(model: model, node: node, spec: spec)
         case "lfo": return LFODisplay(model: model, node: node, spec: spec)
         case "chord": return ChordDisplay(model: model, node: node, spec: spec)
@@ -378,6 +379,123 @@ final class GridDisplay: NativeDisplay {
         if scrolling { scrolling = false; return }
         paint = nil
         view?.commit()
+    }
+}
+
+// MARK: - fm: the voice (◀ name ▶, the bank, load a sysex), the six operators, the selected one's envelope
+
+final class FMDisplay: NativeDisplay {
+    private func inner(_ r: CGRect) -> CGRect { r.insetBy(dx: 0, dy: 4) }
+    private func nameRow(_ r: CGRect) -> CGRect { let i = inner(r); return CGRect(x: i.minX, y: i.minY, width: i.width, height: 20) }
+    private func prevRect(_ r: CGRect) -> CGRect { let n = nameRow(r); return CGRect(x: n.minX, y: n.minY, width: 18, height: n.height) }
+    private func syxRect(_ r: CGRect) -> CGRect { let n = nameRow(r); return CGRect(x: n.maxX - 36, y: n.minY, width: 36, height: n.height) }
+    private func nextRect(_ r: CGRect) -> CGRect { let s = syxRect(r); return CGRect(x: s.minX - 22, y: s.minY, width: 18, height: s.height) }
+    private func nameRect(_ r: CGRect) -> CGRect {
+        let a = prevRect(r), b = nextRect(r)
+        return CGRect(x: a.maxX + 4, y: a.minY, width: max(b.minX - 4 - a.maxX - 4, 10), height: a.height)
+    }
+    private func tab(_ k: Int, _ r: CGRect) -> CGRect {
+        let i = inner(r), gap: CGFloat = 4, w = (i.width - gap * 5) / 6
+        return CGRect(x: i.minX + CGFloat(k) * (w + gap), y: i.minY + 26, width: w, height: 24)
+    }
+    private func envRect(_ r: CGRect) -> CGRect { let i = inner(r); return CGRect(x: i.minX, y: i.minY + 56, width: i.width, height: max(i.height - 56, 10)) }
+    private var sel: Int { min(max(Int((node.params["sel"] ?? 0).rounded()), 0), 5) }
+    private var algorithm: FMAlgorithms.Algorithm {
+        FMAlgorithms.all[min(max(Int((node.params["algo"] ?? 1).rounded()) - 1, 0), 31)]
+    }
+    private func value(_ i: Int) -> Float { model.value(node, i, spec) }
+
+    override func paintStatic(_ g: LiveGC, _ r: CGRect) {
+        // ◀ name ▶  syx
+        for (rect, s) in [(prevRect(r), "◀"), (nextRect(r), "▶")] {
+            g.fill(Path(roundedRect: rect, cornerRadius: 2), with: .color(Theme.row))
+            g.draw(LiveText(s, size: 9, color: Theme.dim), at: CGPoint(x: rect.midX, y: rect.midY))
+        }
+        let n = nameRect(r)
+        g.fill(Path(roundedRect: n, cornerRadius: 2), with: .color(Theme.row))
+        let bank = model.fmVoices(id).bank
+        let k = Int(node.data["voice"]?.first ?? 0)
+        g.draw(LiveText(fitText(model.fmVoiceName(node), size: 11, width: n.width - 70), size: 11, color: Theme.text, bold: true),
+               at: CGPoint(x: n.minX + 6, y: n.midY), anchor: .leading)
+        g.draw(LiveText(fitText("\(bank) \(k + 1)", size: 9, width: 64), size: 9, color: Theme.dim),
+               at: CGPoint(x: n.maxX - 6, y: n.midY), anchor: .trailing)
+        let s = syxRect(r)
+        g.stroke(Path(roundedRect: s.insetBy(dx: 0.5, dy: 0.5), cornerRadius: 2), with: .color(Theme.border), lineWidth: 1)
+        g.draw(LiveText("syx…", size: 9, color: Theme.dim), at: CGPoint(x: s.midX, y: s.midY))
+        // operator tabs: the ones you hear (carriers) are filled, the selected one is outlined
+        let alg = algorithm
+        for op in 0..<6 {
+            let t = tab(op, r)
+            let carrier = alg.carriers.contains(op)
+            g.fill(Path(roundedRect: t, cornerRadius: 2), with: .color(carrier ? Theme.text.opacity(0.16) : Theme.row))
+            if op == sel { g.stroke(Path(roundedRect: t.insetBy(dx: 0.75, dy: 0.75), cornerRadius: 2), with: .color(Theme.text), lineWidth: 1.5) }
+            let lvl = Int(value(FMLayout.base(op) + FMLayout.OL).rounded())
+            g.draw(LiveText("\(op + 1)", size: 10, color: Theme.text, bold: true), at: CGPoint(x: t.minX + 5, y: t.minY + 8), anchor: .leading)
+            g.draw(LiveText("\(lvl)", size: 8, color: Theme.dim), at: CGPoint(x: t.maxX - 4, y: t.minY + 8), anchor: .trailing)
+        }
+        // the selected operator's envelope: rates as segment lengths, levels as heights; sustain between key on and off
+        let e = envRect(r), b = FMLayout.base(sel)
+        g.fill(Path(e), with: .color(Theme.row))
+        let rates = (0..<4).map { value(b + FMLayout.R + $0) }, levels = (0..<4).map { value(b + FMLayout.L + $0) }
+        func len(_ rate: Float) -> CGFloat { CGFloat(1.2 - rate / 99) }
+        let segs = [len(rates[0]), len(rates[1]), len(rates[2]), 0.6, len(rates[3])]
+        let total = segs.reduce(0, +)
+        func y(_ l: Float) -> CGFloat { e.maxY - 3 - CGFloat(l / 99) * (e.height - 6) }
+        var x = e.minX
+        var p = Path()
+        p.move(to: CGPoint(x: x, y: y(levels[3])))
+        let pts = [levels[0], levels[1], levels[2], levels[2], levels[3]]
+        for (k, s) in segs.enumerated() {
+            x += s / total * e.width
+            p.addLine(to: CGPoint(x: x, y: y(pts[k])))
+        }
+        g.stroke(p, with: .color(Theme.text.opacity(0.8)), lineWidth: 1)
+        g.draw(LiveText("op \(sel + 1) envelope", size: 8, color: Theme.faint), at: CGPoint(x: e.maxX - 4, y: e.minY + 7), anchor: .trailing)
+    }
+
+    override func parts(_ r: CGRect) -> [LivePart] {
+        // each operator's level, live, as a bar along its tab's bottom
+        guard let d = dsp else { return [] }
+        let first = tab(0, r), last = tab(5, r)
+        let area = CGRect(x: first.minX, y: first.maxY - 4, width: last.maxX - first.minX, height: 3)
+        return [part("levels", area, every: 2, signature: {
+            var h = 0
+            for op in 0..<6 { LiveSig.mix(&h, LiveSig.q(min(max(d.readouts[op], 0), 1), 12)) }
+            return h
+        }) { [weak self] g, size in
+            guard let self else { return }
+            for op in 0..<6 {
+                let t = self.tab(op, r)
+                let w = CGFloat(min(max(d.readouts[op], 0), 1)) * (t.width - 6)
+                g.fill(Path(CGRect(x: t.minX - area.minX + 3, y: 0, width: w, height: size.height)), with: .color(Theme.text.opacity(0.6)))
+            }
+        }]
+    }
+
+    private func showVoices(_ at: CGPoint) {
+        let m = model, nid = id
+        let list = m.fmVoices(id)
+        let cur = Int(node.data["voice"]?.first ?? -1)
+        var items: [MenuItem] = [.section(list.bank)]
+        for (k, v) in list.voices.enumerated() {
+            items.append(MenuItem(title: "\(k + 1)  \(v.name.isEmpty ? "voice \(k + 1)" : v.name)", checked: k == cur, action: { m.loadFMVoice(nid, k) }))
+        }
+        items.append(.divider)
+        items.append(MenuItem(title: "Load sysex bank…", action: { m.sysexImportTarget = nid }))
+        if list.bank != "built-in" { items.append(MenuItem(title: "Built-in voices", action: { m.resetFMBank(nid) })) }
+        m.panelMenu = .init(items: items, at: m.toScreen(CGPoint(x: node.x + at.x, y: node.y + at.y)))
+    }
+
+    override func press(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) -> Bool { inner(r).contains(p) }
+    override func release(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) {
+        guard !info.moved else { return }
+        let count = model.fmVoices(id).voices.count
+        let k = Int(node.data["voice"]?.first ?? 0)
+        if prevRect(r).contains(p) { model.loadFMVoice(id, (k - 1 + count) % max(count, 1)); return }
+        if nextRect(r).contains(p) { model.loadFMVoice(id, (k + 1) % max(count, 1)); return }
+        if syxRect(r).contains(p) { model.sysexImportTarget = id; return }
+        if nameRect(r).contains(p) { showVoices(CGPoint(x: nameRect(r).minX, y: nameRect(r).maxY + 2)); return }
+        for op in 0..<6 where tab(op, r).contains(p) { setParam("sel", Float(op)); return }
     }
 }
 

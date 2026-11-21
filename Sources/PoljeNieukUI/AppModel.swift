@@ -1308,6 +1308,64 @@ public final class AppModel: ObservableObject {
 
     // MARK: Cables
 
+    // MARK: fm voices and sysex banks
+
+    /// fm: the voices to choose from — a loaded sysex bank (kept with the patch), else the 32 built-in ones.
+    func fmVoices(_ id: UUID) -> (bank: String, voices: [(name: String, vced: [UInt8])]) {
+        if let n = patch.nodes.first(where: { $0.id == id }), let b = n.data["bank"], b.count >= 155, b.count % 155 == 0 {
+            let voices = stride(from: 0, to: b.count, by: 155).map { i -> (String, [UInt8]) in
+                let v = b[i..<(i + 155)].map { UInt8(min(max($0.isFinite ? $0 : 0, 0), 127)) }
+                return (FMVoice.name(v), v)
+            }
+            return (Self.text(n.data["bankName"]) ?? "bank", voices.map { (name: $0.0, vced: $0.1) })
+        }
+        return ("built-in", FMPresets.all.map { (name: $0.name, vced: $0.vced) })
+    }
+    /// fm: the voice playing now (its name).
+    func fmVoiceName(_ n: PatchNode) -> String { Self.text(n.data["name"]) ?? FMPresets.all[0].name }
+    static func text(_ v: [Float]?) -> String? {
+        guard let v, !v.isEmpty else { return nil }
+        return String(v.compactMap { $0.isFinite && $0 >= 32 && $0 < 127 ? Character(UnicodeScalar(UInt8($0))) : nil })
+    }
+    static func codes(_ s: String) -> [Float] { s.utf8.prefix(40).map { Float($0) } }
+    /// fm: play voice `k` of its bank (every parameter but the selected operator and the level). One undo step.
+    func loadFMVoice(_ id: UUID, _ k: Int) {
+        let list = fmVoices(id).voices
+        guard let i = patch.index(of: id), k >= 0, k < list.count, let spec = ModuleRegistry.spec("fm") else { return }
+        checkpoint()
+        let p = FMVoice.toParams(list[k].vced)
+        for (j, ps) in spec.params.enumerated() where j != FMLayout.sel && j != FMLayout.level {
+            patch.nodes[i].params[ps.key] = p[j]
+            host.node(id)?.base[j] = p[j]
+        }
+        patch.nodes[i].data["name"] = Self.codes(list[k].name.isEmpty ? "voice \(k + 1)" : list[k].name)
+        patch.nodes[i].data["voice"] = [Float(k)]
+        checkpoint()
+        scheduleAutosave()
+    }
+    /// fm: load a DX7 sysex file (a 32-voice bank, or one voice) into the box and play its first voice.
+    @Published var sysexImportTarget: UUID?
+    func loadSysex(from url: URL) {
+        defer { sysexImportTarget = nil }
+        guard let id = sysexImportTarget, let i = patch.index(of: id) else { return }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let d = try? Data(contentsOf: url) else { audioError = "Couldn't read that file."; return }
+        let voices = FMVoice.parseSysex([UInt8](d))
+        guard !voices.isEmpty else { audioError = "That isn't a DX7 sysex file (a 32-voice bank or a single voice)."; return }
+        checkpoint()
+        patch.nodes[i].data["bank"] = voices.flatMap { $0.map(Float.init) }
+        patch.nodes[i].data["bankName"] = Self.codes(url.deletingPathExtension().lastPathComponent)
+        loadFMVoice(id, 0)
+    }
+    /// fm: back to the 32 built-in voices.
+    func resetFMBank(_ id: UUID) {
+        guard let i = patch.index(of: id) else { return }
+        checkpoint()
+        patch.nodes[i].data["bank"] = nil; patch.nodes[i].data["bankName"] = nil
+        loadFMVoice(id, 0)
+    }
+
     /// samplerack / drumsynth: what a pad (voice) outlet carries — the sample's or the voice's name.
     func outletName(_ n: PatchNode, _ port: Int) -> String? {
         guard BoxLayout.hasLaneOutlets(n.kind), port >= 2 else { return nil }
