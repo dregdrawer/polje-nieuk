@@ -1240,7 +1240,7 @@ bool set(const juce::File& f) {
 void remove() { file().deleteFile(); loaded = false; CustomColours::version++; }
 }
 
-const std::vector<juce::String> AppModel::highlightColours { "#5aa9ff", "#6cc76c", "#ff5f5f", "#ffc030", "#b77be8", "#ff92d6" };
+const std::vector<juce::String> AppModel::highlightColours { "#5aa9ff", "#ff5f5f", "#ffc030", "#b77be8" };
 void AppModel::setHighlight(const juce::String& id, std::optional<juce::String> hex) {
     int i = patch.index(id);
     if (i < 0 || patch.nodes[size_t(i)].highlight == hex) return;

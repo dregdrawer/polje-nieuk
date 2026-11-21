@@ -18,6 +18,7 @@ public struct PoljeNieukRootView: View {
             TopBar(model: model, state: BarState(model), exporting: $exporting, importing: $importing,
                    confirmNew: $confirmNew)
                 .equatable()
+                .zIndex(1)                           // its dropdowns hang over the canvas
             if let err = model.audioError {
                 Text(err)
                     .font(Theme.mono)
@@ -35,6 +36,12 @@ public struct PoljeNieukRootView: View {
                     .id(model.colourVersion)             // custom colours: redraw the canvas, keep the top bar (and the palette) open
                     .overlay(alignment: .bottomLeading) {
                         if model.helpMode { HelpPanel(model: model) }
+                    }
+                    .overlay {
+                        // a top bar menu is open: a click anywhere else closes it
+                        if model.barMenu != nil {
+                            Color.clear.contentShape(Rectangle()).onTapGesture { model.barMenu = nil }
+                        }
                     }
 
             }
@@ -150,6 +157,7 @@ struct BarState: Equatable {
     var inputs, outputs: [DeviceChoice]
     var sections: [String]
     var typeHighlights: Set<String>
+    var barMenu: String?
     @MainActor init(_ m: AppModel) {
         running = m.isRunning; lightScheme = m.lightScheme; helpMode = m.helpMode; selectMode = m.selectMode
         showFiles = m.showFiles; hideCables = m.hideCables; hasUserDefault = m.hasUserDefault
@@ -165,6 +173,7 @@ struct BarState: Equatable {
         for n in m.patch.nodes { if let c = ModuleRegistry.spec(n.kind)?.category { present.insert(c) } }
         sections = ModuleRegistry.categories.filter { present.contains($0) }
         typeHighlights = m.typeHighlights
+        barMenu = m.barMenu
     }
 }
 
@@ -182,13 +191,10 @@ struct TopBar: View, Equatable {
 
     private func deviceMenu(label: String, current: String, choices: [DeviceChoice], selected: String,
                             pick: @escaping (String) -> Void) -> some View {
-        Menu {
-            ForEach(choices) { c in
-                Button { pick(c.id) } label: { Text((c.id == selected ? "✓ " : "   ") + c.name) }
-            }
-            Divider()
-            Button("Refresh devices") { model.refreshDevices() }
-        } label: {
+        barMenu(label.lowercased(), items: {
+            choices.map { c in MenuItem(title: c.name, checked: c.id == selected, action: { pick(c.id) }) }
+                + [.divider, MenuItem(title: "Refresh devices", action: { model.refreshDevices() })]
+        }) {
             HStack(spacing: 4) {
                 Text(label).foregroundStyle(Theme.dim)
                 Text(current).foregroundStyle(Theme.text).lineLimit(1)
@@ -197,13 +203,24 @@ struct TopBar: View, Equatable {
             .font(Theme.barFont)
             .frame(minHeight: 26).contentShape(Rectangle())
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
         .fixedSize()
         .helpTopic(model, "tb-\(label)", label == "IN" ? "audio input" : "audio output",
                    label == "IN" ? "Chooses the audio interface you record from — e.g. the disting NT. Its channels become in's outlets."
                                  : "Chooses where sound goes. Its channels become out's inlets. Changing it never changes the input.")
+    }
+
+    /// A top bar button that opens one of the app's dropdowns (drawn like the module list) under it.
+    private func barMenu<L: View>(_ key: String, alignRight: Bool = false, items: @escaping () -> [MenuItem],
+                                  @ViewBuilder label: () -> L) -> some View {
+        let l = label()
+        return Button { model.barMenu = model.barMenu == key ? nil : key } label: { l }
+            .buttonStyle(.plain)
+            .overlay(alignment: alignRight ? .topTrailing : .topLeading) {
+                if state.barMenu == key {
+                    PanelMenuView(items: items(), maxHeight: 640) { model.barMenu = nil }
+                        .offset(y: 30)
+                }
+            }
     }
 
     /// The full bar when the window is wide enough; then one without the status / cpu text; then a compact
@@ -325,18 +342,15 @@ struct TopBar: View, Equatable {
             .help("Help: point at anything to see what it does")
             .helpTopic(model, "tb-help", "help", "Switches help on: point at anything to see what it does. Tap it again to switch help off.")
 
-            Menu {
-                ForEach(ModuleRegistry.categories, id: \.self) { cat in
-                    Section(cat) {
-                        ForEach(ModuleRegistry.all.filter { $0.category == cat }, id: \.kind) { s in
-                            Button("\(s.name)  —  \(s.summary)") { model.addNode(kind: s.kind, at: model.viewCenterInCanvas) }
-                        }
-                    }
-                }
+            Button {
+                // the module list (the same one double-clicking the canvas opens), in the middle of the view
+                model.barMenu = nil
+                model.replaceTarget = nil
+                model.finderAt = model.finderAt == nil ? model.viewCenterInCanvas : nil
             } label: {
                 icon("plus", on: false).accessibilityLabel("add a module")
             }
-            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
+            .buttonStyle(.plain)
             .fixedSize()
             .help("Add a module")
 
@@ -376,60 +390,38 @@ struct TopBar: View, Equatable {
                 .help("Show / hide the browser")
                 .helpTopic(model, "tb-files", "browser", "Shows your audio files. Drag one onto a looper, sampler or stretch to load it.")
 
-            Menu {
-                // real toggles: the system draws the tick in its own column, so every label lines up
-                Toggle("Hide cables", isOn: Binding(get: { model.hideCables }, set: { model.hideCables = $0 }))
-                Button("Colours…") { model.showColours.toggle() }
-                Divider()
-                Button("Tidy") { model.tidy() }
-                Button(state.allCollapsed ? "Unfold all" : "Fold all") { model.toggleCollapseAll() }
-                Divider()
-                Menu("Select type") {
-                    // tick sections: their boxes get a frame in the section's colour (several at once)
-                    ForEach(ModuleRegistry.categories, id: \.self) { cat in
-                        Toggle(isOn: Binding(get: { state.typeHighlights.contains(cat) }, set: { _ in model.toggleTypeHighlight(cat) })) {
-                            Label { Text(cat) } icon: { TypeDot(hex: AppModel.categoryColours[cat] ?? "#888888") }
-                        }
-                        .disabled(!state.sections.contains(cat))
-                    }
-                    Divider()
-                    Button("None") { model.typeHighlights = [] }.disabled(state.typeHighlights.isEmpty)
+            barMenu("view", alignRight: true, items: {
+                var list = [MenuItem(title: "Hide cables", checked: state.hideCables, action: { model.hideCables.toggle() }),
+                            MenuItem(title: "Colours…", action: { model.showColours.toggle() }),
+                            .divider,
+                            MenuItem(title: "Tidy", action: { model.tidy() }),
+                            MenuItem(title: state.allCollapsed ? "Unfold all" : "Fold all", action: { model.toggleCollapseAll() }),
+                            .divider, .section("Highlight type")]
+                // tick sections (several at once): their boxes get a frame in the section's colour
+                for cat in ModuleRegistry.categories {
+                    list.append(MenuItem(title: cat, checked: state.typeHighlights.contains(cat), enabled: state.sections.contains(cat),
+                                         dot: AppModel.categoryColours[cat], keepOpen: true, action: { model.toggleTypeHighlight(cat) }))
                 }
-                Divider()
-                Button("Reset view") { model.viewScale = 1; model.viewOffset = CGSize(width: 30, height: 30) }
-            } label: {
+                list.append(MenuItem(title: "None", enabled: !state.typeHighlights.isEmpty, keepOpen: true, action: { model.typeHighlights = [] }))
+                list += [.divider, MenuItem(title: "Reset view", action: { model.viewScale = 1; model.viewOffset = CGSize(width: 30, height: 30) })]
+                return list
+            }) {
                 word("view", on: false)
             }
             .fixedSize()
-            .helpTopic(model, "tb-view", "view", "How the patch is shown: hide the cables, colours, tidy, fold all boxes, frame every box of a type (select type), reset the zoom.")
+            .helpTopic(model, "tb-view", "view", "How the patch is shown: hide the cables, colours, tidy, fold all boxes, frame every box of a type (highlight type), reset the zoom.")
 
-            Menu {
-                Button("New…") { confirmNew = true }
-                Button("Open…") { importing = true }
-                Button("Save As…") { exporting = true }
-                Divider()
-                Button("Set as default") { model.setAsDefault() }
-                Button("Reset default") { model.resetDefault() }
-                    .disabled(!model.hasUserDefault)
-            } label: {
+            barMenu("file", alignRight: true, items: {
+                [MenuItem(title: "New…", action: { confirmNew = true }),
+                 MenuItem(title: "Open…", action: { importing = true }),
+                 MenuItem(title: "Save As…", action: { exporting = true }),
+                 .divider,
+                 MenuItem(title: "Set as default", action: { model.setAsDefault() }),
+                 MenuItem(title: "Reset default", enabled: state.hasUserDefault, action: { model.resetDefault() })]
+            }) {
                 word("file", on: false)
             }
             .fixedSize()
         }
-    }
-}
-
-/// A coloured dot for a menu row (select type). Drawn as an image so the menu keeps its colour.
-struct TypeDot: View {
-    let hex: String
-    var body: some View {
-        #if os(macOS)
-        let c = Color(hex: hex) ?? .gray
-        Image(nsImage: NSImage(size: NSSize(width: 12, height: 12), flipped: false) { r in
-            NSColor(c).setFill(); NSBezierPath(ovalIn: r.insetBy(dx: 1, dy: 1)).fill(); return true
-        })
-        #else
-        Image(systemName: "circle.fill").foregroundStyle(Color(hex: hex) ?? .gray)
-        #endif
     }
 }

@@ -64,13 +64,23 @@ struct PatchCanvasView: View {
                 }
                 cableDeleteButton
                 PortHoverOverlay(model: model, hover: hover)
-                if model.finderAt != nil || model.showColours || model.boxMenu != nil {
+                if model.finderAt != nil || model.showColours || model.boxMenu != nil || model.panelMenu != nil {
                     // a menu is open: the first touch anywhere else closes it — straight away, without
                     // waiting to see whether it's a double-tap (that wait was the lag)
                     Color.clear
                         .contentShape(Rectangle())
-                        .onTapGesture { model.finderAt = nil; model.showColours = false; model.boxMenu = nil }
-                        .gesture(DragGesture(minimumDistance: 0).onEnded { _ in model.finderAt = nil; model.showColours = false; model.boxMenu = nil })
+                        .onTapGesture { model.finderAt = nil; model.showColours = false; model.boxMenu = nil; model.panelMenu = nil }
+                        .gesture(DragGesture(minimumDistance: 0).onEnded { _ in model.finderAt = nil; model.showColours = false; model.boxMenu = nil; model.panelMenu = nil })
+                }
+                if let pm = model.panelMenu {
+                    // keep it on screen: open where you clicked, shifted up / left near an edge (scrolls if long)
+                    let maxH = max(geo.size.height - 16, 120)
+                    let h = min(PanelMenuView.estimatedHeight(pm.items), maxH)
+                    let x = min(max(pm.at.x, 8), max(geo.size.width - 240, 8))
+                    let y = min(max(pm.at.y, 8), max(geo.size.height - h - 8, 8))
+                    PanelMenuView(items: pm.items, maxHeight: maxH) { model.panelMenu = nil }
+                        .id(pm.id)
+                        .offset(x: x, y: y)
                 }
                 if let bm = model.boxMenu {
                     let x = min(max(bm.at.x, 8), max(geo.size.width - BoxMenuView.width - 8, 8))
@@ -408,6 +418,73 @@ struct ObjectFinder: View {
             model.addNode(kind: s.kind, at: canvasPoint)
         }
         model.finderAt = nil
+    }
+}
+
+/// Every dropdown in the app (parameter choices, the audio menu, the top bar's menus …), drawn like the module list.
+struct PanelMenuView: View {
+    let items: [MenuItem]
+    var maxHeight: CGFloat = 600
+    let close: () -> Void
+    @State private var contentHeight: CGFloat = 0
+
+    static func estimatedHeight(_ items: [MenuItem]) -> CGFloat {
+        items.reduce(8) { $0 + ($1.separator ? 9 : $1.header ? 24 : 22) }
+    }
+
+    var body: some View {
+        let ticks = items.contains { $0.checked || $0.keepOpen }
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(items.indices, id: \.self) { i in row(items[i], ticks: ticks) }
+            }
+            .padding(.vertical, 4)
+            .fixedSize()
+            .frame(minWidth: 150, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(height: min(max(contentHeight, 20), maxHeight))
+        .fixedSize(horizontal: true, vertical: false)
+        .background(RoundedRectangle(cornerRadius: 3).fill(Theme.box)
+            .shadow(color: .black.opacity(Theme.light ? 0.18 : 0.6), radius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 3).stroke(Theme.border, lineWidth: 1))
+    }
+
+    @ViewBuilder private func row(_ it: MenuItem, ticks: Bool) -> some View {
+        if it.separator {
+            Rectangle().fill(Theme.border.opacity(0.5)).frame(height: 1).padding(.vertical, 4)
+        } else if it.header {
+            Text(it.title.lowercased()).font(Theme.monoSmall).foregroundStyle(Theme.faint)
+                .padding(.horizontal, 10).padding(.top, 6).padding(.bottom, 2)
+        } else {
+            PanelRow(item: it, ticks: ticks) { if !it.keepOpen { close() } }
+        }
+    }
+}
+
+private struct PanelRow: View {
+    let item: MenuItem
+    let ticks: Bool
+    let done: () -> Void
+    @State private var hover = false
+    var body: some View {
+        let on = hover && item.enabled
+        Button { item.action?(); done() } label: {
+            HStack(spacing: 6) {
+                if ticks { Text(item.checked ? "✓" : " ").font(Theme.mono).frame(width: 10) }
+                if let hex = item.dot { Circle().fill(Color(hex: hex) ?? .gray).frame(width: 9, height: 9) }
+                Text(item.title).font(Theme.mono).lineLimit(1)
+            }
+            .foregroundStyle(!item.enabled ? Theme.faint : on ? Theme.inverse : Theme.text)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10).padding(.vertical, 3)
+            .background(on ? Theme.text : Color.clear)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!item.enabled)
+        .onHover { hover = $0 }
     }
 }
 

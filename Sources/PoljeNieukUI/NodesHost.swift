@@ -1081,7 +1081,7 @@ final class NodesContainer: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         layer?.masksToBounds = true
         layer?.addSublayer(canvas.world)
         registerForDraggedTypes([.fileURL])
-        canvas.presentMenu = { [weak self] items, p in self?.showMenu(items, at: p) }
+        canvas.presentMenu = { [weak self] items, p in self?.model.panelMenu = .init(items: items, at: p) }
         canvas.beginTextEdit = { [weak self] id, isGroup in self?.startEditing(id, isGroup: isGroup) }
         canvas.endTextEdit = { [weak self] in self?.finishEditing() }
         canvas.repositionEditor = { [weak self] in self?.placeEditor() }
@@ -1194,38 +1194,6 @@ final class NodesContainer: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     override func mouseExited(with event: NSEvent) { hover.point = nil; canvas.hovered(nil); super.mouseExited(with: event) }
 
     // MARK: menus
-
-    private final class MenuTarget: NSObject {
-        let action: () -> Void
-        init(_ a: @escaping () -> Void) { action = a }
-        @objc func run() { action() }
-    }
-    private var menuTargets: [MenuTarget] = []
-    private func showMenu(_ items: [MenuItem], at p: CGPoint) {
-        let menu = NSMenu()
-        menu.autoenablesItems = false
-        menuTargets = []
-        for it in items {
-            if it.separator { menu.addItem(.separator()); continue }
-            if it.header {
-                let h = NSMenuItem(title: it.title, action: nil, keyEquivalent: "")
-                h.isEnabled = false
-                menu.addItem(h)
-                continue
-            }
-            let mi = NSMenuItem(title: it.title, action: nil, keyEquivalent: "")
-            if let a = it.action {
-                let t = MenuTarget(a)
-                menuTargets.append(t)
-                mi.target = t
-                mi.action = #selector(MenuTarget.run)
-            }
-            mi.state = it.checked ? .on : .off
-            mi.isEnabled = it.enabled
-            menu.addItem(mi)
-        }
-        menu.popUp(positioning: nil, at: p, in: self)
-    }
 
     // MARK: text editing
 
@@ -1345,7 +1313,7 @@ final class NodesContainer: UIView, UIGestureRecognizerDelegate, UITextViewDeleg
         clipsToBounds = true
         isMultipleTouchEnabled = true
         layer.addSublayer(canvas.world)
-        canvas.presentMenu = { [weak self] items, p in self?.showMenu(items, at: p) }
+        canvas.presentMenu = { [weak self] items, p in self?.model.panelMenu = .init(items: items, at: p) }
         canvas.beginTextEdit = { [weak self] id, isGroup in self?.startEditing(id, isGroup: isGroup) }
         canvas.endTextEdit = { [weak self] in self?.finishEditing() }
         canvas.repositionEditor = { [weak self] in self?.placeEditor() }
@@ -1453,23 +1421,6 @@ final class NodesContainer: UIView, UIGestureRecognizerDelegate, UITextViewDeleg
     }
 
     // MARK: menus
-    private var parentController: UIViewController? {
-        sequence(first: next, next: { $0?.next }).first(where: { $0 is UIViewController }) as? UIViewController
-    }
-    private func showMenu(_ items: [MenuItem], at p: CGPoint) {
-        guard let vc = parentController else { return }
-        let sheet = UIAlertController(title: items.first(where: { $0.header })?.title, message: nil, preferredStyle: .actionSheet)
-        for it in items where !it.separator && !it.header {
-            let a = UIAlertAction(title: (it.checked ? "✓ " : "") + it.title, style: .default) { _ in it.action?() }
-            a.isEnabled = it.enabled
-            sheet.addAction(a)
-        }
-        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        sheet.popoverPresentationController?.sourceView = self
-        sheet.popoverPresentationController?.sourceRect = CGRect(x: p.x, y: p.y, width: 1, height: 1)
-        vc.present(sheet, animated: true)
-    }
-
     // MARK: text editing
     private var editor: UIView?
     private var editingID: UUID?

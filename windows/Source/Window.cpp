@@ -301,17 +301,11 @@ void TopBar::deviceMenu(bool input, Pt at) {
     popup(m, at);
 }
 
-void TopBar::addMenu(Pt at) {
-    juce::PopupMenu m;
-    for (auto& cat : Registry::categories) {
-        m.addSectionHeader(nameOf(cat));
-        for (auto& s : Registry::all()) {
-            if (s.category != cat) continue;
-            auto kind = s.kind;
-            m.addItem(nameOf(s.name) + u8("  \xe2\x80\x94  ") + nameOf(s.summary), [this, kind] { model.addNode(kind, model.viewCenterInCanvas()); });
-        }
-    }
-    popup(m, at);
+void TopBar::addMenu(Pt) {
+    // the module list (the same one double-clicking the canvas opens), in the middle of the view
+    model.replaceTarget = {};
+    if (model.finderAt) model.finderAt.reset(); else model.finderAt = model.viewCenterInCanvas();
+    model.changed();
 }
 
 void TopBar::viewMenu(Pt at) {
@@ -338,7 +332,7 @@ void TopBar::viewMenu(Pt at) {
     }
     types.addSeparator();
     types.addItem("None", !model.typeHighlights.empty(), false, [this] { model.setTypeHighlights({}); });
-    m.addSubMenu("Select type", types);
+    m.addSubMenu("Highlight type", types);
     m.addSeparator();
     m.addItem("Reset view", [this] { model.setView({ 30, 30 }, 1); });
     popup(m, at);
@@ -724,6 +718,15 @@ struct Look : juce::LookAndFeel_V4 {
         setColour(juce::TextEditor::highlightColourId, Theme::fill());
     }
     juce::Font getPopupMenuFont() override { return Theme::mono(11); }
+    // dropdowns drawn like the module list: a flat panel with a thin border, lowercase section names
+    void drawPopupMenuBackground(juce::Graphics& g, int w, int h) override {
+        g.fillAll(Theme::box());
+        g.setColour(Theme::border()); g.drawRect(0, 0, w, h, 1);
+    }
+    void drawPopupMenuSectionHeader(juce::Graphics& g, const juce::Rectangle<int>& area, const juce::String& name) override {
+        g.setFont(Theme::mono(9)); g.setColour(Theme::faint());
+        g.drawFittedText(name.toLowerCase(), area.reduced(10, 0).withTrimmedTop(4), juce::Justification::bottomLeft, 1);
+    }
     juce::Font getAlertWindowTitleFont() override { return Theme::mono(12, true); }
     juce::Font getAlertWindowMessageFont() override { return Theme::mono(11); }
     juce::Font getTextButtonFont(juce::TextButton&, int) override { return Theme::mono(11); }

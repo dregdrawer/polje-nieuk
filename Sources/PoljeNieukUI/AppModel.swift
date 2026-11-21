@@ -1163,7 +1163,13 @@ public final class AppModel: ObservableObject {
     }
 
     /// The coloured frame around a box (nil = none). One undo step.
-    static let highlightColours: [String] = ["#5aa9ff", "#6cc76c", "#ff5f5f", "#ffc030", "#b77be8", "#ff92d6"]
+    static let highlightColours: [String] = ["#5aa9ff", "#ff5f5f", "#ffc030", "#b77be8"]
+    /// A dropdown opened from the canvas (a parameter's choices, the audio menu, a rack pad …): drawn by the
+    /// canvas like the module list, at `at` (canvas-view point).
+    struct PanelMenu: Identifiable { let id = UUID(); var items: [MenuItem]; var at: CGPoint }
+    @Published var panelMenu: PanelMenu?
+    /// The top bar menu that's open ("in", "out", "view", "file").
+    @Published var barMenu: String?
     /// The box menu (right-click / long-press a title bar): which box, and where (canvas-view point).
     struct BoxMenu: Equatable { var id: UUID; var at: CGPoint }
     @Published var boxMenu: BoxMenu?
