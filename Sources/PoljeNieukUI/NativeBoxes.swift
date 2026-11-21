@@ -32,6 +32,7 @@ struct MenuItem {
     var separator = false
     var dot: String? = nil       // "#rrggbb": a colour dot before the title
     var keepOpen = false         // ticking it leaves the menu open (tick several in a row)
+    var submenu: [MenuItem]? = nil   // opens these in the same panel (with a ‹ back row)
     var action: (() -> Void)?
     static let divider = MenuItem(title: "", separator: true)
     static func section(_ t: String) -> MenuItem { MenuItem(title: t, enabled: false, header: true) }

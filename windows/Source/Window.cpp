@@ -332,7 +332,7 @@ void TopBar::viewMenu(Pt at) {
     }
     types.addSeparator();
     types.addItem("None", !model.typeHighlights.empty(), false, [this] { model.setTypeHighlights({}); });
-    m.addSubMenu("Highlight type", types);
+    m.addSubMenu("Highlight by type", types);
     m.addSeparator();
     m.addItem("Reset view", [this] { model.setView({ 30, 30 }, 1); });
     popup(m, at);
@@ -570,6 +570,17 @@ void FileBrowser::mouseUp(const juce::MouseEvent& e) {
     float x = 10 + float(r.depth) * 12;
     switch (r.kind) {
         case Row::folder:
+            if (e.mods.isPopupMenu()) {
+                // right-click a folder: add it to (or take it out of) Collections
+                bool in = std::find(model.browserFolders.begin(), model.browserFolders.end(), r.file) != model.browserFolders.end();
+                juce::PopupMenu m;
+                m.setLookAndFeel(&getLookAndFeel());
+                auto f = r.file;
+                if (in) m.addItem("Remove from Collections", [this, f] { model.removeFolder(f); rebuild(); });
+                else m.addItem("Add to Collections", [this, f] { model.addFolder(f); rebuild(); });
+                m.showMenuAsync(juce::PopupMenu::Options().withTargetScreenArea({ e.getScreenX(), e.getScreenY(), 1, 1 }));
+                return;
+            }
             if (r.removable && e.position.x > float(getWidth()) - 26) { model.removeFolder(r.file); rebuild(); return; }
             if (open.count(r.file.getFullPathName())) open.erase(r.file.getFullPathName()); else open.insert(r.file.getFullPathName());
             rebuild();

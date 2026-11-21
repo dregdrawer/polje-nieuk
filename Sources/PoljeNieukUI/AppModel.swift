@@ -1163,7 +1163,7 @@ public final class AppModel: ObservableObject {
     }
 
     /// The coloured frame around a box (nil = none). One undo step.
-    static let highlightColours: [String] = ["#5aa9ff", "#ff5f5f", "#ffc030", "#b77be8"]
+    static let highlightColours: [String] = ["#5aa9ff", "#ff5f5f", "#ffc030"]
     /// A dropdown opened from the canvas (a parameter's choices, the audio menu, a rack pad …): drawn by the
     /// canvas like the module list, at `at` (canvas-view point).
     struct PanelMenu: Identifiable { let id = UUID(); var items: [MenuItem]; var at: CGPoint }
@@ -1262,6 +1262,15 @@ public final class AppModel: ObservableObject {
 
     // MARK: Cables
 
+    /// The box on top at a canvas point (boxes later in the patch are drawn over earlier ones), as its index.
+    func topBox(at p: CGPoint) -> Int? {
+        patch.nodes.indices.last { i in
+            let n = patch.nodes[i]
+            guard let spec = ModuleRegistry.spec(n.kind) else { return false }
+            return CGRect(x: n.x, y: n.y, width: BoxLayout.width(n), height: BoxLayout.height(n, spec, hw)).contains(p)
+        }
+    }
+
     func finishCable(at screen: CGPoint) {
         defer { pendingCable = nil }
         guard let pc = pendingCable else { return }
@@ -1273,7 +1282,9 @@ public final class AppModel: ObservableObject {
             let d = hypot(q.x - p.x, q.y - p.y)
             if d < radius && d < (best?.d ?? .infinity) { best = (id, port, d) }
         }
-        for n in patch.nodes where n.id != pc.node {
+        // only the box on top answers where boxes overlap
+        let top = topBox(at: p)
+        for (k, n) in patch.nodes.enumerated() where n.id != pc.node && (top == nil || k >= top!) {
             guard let spec = ModuleRegistry.spec(n.kind) else { continue }
             let ports = BoxLayout.ports(n, spec, hw)
             if n.collapsed {

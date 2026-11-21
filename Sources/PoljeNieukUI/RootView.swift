@@ -236,8 +236,9 @@ struct TopBar: View, Equatable {
         .font(Theme.barFont)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+        // the bottom line belongs to the background, so the bar's dropdowns hang over it
+        .background(alignment: .bottom) { Rectangle().fill(Theme.border).frame(height: 1) }
         .background(Theme.bar)
-        .overlay(alignment: .bottom) { Rectangle().fill(Theme.border).frame(height: 1) }
     }
 
     /// A top-bar button label: one word. Toggles show bright when on, dim when off; plain actions are mid-tone.
@@ -396,20 +397,21 @@ struct TopBar: View, Equatable {
                             .divider,
                             MenuItem(title: "Tidy", action: { model.tidy() }),
                             MenuItem(title: state.allCollapsed ? "Unfold all" : "Fold all", action: { model.toggleCollapseAll() }),
-                            .divider, .section("Highlight type")]
+                            .divider]
                 // tick sections (several at once): their boxes get a frame in the section's colour
-                for cat in ModuleRegistry.categories {
-                    list.append(MenuItem(title: cat, checked: state.typeHighlights.contains(cat), enabled: state.sections.contains(cat),
-                                         dot: AppModel.categoryColours[cat], keepOpen: true, action: { model.toggleTypeHighlight(cat) }))
+                var types = ModuleRegistry.categories.map { cat in
+                    MenuItem(title: cat, checked: state.typeHighlights.contains(cat), enabled: state.sections.contains(cat),
+                             dot: AppModel.categoryColours[cat], keepOpen: true, action: { model.toggleTypeHighlight(cat) })
                 }
-                list.append(MenuItem(title: "None", enabled: !state.typeHighlights.isEmpty, keepOpen: true, action: { model.typeHighlights = [] }))
+                types += [.divider, MenuItem(title: "None", enabled: !state.typeHighlights.isEmpty, keepOpen: true, action: { model.typeHighlights = [] })]
+                list.append(MenuItem(title: "Highlight by type", submenu: types))
                 list += [.divider, MenuItem(title: "Reset view", action: { model.viewScale = 1; model.viewOffset = CGSize(width: 30, height: 30) })]
                 return list
             }) {
                 word("view", on: false)
             }
             .fixedSize()
-            .helpTopic(model, "tb-view", "view", "How the patch is shown: hide the cables, colours, tidy, fold all boxes, frame every box of a type (highlight type), reset the zoom.")
+            .helpTopic(model, "tb-view", "view", "How the patch is shown: hide the cables, colours, tidy, fold all boxes, frame every box of a type (highlight by type), reset the zoom.")
 
             barMenu("file", alignRight: true, items: {
                 [MenuItem(title: "New…", action: { confirmNew = true }),

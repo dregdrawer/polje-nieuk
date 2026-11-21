@@ -1087,6 +1087,15 @@ void AppModel::autoTick() {
 
 // ---------------------------------------------------------------- cables
 
+int AppModel::topBox(Pt p) const {
+    for (int i = int(patch.nodes.size()) - 1; i >= 0; --i) {
+        auto& n = patch.nodes[size_t(i)];
+        auto* sp = Registry::spec(n.kind);
+        if (sp && Rect(float(n.x), float(n.y), BoxLayout::width(n), BoxLayout::height(n, *sp, hw)).contains(p)) return i;
+    }
+    return -1;
+}
+
 void AppModel::finishCable(Pt screen) {
     auto pc = pendingCable;
     pendingCable.reset();
@@ -1100,8 +1109,10 @@ void AppModel::finishCable(Pt screen) {
         float d = q->getDistanceFrom(p);
         if (d < radius && d < bestD) { bestD = d; bestNode = id; bestPort = port; }
     };
-    for (auto& n : patch.nodes) {
-        if (n.id == pc->node) continue;
+    int top = topBox(p);          // only the box on top answers where boxes overlap
+    for (int k = 0; k < int(patch.nodes.size()); ++k) {
+        auto& n = patch.nodes[size_t(k)];
+        if (n.id == pc->node || (top >= 0 && k < top)) continue;
         auto* spec = Registry::spec(n.kind);
         if (!spec) continue;
         auto ports = BoxLayout::ports(n, *spec, hw);
@@ -1240,7 +1251,7 @@ bool set(const juce::File& f) {
 void remove() { file().deleteFile(); loaded = false; CustomColours::version++; }
 }
 
-const std::vector<juce::String> AppModel::highlightColours { "#5aa9ff", "#ff5f5f", "#ffc030", "#b77be8" };
+const std::vector<juce::String> AppModel::highlightColours { "#5aa9ff", "#ff5f5f", "#ffc030" };
 void AppModel::setHighlight(const juce::String& id, std::optional<juce::String> hex) {
     int i = patch.index(id);
     if (i < 0 || patch.nodes[size_t(i)].highlight == hex) return;

@@ -270,6 +270,14 @@ private struct FolderNode: View {
             .padding(.leading, CGFloat(10 + depth * 12)).padding(.trailing, 10).padding(.vertical, 4)
             .contentShape(Rectangle())
             .onTapGesture { open.toggle() }
+            .contextMenu {
+                // right-click (long-press on iPad) a folder
+                if model.browserFolders.contains(url) {
+                    Button("Remove from Collections") { model.removeFolder(url) }
+                } else {
+                    Button("Add to Collections") { model.addFolder(url) }
+                }
+            }
 
             if open {
                 let e = entries

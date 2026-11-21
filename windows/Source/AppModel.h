@@ -160,6 +160,7 @@ public:
 
     // cables
     void finishCable(Pt screen);
+    int topBox(Pt canvasPoint) const;           // the box drawn on top there (index), or -1
     void connect(const juce::String& a, int ap, const juce::String& b, int bp);
     bool pickUpCable(const juce::String& node, int port, Pt point);
 

@@ -444,7 +444,10 @@ void Canvas::paint(juce::Graphics& g) {
     if (at && !model.finderAt) {
         float reach = pc ? 24.0f : 22.0f;            // 24 = what finishCable connects to
         std::optional<std::tuple<Pt, juce::String, bool>> best; float bd = INFINITY;
-        for (auto& n : model.patch.nodes) {
+        int top = model.topBox(model.toCanvas(*at));   // only the box on top answers where boxes overlap
+        for (int k = 0; k < int(model.patch.nodes.size()); ++k) {
+            auto& n = model.patch.nodes[size_t(k)];
+            if (top >= 0 && k < top) continue;
             auto* sp = Registry::spec(n.kind);
             if (!sp) continue;
             if (pc && n.id == pc->node) continue;
@@ -857,7 +860,7 @@ class SwatchRow : public juce::PopupMenu::CustomComponent {
 public:
     SwatchRow(std::optional<juce::String> cur, std::function<void(std::optional<juce::String>)> pick)
         : juce::PopupMenu::CustomComponent(false), current(std::move(cur)), onPick(std::move(pick)) {}
-    void getIdealSize(int& w, int& h) override { w = 10 + 7 * 24 + 6; h = 28; }
+    void getIdealSize(int& w, int& h) override { w = 10 + int(AppModel::highlightColours.size() + 1) * 24 + 6; h = 28; }
     void paint(juce::Graphics& g) override {
         for (int k = 0; k <= int(AppModel::highlightColours.size()); ++k) {
             auto r = cell(k);

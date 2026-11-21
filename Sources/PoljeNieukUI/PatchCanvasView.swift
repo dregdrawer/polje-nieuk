@@ -422,25 +422,51 @@ struct ObjectFinder: View {
 }
 
 /// Every dropdown in the app (parameter choices, the audio menu, the top bar's menus …), drawn like the module list.
+/// Left-aligned and only as wide as its longest row; a ticked row shows ✓ at its right end; a row with a
+/// submenu opens it in the same panel.
 struct PanelMenuView: View {
     let items: [MenuItem]
     var maxHeight: CGFloat = 600
     let close: () -> Void
     @State private var contentHeight: CGFloat = 0
+    @State private var path: [Int] = []           // the submenus opened, as row indices (so ticks stay current)
 
     static func estimatedHeight(_ items: [MenuItem]) -> CGFloat {
         items.reduce(8) { $0 + ($1.separator ? 9 : $1.header ? 24 : 22) }
     }
 
+    private var current: [MenuItem] {
+        var list = items
+        for i in path { guard i < list.count, let s = list[i].submenu else { break }; list = s }
+        return list
+    }
+
+    /// The menu and its submenus: the panel is as wide as the widest of them, so opening a submenu
+    /// doesn't change its width (or, for a menu hanging from the right, where it sits).
+    private var levels: [[MenuItem]] { [items] + items.compactMap(\.submenu) }
+
+    private func level(_ list: [MenuItem], sub: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if sub {
+                PanelRow(item: MenuItem(title: "‹ back")) { path.removeLast() }
+                Rectangle().fill(Theme.border.opacity(0.5)).frame(height: 1).padding(.vertical, 4)
+            }
+            ForEach(list.indices, id: \.self) { i in row(list[i], index: i) }
+        }
+    }
+
     var body: some View {
-        let ticks = items.contains { $0.checked || $0.keepOpen }
+        let list = current
         ScrollView(.vertical) {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(items.indices, id: \.self) { i in row(items[i], ticks: ticks) }
+            ZStack(alignment: .topLeading) {
+                // the other levels, invisible and flat: they only set the width
+                ForEach(levels.indices, id: \.self) { k in
+                    level(levels[k], sub: k > 0).hidden().frame(height: 0).allowsHitTesting(false)
+                }
+                level(list, sub: !path.isEmpty)
             }
             .padding(.vertical, 4)
             .fixedSize()
-            .frame(minWidth: 150, alignment: .leading)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
         }
         .scrollBounceBehavior(.basedOnSize)
@@ -451,30 +477,33 @@ struct PanelMenuView: View {
         .overlay(RoundedRectangle(cornerRadius: 3).stroke(Theme.border, lineWidth: 1))
     }
 
-    @ViewBuilder private func row(_ it: MenuItem, ticks: Bool) -> some View {
+    @ViewBuilder private func row(_ it: MenuItem, index: Int) -> some View {
         if it.separator {
             Rectangle().fill(Theme.border.opacity(0.5)).frame(height: 1).padding(.vertical, 4)
         } else if it.header {
             Text(it.title.lowercased()).font(Theme.monoSmall).foregroundStyle(Theme.faint)
                 .padding(.horizontal, 10).padding(.top, 6).padding(.bottom, 2)
+        } else if it.submenu != nil {
+            PanelRow(item: it, trailing: "›") { path.append(index) }
         } else {
-            PanelRow(item: it, ticks: ticks) { if !it.keepOpen { close() } }
+            PanelRow(item: it, trailing: it.checked ? "✓" : nil) { if !it.keepOpen { close() } }
         }
     }
 }
 
 private struct PanelRow: View {
     let item: MenuItem
-    let ticks: Bool
+    var trailing: String? = nil
     let done: () -> Void
     @State private var hover = false
     var body: some View {
         let on = hover && item.enabled
-        Button { item.action?(); done() } label: {
+        Button { if item.submenu == nil { item.action?() }; done() } label: {
             HStack(spacing: 6) {
-                if ticks { Text(item.checked ? "✓" : " ").font(Theme.mono).frame(width: 10) }
                 if let hex = item.dot { Circle().fill(Color(hex: hex) ?? .gray).frame(width: 9, height: 9) }
                 Text(item.title).font(Theme.mono).lineLimit(1)
+                Spacer(minLength: 12)
+                if let t = trailing { Text(t).font(Theme.mono) }
             }
             .foregroundStyle(!item.enabled ? Theme.faint : on ? Theme.inverse : Theme.text)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -493,7 +522,7 @@ private struct PanelRow: View {
 struct BoxMenuView: View {
     @ObservedObject var model: AppModel
     let id: UUID
-    static let width: CGFloat = 190
+    static let width: CGFloat = 150          // about how wide it comes out (for keeping it on screen)
 
     var body: some View {
         let cur = model.patch.nodes.first { $0.id == id }?.highlight
@@ -510,7 +539,7 @@ struct BoxMenuView: View {
             .padding(.horizontal, 10).padding(.bottom, 8)
         }
         .padding(.top, 6)
-        .frame(width: Self.width, alignment: .leading)
+        .fixedSize()
         .background(RoundedRectangle(cornerRadius: 3).fill(Theme.box)
             .shadow(color: .black.opacity(Theme.light ? 0.18 : 0.6), radius: 12))
         .overlay(RoundedRectangle(cornerRadius: 3).stroke(Theme.border, lineWidth: 1))

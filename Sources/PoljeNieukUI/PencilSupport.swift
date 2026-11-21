@@ -19,8 +19,11 @@ struct PortHoverOverlay: View {
             guard let hp = pc?.point ?? hover.point, model.finderAt == nil else { return }
             let reach: CGFloat = pc == nil ? 22 : 24          // 24 = what finishCable connects to
             var best: (CGPoint, String, Bool, CGFloat)?
+            // only the box on top answers where boxes overlap: a box drawn under it shows no ports there
+            let top = model.topBox(at: model.toCanvas(hp))
             let hw = model.hw, z = model.viewScale, o = model.viewOffset
-            for n in model.patch.nodes {
+            for (k, n) in model.patch.nodes.enumerated() {
+                if let top, k < top { continue }
                 guard let spec = ModuleRegistry.spec(n.kind) else { continue }
                 // only the boxes near the pointer (working out every port of every box on each change made
                 // dragging a slider slow on a big patch)
