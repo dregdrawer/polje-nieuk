@@ -94,7 +94,12 @@ public:
     Pt viewCenterInCanvas() const { return toCanvas({ viewSize.x / 2 - 90, viewSize.y / 3 }); }
     void zoomBy(float factor, Pt anchor);
     void setView(Pt offset, float scale);
-    void toggleLock(const juce::String& id);      // lock a box where it is on screen (or let it move again)
+    void toggleLock(const juce::String& id);
+    // box menu on one box or the whole selection (right-click a selected box): one undo step each
+    std::vector<juce::String> menuTargets(const juce::String& id) const;
+    void setHighlights(const std::vector<juce::String>& ids, std::optional<juce::String> hex);
+    void setLocked(const std::vector<juce::String>& ids, bool on);
+    void setHidden(const std::vector<juce::String>& ids, std::optional<bool> in, std::optional<bool> out);      // lock a box where it is on screen (or let it move again)
     void followPins();                            // pan / zoom: locked boxes stay put on screen
     void refreshPins();
     void toggleHideIn(const juce::String& id);

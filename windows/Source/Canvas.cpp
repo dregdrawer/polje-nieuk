@@ -916,16 +916,19 @@ void Canvas::showBoxMenu(const juce::String& id, Pt screen) {
     if (i < 0) return;
     juce::PopupMenu menu;
     menu.setLookAndFeel(&getLookAndFeel());
-    menu.addItem("duplicate", [this, id] { model.duplicate(id); });
+    auto targets = model.menuTargets(id);         // right-clicking a selected box acts on the whole selection
+    menu.addItem(targets.size() > 1 ? "duplicate " + juce::String(int(targets.size())) : juce::String("duplicate"),
+                 [this, id, targets] { if (targets.size() > 1) model.duplicateSelection(); else model.duplicate(id); });
     menu.addItem(juce::String::fromUTF8("replace\xe2\x80\xa6"), [this, id] { model.beginReplace(id); });
     auto& nd = model.patch.nodes[size_t(i)];
-    menu.addItem("lock to screen", true, nd.pin.has_value(), [this, id] { model.toggleLock(id); });
-    menu.addItem("hide cables in", true, nd.hideIn, [this, id] { model.toggleHideIn(id); });
-    menu.addItem("hide cables out", true, nd.hideOut, [this, id] { model.toggleHideOut(id); });
+    bool locked = nd.pin.has_value(), hin = nd.hideIn, hout = nd.hideOut;
+    menu.addItem("lock to screen", true, locked, [this, targets, locked] { model.setLocked(targets, !locked); });
+    menu.addItem("hide cables in", true, hin, [this, targets, hin] { model.setHidden(targets, !hin, std::nullopt); });
+    menu.addItem("hide cables out", true, hout, [this, targets, hout] { model.setHidden(targets, std::nullopt, !hout); });
     menu.addSeparator();
     menu.addSectionHeader("highlight");
     menu.addCustomItem(1000, std::make_unique<SwatchRow>(model.patch.nodes[size_t(i)].highlight,
-                                                         [this, id](std::optional<juce::String> h) { model.setHighlight(id, h); }), nullptr);
+                                                         [this, targets](std::optional<juce::String> h) { model.setHighlights(targets, h); }), nullptr);
     auto p = localPointToGlobal(screen.toInt());
     menu.showMenuAsync(juce::PopupMenu::Options().withTargetScreenArea({ p.x, p.y, 1, 1 }));
 }

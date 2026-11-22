@@ -1,5 +1,6 @@
 #include "Displays.h"
 #include "ModulesFM.h"
+#include "Buffers.h"
 #include <complex>
 
 namespace pn {
@@ -71,6 +72,35 @@ public:
         auto* m = &model; auto nid = id; auto kind = spec.kind;
         return { part("readout", r, [this, m, nid] { return LiveSig::readouts(m->node(nid), 24, 200) + LiveSig::patch(node) * 3 + (m->isRunning ? 1 : 0); },
                       [m, nid, kind](GC& g, Pt size) { drawReadout(g, size, kind, m->node(nid)); }) };
+    }
+};
+
+// ---------------------------------------------------------------- rec: REC / idle and the time, and "open file location"
+
+class RecDisplay : public NativeDisplay {
+public:
+    using NativeDisplay::NativeDisplay;
+    Rect line(Rect r) const { return Rect(r.getX(), r.getY(), r.getWidth(), 20); }
+    Rect button(Rect r) const { return Rect(r.getX(), r.getY() + 24, r.getWidth(), 18); }
+    std::vector<LivePart> parts(Rect r) override {
+        auto* m = &model; auto nid = id; auto kind = spec.kind;
+        return { part("readout", line(r), [this, m, nid] { return LiveSig::readouts(m->node(nid), 24, 200) + LiveSig::patch(node) * 3 + (m->isRunning ? 1 : 0); },
+                      [m, nid, kind](GC& g, Pt size) { drawReadout(g, size, kind, m->node(nid)); }) };
+    }
+    void paintStatic(GC& g, Rect r) override {
+        auto b = button(r);
+        g.fillRounded(b, 2, Theme::row());
+        g.text("open file location", b.getCentre(), 9, Theme::text());
+    }
+    bool press(Pt pt, Rect r, const PointerInfo&) override { return button(r).contains(pt); }
+    void release(Pt pt, Rect r, const PointerInfo& info) override {
+        if (info.moved || !button(r).contains(pt)) return;
+        // Explorer (Finder), with the newest recording selected — or just the folder
+        auto dir = recordingsDirectory();
+        juce::File newest;
+        for (auto& f : dir.findChildFiles(juce::File::findFiles, false, "*.wav"))
+            if (!newest.exists() || f.getLastModificationTime() > newest.getLastModificationTime()) newest = f;
+        if (newest.exists()) newest.revealToUser(); else dir.startAsProcess();
     }
 };
 
@@ -1572,7 +1602,19 @@ public:
     virtual void audition(int k) = 0;
     virtual int nameLines() const { return 1; }
     float padLevel(int k) { auto* d = dsp(); return d ? fin(d->readouts[size_t(1 + k)]) : 0.0f; }
-    bool padPlaying(int k) { return padLevel(k) > 0.05f; }
+    /// how many times pad k has been hit (each hit flashes it)
+    virtual int hitCount(int) { return 0; }
+    /// a pad is lit for a moment after each hit — shorter when hits come fast, so every one shows as a flash
+    bool padPlaying(int k) {
+        double now = juce::Time::getMillisecondCounterHiRes() * 0.001;
+        if (int(flash.size()) <= k) flash.resize(size_t(k + 1), { 0, -1.0, 1.0 });
+        auto& f = flash[size_t(k)];
+        int c = hitCount(k);
+        if (c != f.count) { f.interval = f.at < 0 ? 1.0 : now - f.at; f.at = now; f.count = c; }
+        return now - f.at < std::min(0.08, f.interval * 0.6);
+    }
+    struct Flash { int count; double at, interval; };
+    std::vector<Flash> flash;
     int len() const { return int(std::round(p("len", 16))); }
     int selected() const { return int(std::round(p("sel", 0))); }
     Rect inner(Rect r) const { return r.reduced(0, 4); }
@@ -1646,6 +1688,11 @@ public:
             auto pr = padRect(k, r);
             bool muted = flag("m" + std::to_string(k + 1)), solo = flag("s" + std::to_string(k + 1));
             g.fill(pr, Theme::row());
+            // its level: a faint fill from the bottom and the number (drag the pad up / down to change it)
+            float level = std::clamp(p("v" + std::to_string(k + 1), 0.8f), 0.0f, levelMax);
+            float fh = pr.getHeight() * level / levelMax;
+            g.fill(Rect(pr.getX(), pr.getBottom() - fh, pr.getWidth(), fh), Theme::text().withMultipliedAlpha(0.08f));
+            g.textRight(juce::String(int(std::round(level * 100))) + "%", { pr.getRight() - 4, pr.getBottom() - 10 }, 8, Theme::dim());
             bool loading = model.loadingPads.count(id) && model.loadingPads[id].count(k);
             juce::String title = dropPad == k ? juce::String("drop to load") : (loading ? u8("loading\xe2\x80\xa6") : laneName(k));
             float maxW = pr.getWidth() - 8;
@@ -1692,10 +1739,17 @@ public:
             if (k >= 0 && k < lanes()) select(k);
             return true;
         }
-        for (int k = 0; k < padRows() * padCols(); ++k) if (padRect(k, r).contains(pt)) { pressedPad = k; return true; }
+        for (int k = 0; k < padRows() * padCols(); ++k)
+            if (padRect(k, r).contains(pt)) { pressedPad = k; levelY = pt.y; levelFrom = p("v" + std::to_string(k + 1), 0.8f); return true; }
         return false;
     }
-    void drag(Pt pt, Rect r, const PointerInfo&) override { if (grabRoll) paintRoll(pt, r); }
+    void drag(Pt pt, Rect r, const PointerInfo& info) override {
+        if (grabRoll) { paintRoll(pt, r); return; }
+        // a pad dragged up / down: its level (100 points = the full range)
+        if (pressedPad < 0 || !info.moved) return;
+        float v = std::clamp(levelFrom + (levelY - pt.y) / 100 * levelMax, 0.0f, levelMax);
+        setParam("v" + std::to_string(pressedPad + 1), std::round(v * 100) / 100);
+    }
     void release(Pt pt, Rect r, const PointerInfo& info) override {
         if (grabRoll) { paint.reset(); grabRoll = false; commit(); return; }
         int k = pressedPad; pressedPad = -1;
@@ -1713,9 +1767,12 @@ private:
     std::optional<float> paint;
     bool grabRoll = false;
     int pressedPad = -1;
+    static constexpr float levelMax = 1.5f;
+    float levelY = 0, levelFrom = 0.8f;
 };
 
 class RackDisplay : public PadsDisplay {
+    int hitCount(int k) override { auto* r = dynamic_cast<RackNode*>(dsp()); return r && k < RackLayout::pads ? r->hitCount[size_t(k)] : 0; }
 public:
     using PadsDisplay::PadsDisplay;
     RackNode* rack() { return dynamic_cast<RackNode*>(dsp()); }
@@ -1742,6 +1799,7 @@ public:
 };
 
 class DrumSynthDisplay : public PadsDisplay {
+    int hitCount(int k) override { auto* d = dynamic_cast<DrumSynthNode*>(dsp()); return d ? d->hitCount(k) : 0; }
 public:
     using PadsDisplay::PadsDisplay;
     DrumSynthNode* synth() { return dynamic_cast<DrumSynthNode*>(dsp()); }
@@ -1782,6 +1840,7 @@ std::unique_ptr<NativeDisplay> NativeDisplay::make(AppModel& m, const PatchNode&
     if (k == "slider" || k == "knob") return std::make_unique<ControlsDisplay>(m, n, s);
     if (k == "peq") return std::make_unique<EQDisplay>(m, n, s);
     if (k == "clock") return std::make_unique<ClockDisplay>(m, n, s);
+    if (k == "rec") return std::make_unique<RecDisplay>(m, n, s);
     return std::make_unique<TextReadout>(m, n, s);
 }
 

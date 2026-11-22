@@ -249,6 +249,7 @@ public:
     std::vector<std::string> padNames;
     int contentVersion = 0;
     std::atomic<int> audition { -1 };
+    std::array<int, RackLayout::pads> hitCount {};     // hits per pad (the display flashes the pad on each)
 private:
     void install(int k, const StereoAudio& audio, const std::string& name);
     void trigger(int k);
@@ -281,6 +282,7 @@ public:
     void setData(const std::string& key, const std::vector<float>& values) override;
     std::array<float, DrumSynthLayout::voices * DrumSynthLayout::steps> hits {};
     std::atomic<int> audition { -1 };
+    int hitCount(int v) const;                         // hits per voice (the display flashes its pad on each)
 private:
     struct Impl;
     std::unique_ptr<Impl> impl;

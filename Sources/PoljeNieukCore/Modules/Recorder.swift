@@ -2,6 +2,20 @@ import Foundation
 import AVFoundation
 import Synchronization
 
+/// Where rec puts its files, and the newest one (for "open file location").
+public enum Recordings {
+    public static var directory: URL { RecorderNode.directory }
+    public static var latest: URL? {
+        let fm = FileManager.default
+        guard let items = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey]) else { return nil }
+        return items.filter { $0.pathExtension.lowercased() == "wav" }.max {
+            let a = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            let b = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            return a < b
+        }
+    }
+}
+
 /// rec : records its two inlets to a 32-bit float stereo WAV file.
 /// The audio thread only copies into a lock-free ring; a background queue writes the file.
 final class RecorderNode: DSPNode {
@@ -134,6 +148,3 @@ final class RecorderNode: DSPNode {
     }
 }
 
-public enum Recordings {
-    public static var directory: URL { RecorderNode.directory }
-}

@@ -192,6 +192,7 @@ enum BoxLayout {
     /// Height of the live area under the ports (waveforms and curves are taller).
     static func readoutHeight(_ kind: String) -> CGFloat {
         switch kind {
+        case "rec": return 44                   // REC / time, and "open file location"
         case "looper", "stretch": return 104
         case "sampler": return 122
         case "peq": return 150
@@ -244,6 +245,16 @@ enum BoxLayout {
 
     /// Parameter indices drawn as rows (triggers share one button row above them).
     /// eq only shows the bands that are switched on.
+    /// How many rows the box makes room for. samplerack / drumsynth: the most any pad's selection shows (the
+    /// selected pad's rows plus other pads' rows with cables), so picking another pad doesn't resize the box.
+    static func rowCount(_ spec: ModuleSpec, _ node: PatchNode) -> Int {
+        guard spec.kind == "rack" || spec.kind == "drumsynth" else { return rowParams(spec, node).count }
+        let pads = spec.kind == "rack" ? RackLayout.pads : DrumSynthLayout.voices
+        var n = node, most = 0
+        for k in 0..<pads { n.params["sel"] = Float(k); most = max(most, rowParams(spec, n).count) }
+        return most
+    }
+
     static func rowParams(_ spec: ModuleSpec, _ node: PatchNode) -> [Int] {
         var all = spec.params.indices.filter { !spec.params[$0].isTrigger }
         // roll: where its view sits is set by the scrollbar beside the grid, not a row
@@ -335,7 +346,7 @@ enum BoxLayout {
             let display = readoutHeight(node)
             return header + (r > 0 ? CGFloat(r) * portRow + 6 : 0) + (display > 0 ? display + 6 : 0)
         }
-        let rows = rowParams(spec, node).count + (hasTriggerRow(spec) ? 1 : 0)
+        let rows = rowCount(spec, node) + (hasTriggerRow(spec) ? 1 : 0)
         return header + bodyHeight(node, spec, hw)
             + (rows > 0 ? CGFloat(rows) * row + 4 : 0) + 4
     }

@@ -400,6 +400,36 @@ void AppModel::setView(Pt offset, float scale) {
 
 // ---------------------------------------------------------------- boxes locked to the screen, hidden cables
 
+std::vector<juce::String> AppModel::menuTargets(const juce::String& id) const {
+    if (!(selectedNodes.count(id) && selectedNodes.size() > 1)) return { id };
+    std::vector<juce::String> v;
+    for (auto& n : patch.nodes) if (selectedNodes.count(n.id)) v.push_back(n.id);
+    return v;
+}
+void AppModel::setHighlights(const std::vector<juce::String>& ids, std::optional<juce::String> hex) {
+    checkpoint();
+    for (auto& id : ids) { int i = patch.index(id); if (i >= 0) patch.nodes[size_t(i)].highlight = hex; }
+    checkpoint(); scheduleAutosave(); changed();
+}
+void AppModel::setLocked(const std::vector<juce::String>& ids, bool on) {
+    checkpoint();
+    for (auto& id : ids) {
+        int i = patch.index(id); if (i < 0) continue;
+        auto& n = patch.nodes[size_t(i)];
+        if (on) { Pt s = toScreen({ float(n.x), float(n.y) }); n.pin = std::array<double, 2> { s.x, s.y }; } else n.pin.reset();
+    }
+    checkpoint(); scheduleAutosave(); changed();
+}
+void AppModel::setHidden(const std::vector<juce::String>& ids, std::optional<bool> in, std::optional<bool> out) {
+    checkpoint();
+    for (auto& id : ids) {
+        int i = patch.index(id); if (i < 0) continue;
+        if (in) patch.nodes[size_t(i)].hideIn = *in;
+        if (out) patch.nodes[size_t(i)].hideOut = *out;
+    }
+    checkpoint(); scheduleAutosave(); changed();
+}
+
 void AppModel::toggleLock(const juce::String& id) {
     int i = patch.index(id);
     if (i < 0) return;

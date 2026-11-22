@@ -134,6 +134,7 @@ StereoAudio RackNode::sample(int k) const {
 
 void RackNode::trigger(int k) {
     if (padL[size_t(k)].empty()) return;
+    ++hitCount[size_t(k)];
     pos[k] = 0; env[k] = 0; attacking[k] = true; active[k] = true;
 }
 
@@ -222,8 +223,11 @@ struct DrumSynthNode::Impl {
     EdgeDetector clockEdge, resetEdge;
     explicit Impl(double sr) : bridge(sr, MI_MACRO_RATE, MI_MACRO_BLOCK, V, V * 2) { for (auto& d : dsp) d = mi_macro_create(); }
     ~Impl() { for (auto& d : dsp) mi_macro_destroy(d); }
-    void start(int v, int gate) { gateLeft[v] = gate; env[v] = attackInc[v] >= 1 ? 1.0f : 0.0f; attacking[v] = attackInc[v] < 1; }
+    int hits[V] = {};
+    void start(int v, int gate) { ++hits[v]; gateLeft[v] = gate; env[v] = attackInc[v] >= 1 ? 1.0f : 0.0f; attacking[v] = attackInc[v] < 1; }
 };
+
+int DrumSynthNode::hitCount(int v) const { return v >= 0 && v < DrumSynthLayout::voices ? impl->hits[v] : 0; }
 
 std::vector<float> DrumSynthNode::starterBeat() {
     std::vector<float> h(size_t(DrumSynthLayout::voices * DrumSynthLayout::steps), 0.0f);

@@ -67,6 +67,35 @@ public final class AppModel: ObservableObject {
 
     // MARK: Boxes locked to the screen
 
+    /// The boxes a box menu acts on: every selected box when the right-clicked one is part of the selection.
+    func menuTargets(_ id: UUID) -> [UUID] {
+        selectedNodes.contains(id) && selectedNodes.count > 1 ? patch.nodes.map(\.id).filter { selectedNodes.contains($0) } : [id]
+    }
+    /// Box menu on one box or the selection: one undo step.
+    func setHighlight(_ ids: [UUID], _ hex: String?) {
+        checkpoint()
+        for id in ids { if let i = patch.index(of: id) { patch.nodes[i].highlight = hex } }
+        checkpoint(); scheduleAutosave()
+    }
+    func setLocked(_ ids: [UUID], _ on: Bool) {
+        checkpoint()
+        for id in ids {
+            guard let i = patch.index(of: id) else { continue }
+            if on { let s = toScreen(CGPoint(x: patch.nodes[i].x, y: patch.nodes[i].y)); patch.nodes[i].pin = [Double(s.x), Double(s.y)] }
+            else { patch.nodes[i].pin = nil }
+        }
+        checkpoint(); scheduleAutosave()
+    }
+    func setHidden(_ ids: [UUID], cablesIn: Bool? = nil, cablesOut: Bool? = nil) {
+        checkpoint()
+        for id in ids {
+            guard let i = patch.index(of: id) else { continue }
+            if let v = cablesIn { patch.nodes[i].hideIn = v ? true : nil }
+            if let v = cablesOut { patch.nodes[i].hideOut = v ? true : nil }
+        }
+        checkpoint(); scheduleAutosave()
+    }
+
     /// Lock a box where it is on screen (or let it move with the canvas again). One undo step.
     func toggleLock(_ id: UUID) {
         guard let i = patch.index(of: id) else { return }

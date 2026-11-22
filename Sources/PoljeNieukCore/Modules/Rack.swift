@@ -124,8 +124,11 @@ public final class RackNode: DSPNode {
 
     // MARK: Audio
 
+    /// How many times each pad has been hit (the display flashes the pad on every hit, however short the sound).
+    public private(set) var hitCount = [Int](repeating: 0, count: RackLayout.pads)
     @inline(__always) private func trigger(_ k: Int) {
         guard padLen[k] > 0 else { return }
+        hitCount[k] &+= 1
         pos[k] = 0
         env[k] = 0
         attacking[k] = true

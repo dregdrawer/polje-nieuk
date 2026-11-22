@@ -55,6 +55,7 @@ import PoljeNieukCore
         case "slider", "knob": return ControlsDisplay(model: model, node: node, spec: spec)
         case "peq": return EQDisplay(model: model, node: node, spec: spec)
         case "clock": return ClockDisplay(model: model, node: node, spec: spec)
+        case "rec": return RecDisplay(model: model, node: node, spec: spec)
         default: return TextReadout(model: model, node: node, spec: spec)
         }
     }
@@ -78,6 +79,48 @@ final class TextReadout: NativeDisplay {
             guard let self else { return }
             ReadoutView(kind: self.spec.kind, node: m.node(nid), model: m, patchNode: self.node, spec: self.spec).drawLive(g, size)
         }]
+    }
+}
+
+// MARK: - rec: REC / idle and the time, and a button that shows where the files are
+
+final class RecDisplay: NativeDisplay {
+    private func line(_ r: CGRect) -> CGRect { CGRect(x: r.minX, y: r.minY, width: r.width, height: 20) }
+    private func button(_ r: CGRect) -> CGRect { CGRect(x: r.minX, y: r.minY + 24, width: r.width, height: 18) }
+    override func parts(_ r: CGRect) -> [LivePart] {
+        let m = model, nid = id
+        return [part("readout", line(r), signature: { [weak self] in
+            guard let self else { return 0 }
+            return LiveSig.readouts(m.node(nid), 24, steps: 200) &+ LiveSig.patch(self.node) &* 3 &+ (m.isRunning ? 1 : 0)
+        }) { [weak self] g, size in
+            guard let self else { return }
+            ReadoutView(kind: self.spec.kind, node: m.node(nid), model: m, patchNode: self.node, spec: self.spec).drawLive(g, size)
+        }]
+    }
+    override func paintStatic(_ g: LiveGC, _ r: CGRect) {
+        let b = button(r)
+        g.fill(Path(roundedRect: b, cornerRadius: 2), with: .color(Theme.row))
+        #if os(iOS)
+        let title = "show in Files"
+        #else
+        let title = "open file location"
+        #endif
+        g.draw(LiveText(title, size: 9, color: Theme.text), at: CGPoint(x: b.midX, y: b.midY))
+    }
+    override func press(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) -> Bool { button(r).contains(p) }
+    override func release(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) {
+        guard !info.moved, button(r).contains(p) else { return }
+        #if os(macOS)
+        // Finder, with the newest recording selected (or just the folder)
+        if let f = Recordings.latest { NSWorkspace.shared.activateFileViewerSelecting([f]) }
+        else { NSWorkspace.shared.open(Recordings.directory) }
+        #else
+        // the Files app, at this app's recordings folder
+        let path = Recordings.directory.path
+        if let u = URL(string: "shareddocuments://" + (path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path)) {
+            UIApplication.shared.open(u)
+        }
+        #endif
     }
 }
 
@@ -928,11 +971,30 @@ class PadsDisplay: NativeDisplay {
     func laneName(_ k: Int) -> String { "" }
     func padName(_ k: Int) -> String { laneName(k) }
     func padLevel(_ k: Int) -> Float { fin(dsp?.readouts[1 + k] ?? 0) }
-    func padPlaying(_ k: Int) -> Bool { padLevel(k) > 0.05 }
+    /// how many times pad k has been hit (each hit flashes it)
+    func hitCount(_ k: Int) -> Int { 0 }
+    private var flash: [(count: Int, at: CFTimeInterval, interval: CFTimeInterval)] = []
+    /// A pad is lit for a moment after each hit — shorter when hits come fast, so every one shows as a flash,
+    /// even a closed hat that's over before the screen redraws.
+    func padPlaying(_ k: Int) -> Bool {
+        let now = CACurrentMediaTime()
+        while flash.count <= k { flash.append((0, -1, 1)) }
+        let c = hitCount(k)
+        if c != flash[k].count {
+            let gap = now - flash[k].at
+            flash[k] = (c, now, flash[k].at < 0 ? 1 : gap)
+        }
+        return now - flash[k].at < min(0.08, flash[k].interval * 0.6)
+    }
     func audition(_ k: Int) {}
     var nameLines: Int { 1 }
     private var paint: Float?
     private var pressedPad: Int?
+    /// dragging a pad up / down sets its level (samplerack and drumsynth both keep it in v1, v2 …)
+    static let levelMax: Float = 1.5
+    var levelDefault: Float { 0.8 }
+    func levelKey(_ k: Int) -> String { "v\(k + 1)" }
+    private var levelStart: (y: CGFloat, value: Float)?
 
     var len: Int { Int((node.params["len"] ?? 16).rounded()) }
     var selected: Int { Int((node.params["sel"] ?? 0).rounded()) }
@@ -999,6 +1061,12 @@ class PadsDisplay: NativeDisplay {
             let p = padRect(k, r)
             let muted = flag("m\(k + 1)"), solo = flag("s\(k + 1)")
             g.fill(Path(p), with: .color(Theme.row))
+            // its level: a faint fill from the bottom, and the number (drag the pad up / down to change it)
+            let level = CGFloat(min(max(node.params[levelKey(k)] ?? levelDefault, 0), Self.levelMax))
+            let fh = p.height * level / CGFloat(Self.levelMax)
+            g.fill(Path(CGRect(x: p.minX, y: p.maxY - fh, width: p.width, height: fh)), with: .color(Theme.text.opacity(0.08)))
+            g.draw(LiveText("\(Int((level * 100).rounded()))%", size: 8, color: Theme.dim),
+                   at: CGPoint(x: p.maxX - 4, y: p.maxY - 10), anchor: .trailing)
             let loading = model.loadingPads[id]?.contains(k) == true
             let title = dropPad == k ? "drop to load" : (loading ? "loading…" : padName(k))
             // name: up to two lines
@@ -1049,13 +1117,23 @@ class PadsDisplay: NativeDisplay {
             if k >= 0 && k < lanes { select(k) }
             return true
         }
-        for k in 0..<(padRows * padCols) where padRect(k, r).contains(p) { pressedPad = k; return true }
+        for k in 0..<(padRows * padCols) where padRect(k, r).contains(p) {
+            pressedPad = k
+            levelStart = (p.y, node.params[levelKey(k)] ?? levelDefault)
+            return true
+        }
         return false
     }
-    override func drag(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) { if grab == .roll { paintRoll(p, r) } }
+    override func drag(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) {
+        if grab == .roll { paintRoll(p, r); return }
+        // a pad dragged up / down: its level (100 points = the full range)
+        guard let k = pressedPad, let s = levelStart, info.moved else { return }
+        let v = min(max(s.value + Float((s.y - p.y) / 100) * Self.levelMax, 0), Self.levelMax)
+        setParam(levelKey(k), (v * 100).rounded() / 100)
+    }
     override func release(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) {
         if grab == .roll { paint = nil; grab = .none; commit(); return }
-        defer { pressedPad = nil }
+        defer { pressedPad = nil; levelStart = nil }
         guard let k = pressedPad, !info.moved, padRect(k, r).contains(p) else { return }
         for (s, b) in padButtons(k, r) where b.contains(p) {
             switch s {
@@ -1081,6 +1159,7 @@ final class RackDisplay: PadsDisplay {
     override var hits: UnsafeMutablePointer<Float>? { rack?.hits }
     override func laneName(_ k: Int) -> String { rack?.padNames[k] ?? "" }
     override func audition(_ k: Int) { rack?.audition = k }
+    override func hitCount(_ k: Int) -> Int { rack.map { k < $0.hitCount.count ? $0.hitCount[k] : 0 } ?? 0 }
     override func drawRoll(_ g: LiveGC, _ size: CGSize) {
         guard let n = rack else { return }
         RackView(node: n, model: model, patchNode: node).drawRoll(g, size)
@@ -1113,6 +1192,7 @@ final class DrumSynthDisplay: PadsDisplay {
         guard let n = synth else { return "" }
         return DrumSynthView(node: n, model: model, patchNode: node).name(v)
     }
+    override func hitCount(_ k: Int) -> Int { synth.map { k < $0.hitCount.count ? $0.hitCount[k] : 0 } ?? 0 }
     override func audition(_ k: Int) { synth?.audition = k }
     override func drawRoll(_ g: LiveGC, _ size: CGSize) {
         guard let n = synth else { return }

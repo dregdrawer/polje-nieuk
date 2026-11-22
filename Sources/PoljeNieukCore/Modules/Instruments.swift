@@ -381,7 +381,10 @@ public final class DrumSynthNode: DSPNode {
     private var decayMul = [Float](repeating: 1, count: DrumSynthLayout.voices)
 
     /// A hit on voice `v`: gate the Plaits voice and restart the amplitude envelope.
+    /// How many times each voice has been hit (the display flashes its pad on every hit).
+    public private(set) var hitCount = [Int](repeating: 0, count: DrumSynthLayout.voices)
     @inline(__always) private func start(_ v: Int, _ gate: Int) {
+        hitCount[v] &+= 1
         gateLeft[v] = gate
         env[v] = attackInc[v] >= 1 ? 1 : 0
         attacking[v] = attackInc[v] < 1

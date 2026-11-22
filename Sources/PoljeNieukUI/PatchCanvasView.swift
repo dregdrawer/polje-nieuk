@@ -612,11 +612,16 @@ struct BoxMenuView: View {
         let node = model.patch.nodes.first { $0.id == id }
         let cur = node?.highlight
         VStack(alignment: .leading, spacing: 0) {
-            MenuRow(title: "duplicate") { model.duplicate(id); model.boxMenu = nil }
+            // right-clicking a selected box acts on the whole selection (replace: just this one)
+            let targets = model.menuTargets(id)
+            MenuRow(title: targets.count > 1 ? "duplicate \(targets.count)" : "duplicate") {
+                if targets.count > 1 { model.duplicateSelection() } else { model.duplicate(id) }
+                model.boxMenu = nil
+            }
             MenuRow(title: "replace…") { model.boxMenu = nil; model.beginReplace(id) }
-            MenuRow(title: "lock to screen", checked: node?.pin != nil) { model.toggleLock(id); model.boxMenu = nil }
-            MenuRow(title: "hide cables in", checked: node?.hideIn == true) { model.toggleHideIn(id); model.boxMenu = nil }
-            MenuRow(title: "hide cables out", checked: node?.hideOut == true) { model.toggleHideOut(id); model.boxMenu = nil }
+            MenuRow(title: "lock to screen", checked: node?.pin != nil) { model.setLocked(targets, node?.pin == nil); model.boxMenu = nil }
+            MenuRow(title: "hide cables in", checked: node?.hideIn == true) { model.setHidden(targets, cablesIn: node?.hideIn != true); model.boxMenu = nil }
+            MenuRow(title: "hide cables out", checked: node?.hideOut == true) { model.setHidden(targets, cablesOut: node?.hideOut != true); model.boxMenu = nil }
             Rectangle().fill(Theme.border.opacity(0.5)).frame(height: 1).padding(.vertical, 4)
             Text("highlight").font(Theme.monoSmall).foregroundStyle(Theme.faint)
                 .padding(.horizontal, 10).padding(.bottom, 4)
@@ -635,7 +640,7 @@ struct BoxMenuView: View {
 
     /// One colour circle (nil = no highlight: an empty circle with a slash). The current one has a ring.
     private func swatch(_ hex: String?, on: Bool) -> some View {
-        Button { model.setHighlight(id, hex); model.boxMenu = nil } label: {
+        Button { model.setHighlight(model.menuTargets(id), hex); model.boxMenu = nil } label: {
             ZStack {
                 if let hex, let c = Color(hex: hex) {
                     Circle().fill(c)

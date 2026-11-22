@@ -289,6 +289,7 @@ bool hasReadout(const std::string& k) {
     return s.count(k) > 0;
 }
 float readoutHeight(const std::string& k) {
+    if (k == "rec") return 44;                // REC / time, and "open file location"
     if (k == "fm") return 104;                // voice name, operators, the selected one's envelope
     if (k == "looper" || k == "stretch") return 104;
     if (k == "sampler") return 122;
@@ -424,7 +425,13 @@ float height(const PatchNode& n, const ModuleSpec& s, const HardwareCounts& hw) 
         float display = readoutHeight(n);
         return header + (r > 0 ? float(r) * portRow + 6 : 0) + (display > 0 ? display + 6 : 0);
     }
-    int rows = int(rowParams(s, n).size()) + (hasTriggerRow(s) ? 1 : 0);
+    // samplerack / drumsynth: room for the most any pad's selection shows, so picking another pad doesn't resize the box
+    int rows = int(rowParams(s, n).size());
+    if (s.kind == "rack" || s.kind == "drumsynth") {
+        auto m = n;
+        for (int k = 0; k < (s.kind == "rack" ? RackLayout::pads : DrumSynthLayout::voices); ++k) { m.params["sel"] = float(k); rows = std::max(rows, int(rowParams(s, m).size())); }
+    }
+    rows += hasTriggerRow(s) ? 1 : 0;
     return header + bodyHeight(n, s, hw) + (rows > 0 ? float(rows) * row + 4 : 0) + 4;
 }
 Pt inlet(const PatchNode& n, const ModuleSpec& s, const HardwareCounts&, int i) {
