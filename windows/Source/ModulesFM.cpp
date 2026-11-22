@@ -256,7 +256,7 @@ void FMNode::process(int frames, const float* const* in, uint64_t con, ProcessCo
                 if (carrier[op]) sum += y;
             }
             fb2[v] = fb1[v]; fb1[v] = out_[w + alg.fbSource];
-            o[i] += sum * gain;
+            o[i] += sum * gain * (hasVel ? vel[v] : 1.0f);   // a patched velocity also sets the loudness (0 = silent)
             if (!gate[v] && !heard) {
                 active[v] = false;
                 for (int op = 0; op < 6; ++op) { eg[w + op] = -96; stage[w + op] = 4; out_[w + op] = 0; }

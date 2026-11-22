@@ -357,8 +357,10 @@ struct GridEditor: View {
                 for s in 0..<len where n.starts(s, r + base) {
                     let l = min(n.noteLength(s, r + base), len - s)
                     let rect = CGRect(x: CGFloat(s) * cw + 1, y: rowY(r, rh, size.height) + 1, width: CGFloat(l) * cw - 2, height: rh - 2)
+                    // the shade shows the velocity: quiet notes pale, loud ones solid
                     let playing = ps >= s && ps < s + l
-                    ctx.fill(Path(roundedRect: rect, cornerRadius: 1.5), with: .color(playing ? Theme.text : Theme.text.opacity(0.75)))
+                    let v = Double(n.vel[(r + base) * RollNode.steps + s])
+                    ctx.fill(Path(roundedRect: rect, cornerRadius: 1.5), with: .color(Theme.text.opacity(playing ? 1 : 0.25 + 0.7 * v)))
                 }
             }
         } else {

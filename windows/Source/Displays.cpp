@@ -522,8 +522,10 @@ public:
                     for (int r = 0; r < R; ++r)
                         for (int s = 0; s < L; ++s) if (n->starts(s, r + B)) {
                             int l = std::min(n->noteLength(s, r + B), L - s);
-                            bool playing = ps >= s && ps < s + l;
-                            g.fillRounded(Rect(float(s) * cw + 1, rowY(r, rh, size.y) + 1, float(l) * cw - 2, rh - 2), 1.5f, playing ? Theme::text() : Theme::text().withMultipliedAlpha(0.75f));
+                            bool playing = ps >= s && ps < s + l;           // the shade shows the velocity
+                            float v = n->vel[size_t((r + B) * S + s)];
+                            g.fillRounded(Rect(float(s) * cw + 1, rowY(r, rh, size.y) + 1, float(l) * cw - 2, rh - 2), 1.5f,
+                                          Theme::text().withMultipliedAlpha(playing ? 1.0f : 0.25f + 0.7f * v));
                         }
                 } else {
                     for (int s = 0; s < L; ++s)
@@ -540,6 +542,7 @@ public:
                 auto* n = roll(); if (!n) return int64_t(0);
                 int64_t h = LiveSig::floats(n->grid.data(), S * RollNode::rows);
                 LiveSig::mix(h, LiveSig::floats(n->vel.data(), S * RollNode::rows));
+                LiveSig::mix(h, dragStep * 1000 + int(dragVel * 127));
                 LiveSig::mix(h, LiveSig::patch(node));
                 return h;
             }, [this](GC& g, Pt size) {
@@ -551,6 +554,12 @@ public:
                     float hh = *v * (size.y - 2), x = float(s) * cw + cw / 2;
                     g.fill(Rect(x - 0.75f, size.y - hh, 1.5f, hh), Theme::text().withMultipliedAlpha(0.75f));
                     g.g.setColour(Theme::text()); g.g.fillEllipse(x - 2.5f, size.y - hh - 2.5f, 5, 5);
+                }
+                if (dragStep >= 0 && dragStep < L) {           // the value being dragged, 0 ... 127
+                    float x = float(dragStep) * cw + cw / 2;
+                    bool right = x < size.x - 30;
+                    juce::String t(int(std::round(dragVel * 127)));
+                    if (right) g.textLeft(t, { x + 6, 8 }, 9, Theme::text(), true); else g.textRight(t, { x - 6, 8 }, 9, Theme::text(), true);
                 }
             }));
         }
@@ -596,8 +605,9 @@ public:
         float cw = l.getWidth() / float(std::max(L, 1));
         int s = int(std::floor((pt.x - l.getX()) / cw));
         if (s < 0 || s >= L) return;
-        float v = std::clamp((l.getBottom() - pt.y) / (l.getHeight() - 2), 0.02f, 1.0f);
+        float v = std::round(std::clamp((l.getBottom() - pt.y) / (l.getHeight() - 2), 0.0f, 1.0f) * 127) / 127;
         for (int row = 0; row < RollNode::rows; ++row) if (n->starts(s, row)) n->vel[size_t(row * S + s)] = v;
+        dragStep = s; dragVel = v;
     }
     void commit() {
         if (auto* n = roll()) {
@@ -636,6 +646,7 @@ public:
         }
     }
     void release(Pt, Rect, const PointerInfo& info) override {
+        dragStep = -1;
         if (mode == Mode::scroll) { mode = Mode::none; return; }
         if (mode == Mode::note && !info.moved && !created) if (auto* n = roll()) deleteNote(*n, noteStart, noteRow);
         paint.reset();
@@ -660,6 +671,7 @@ private:
     std::optional<float> paint;
     int noteStart = 0, noteRow = 0; bool created = false;
     float rest = 0;
+    int dragStep = -1; float dragVel = 0;              // the velocity being dragged (shown 0 ... 127)
 };
 
 // ---------------------------------------------------------------- fm: the voice (< name >, bank, load a sysex), six operators, the selected one's envelope
@@ -680,13 +692,13 @@ public:
     float val(int i) { return model.value(node, i, spec); }
     int voiceIndex() const { auto it = node.data.find("voice"); return it == node.data.end() || it->second.empty() ? 0 : int(it->second[0]); }
 
-    // the envelope: each rate gets a fixed share of the width (so moving one handle doesn't shift the others).
-    // Points: start (level 4: where the attack starts and the release ends), the ends of stages 1, 2, 3, key off
-    // (sustain = level 3), and the end of the release. Every one is a handle.
+    // the envelope: the DX7's four stages, one circle each — sideways for the stage's time (rate), up / down for
+    // the level it reaches. 1 attack, 2 and 3 the decays (3 ends at the sustain), 4 the release (its level is also
+    // where the next attack starts: the small dot). The sustain, while the key is held, is the dashed stretch.
     static constexpr float segMax = 1.2f, sustainLen = 0.6f;
     float unit(Rect e) const { return (e.getWidth() - 12) / (segMax * 4 + sustainLen); }
     float envY(float l, Rect e) const { return e.getBottom() - 5 - std::clamp(l, 0.0f, 99.0f) / 99 * (e.getHeight() - 10); }
-    std::vector<Pt> envPoints(Rect r) {
+    std::vector<Pt> envPoints(Rect r) {                 // start, 1, 2, 3, key off, 4
         auto e = envRect(r); int b = FMLayout::base(sel()); float u = unit(e);
         auto len = [&](int k) { return segMax - val(b + FMLayout::R + k) / 99; };
         float x = e.getX() + 6;
@@ -699,15 +711,13 @@ public:
     std::optional<int> grabbed;
     void dragHandle(Pt pt, Rect r) {
         if (!grabbed) return;
-        int k = *grabbed;
+        int k = *grabbed, stage = k == 5 ? 4 : k;
         auto e = envRect(r); auto pts = envPoints(r); float u = unit(e);
         float level = std::clamp(std::round((e.getBottom() - 5 - pt.y) / (e.getHeight() - 10) * 99), 0.0f, 99.0f);
-        auto rate = [&] { return std::clamp(std::round((segMax - std::clamp((pt.x - pts[size_t(k - 1)].x) / u, 0.2f, segMax)) * 99), 0.0f, 99.0f); };
+        float rate = std::clamp(std::round((segMax - std::clamp((pt.x - pts[size_t(k - 1)].x) / u, 0.2f, segMax)) * 99), 0.0f, 99.0f);
         auto n = std::to_string(sel() + 1);
-        if (k == 0) setParam("o" + n + "l4", level);                                     // where the attack starts (and the release ends)
-        else if (k <= 3) { setParam("o" + n + "r" + std::to_string(k), rate()); setParam("o" + n + "l" + std::to_string(k), level); }
-        else if (k == 4) setParam("o" + n + "l3", level);                                // key off: the sustain level
-        else setParam("o" + n + "r4", rate());                                           // the release: its time only
+        setParam("o" + n + "r" + std::to_string(stage), rate);
+        setParam("o" + n + "l" + std::to_string(stage), level);
     }
 
     void paintStatic(GC& g, Rect r) override {
@@ -740,12 +750,22 @@ public:
         auto pts = envPoints(r);
         juce::Path path;
         path.startNewSubPath(pts[0]);
-        for (size_t k = 1; k < pts.size(); ++k) path.lineTo(pts[k]);
+        for (int k = 1; k <= 3; ++k) path.lineTo(pts[size_t(k)]);
         g.stroke(path, Theme::text().withMultipliedAlpha(0.8f), 1);
-        for (auto q : pts) {
-            Rect c(q.x - 3.5f, q.y - 3.5f, 7, 7);
+        juce::Path hold; hold.startNewSubPath(pts[3]); hold.lineTo(pts[4]);           // sustain, while the key is held
+        g.stroke(hold, Theme::text().withMultipliedAlpha(0.55f), 1, false, { 3, 2 });
+        juce::Path rel; rel.startNewSubPath(pts[4]); rel.lineTo(pts[5]);
+        g.stroke(rel, Theme::text().withMultipliedAlpha(0.8f), 1);
+        g.fill(Rect(pts[4].x - 0.25f, e.getY() + 3, 0.5f, e.getHeight() - 6), Theme::faint());
+        g.textLeft("key off", { pts[4].x + 3, e.getBottom() - 6 }, 7, Theme::faint());
+        g.g.setColour(Theme::dim()); g.g.fillEllipse(pts[0].x - 1.5f, pts[0].y - 1.5f, 3, 3);
+        int j = 1;
+        for (int k : { 1, 2, 3, 5 }) {
+            auto q = pts[size_t(k)];
+            Rect c(q.x - 4, q.y - 4, 8, 8);
             g.g.setColour(Theme::box()); g.g.fillEllipse(c);
             g.g.setColour(Theme::text()); g.g.drawEllipse(c.reduced(0.5f), 1);
+            g.text(juce::String(j++), { q.x, q.y < e.getCentreY() ? q.y + 10 : q.y - 10 }, 7, Theme::dim());
         }
         g.textRight("op " + juce::String(sel() + 1) + " envelope", { e.getRight() - 4, e.getY() + 7 }, 8, Theme::faint());
     }
@@ -755,7 +775,20 @@ public:
         if (!d) return {};
         auto first = tab(0, r), last = tab(5, r);
         Rect area(first.getX(), first.getBottom() - 4, last.getRight() - first.getX(), 3);
-        return { part("levels", area, [d] {
+        auto e = envRect(r);
+        auto dragPart = part("envdrag", e, [this] {
+            if (!grabbed) return int64_t(-1);
+            int b = FMLayout::base(sel()), stage = *grabbed == 5 ? 4 : *grabbed;
+            return int64_t(*grabbed * 100000 + int(val(b + FMLayout::R + stage - 1)) * 100 + int(val(b + FMLayout::L + stage - 1)));
+        }, [this, r, e](GC& g, Pt) {
+            if (!grabbed) return;
+            int b = FMLayout::base(sel()), stage = *grabbed == 5 ? 4 : *grabbed;
+            auto q = envPoints(r)[size_t(*grabbed)];
+            g.g.setColour(Theme::text()); g.g.fillEllipse(q.x - e.getX() - 4, q.y - e.getY() - 4, 8, 8);
+            g.textLeft("rate " + juce::String(int(val(b + FMLayout::R + stage - 1))) + juce::String::fromUTF8(" \xc2\xb7 level ")
+                       + juce::String(int(val(b + FMLayout::L + stage - 1))), { 4, 7 }, 8, Theme::text(), true);
+        });
+        return { dragPart, part("levels", area, [d] {
                 int64_t h = 0;
                 for (int op = 0; op < 6; ++op) LiveSig::mix(h, LiveSig::q(std::clamp(d->readouts[size_t(op)], 0.0f, 1.0f), 12));
                 return h;
@@ -800,8 +833,8 @@ public:
     bool press(Pt pt, Rect r, const PointerInfo&) override {
         auto pts = envPoints(r);
         grabbed.reset();
-        float best = 9;
-        for (int k = 0; k < int(pts.size()); ++k) if (pts[size_t(k)].getDistanceFrom(pt) < best) { best = pts[size_t(k)].getDistanceFrom(pt); grabbed = k; }
+        float best = 10;
+        for (int k : { 1, 2, 3, 5 }) if (pts[size_t(k)].getDistanceFrom(pt) < best) { best = pts[size_t(k)].getDistanceFrom(pt); grabbed = k; }
         return grabbed.has_value() || inner(r).contains(pt);
     }
     void drag(Pt pt, Rect r, const PointerInfo&) override { dragHandle(pt, r); }

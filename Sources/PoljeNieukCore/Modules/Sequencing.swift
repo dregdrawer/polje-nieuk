@@ -481,9 +481,9 @@ public final class RollNode: DSPNode {
     /// Notes: row * steps + step (row 0 = lowest). 0 = nothing, 1 = a note starts here, 2 = the note from the step
     /// before carries on (a longer note, drawn by dragging). Any number of notes per step.
     public let grid: UnsafeMutablePointer<Float>
-    /// Each note's velocity (0…1) at the step it starts; 0.8 unless set in the velocity lane.
+    /// Each note's velocity (0…1, shown as 0…127) at the step it starts; 100 unless set in the velocity lane.
     public let vel: UnsafeMutablePointer<Float>
-    public static let defaultVelocity: Float = 0.8
+    public static let defaultVelocity: Float = 100.0 / 127
     private var step = -1
     private var clock = StepClock()
     public static let voices = kMaxVoices
@@ -492,7 +492,7 @@ public final class RollNode: DSPNode {
     private var held = [Float](repeating: 0, count: RollNode.voices)
     private var on = [Bool](repeating: false, count: RollNode.voices)
     private var gateLeft = [Int](repeating: 0, count: RollNode.voices)
-    private var noteVel = [Float](repeating: 0.8, count: RollNode.voices)
+    private var noteVel = [Float](repeating: RollNode.defaultVelocity, count: RollNode.voices)
     private var gap = [Int](repeating: 0, count: RollNode.voices)
     private var taken = [Bool](repeating: false, count: RollNode.voices)
 

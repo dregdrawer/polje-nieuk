@@ -478,8 +478,7 @@ void Canvas::paint(juce::Graphics& g) {
         float sc = std::min(mr.getWidth() / std::max(e.getWidth(), 1.0f), mr.getHeight() / std::max(e.getHeight(), 1.0f));
         Pt o { mr.getX() + (mr.getWidth() - e.getWidth() * sc) / 2, mr.getY() + (mr.getHeight() - e.getHeight() * sc) / 2 };
         auto map = [&](Rect r) { return Rect(o.x + (r.getX() - e.getX()) * sc, o.y + (r.getY() - e.getY()) * sc, r.getWidth() * sc, r.getHeight() * sc); };
-        g.setColour(Theme::box().withAlpha(0.92f)); g.fillRoundedRectangle(mr, 3);
-        g.setColour(Theme::border()); g.drawRoundedRectangle(mr, 3, 1);
+        g.setColour(Theme::border()); g.drawRoundedRectangle(mr, 3, 1);       // see-through: just the frame
         for (auto& n : model.patch.nodes) {
             auto* sp = Registry::spec(n.kind);
             if (!sp) continue;

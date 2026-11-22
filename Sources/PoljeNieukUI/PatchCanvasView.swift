@@ -491,7 +491,7 @@ struct PatchMap: View {
             ctx.stroke(Path(v), with: .color(Theme.text), lineWidth: 1)
         }
         .frame(width: Self.size.width, height: Self.size.height)
-        .background(RoundedRectangle(cornerRadius: 3).fill(Theme.box.opacity(0.92)))
+        // see-through: only the frame, the boxes and the view's outline
         .overlay(RoundedRectangle(cornerRadius: 3).stroke(Theme.border, lineWidth: 1))
         .contentShape(Rectangle())
         .gesture(DragGesture(minimumDistance: 0).onChanged { g in

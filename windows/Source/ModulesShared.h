@@ -169,7 +169,7 @@ public:
     void process(int frames, const float* const* in, uint64_t con, ProcessContext& ctx) override;
     std::map<std::string, std::vector<float>> defaultData() const override { return { { "grid", std::vector<float>(steps * rows, 0.0f) } }; }
     // grid: 0 nothing, 1 a note starts, 2 the note from the step before carries on; vel: each note's velocity
-    static constexpr float defaultVelocity = 0.8f;
+    static constexpr float defaultVelocity = 100.0f / 127;      // velocities are shown 0 … 127
     RollNode(const ModuleSpec& s, double sr) : DSPNode(s, sr) { vel.fill(defaultVelocity); }
     void setData(const std::string& key, const std::vector<float>& values) override {
         if (key == "vel") {
@@ -196,7 +196,7 @@ public:
 private:
     int step = -1;
     StepClock clock;
-    float held[voices] = {}, noteVel[voices] = { 0.8f, 0.8f, 0.8f, 0.8f };
+    float held[voices] = {}, noteVel[voices] = { defaultVelocity, defaultVelocity, defaultVelocity, defaultVelocity };
     bool on[voices] = {}, taken[voices] = {};
     int gateLeft[voices] = {}, gap[voices] = {};
 };

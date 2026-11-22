@@ -1227,6 +1227,26 @@ do {
     }
     check(loud.isEmpty && silent.isEmpty, "fm: every built-in voice sounds and stays in range (silent \(silent), too loud \(loud))")
     check(stuck.isEmpty, "fm: every voice fades once the gate closes (still sounding: \(stuck))")
+    // velocity on its inlet sets the loudness: 0 is silent, 127 full
+    func loudness(velocity: Float) -> Float {
+        var p = Patch()
+        let fm = PatchNode(kind: "fm", x: 0, y: 0)
+        let g = PatchNode(kind: "lfo", x: 0, y: 0, params: ["shape": 3, "rate": 0.25, "depth": 0.25, "offset": 0.25])
+        let v = PatchNode(kind: "atten", x: 0, y: 0, params: ["amt": 0, "off": velocity])
+        p.nodes = [g, v, fm]
+        p.cables = [PatchCable(fromNode: g.id, fromPort: 0, toNode: fm.id, toPort: 1), PatchCable(fromNode: v.id, fromPort: 0, toNode: fm.id, toPort: 2)]
+        let h = GraphHost(sampleRate: sr); h.load(p); h.prepareForStart()
+        let ins = UnsafeMutablePointer<UnsafeMutablePointer<Float>>.allocate(capacity: 1); ins[0] = .allocate(capacity: kMaxBlock); ins[0].update(repeating: 0, count: kMaxBlock)
+        let outs = UnsafeMutablePointer<UnsafeMutablePointer<Float>>.allocate(capacity: 1); outs[0] = .allocate(capacity: kMaxBlock)
+        var y: [Float] = []
+        for _ in 0..<Int(0.4 * sr / Double(kMaxBlock)) {
+            h.process(frames: kMaxBlock, inputs: ins, inputCount: 0, outputs: outs, outputCount: 1)
+            y += UnsafeBufferPointer(start: h.node(fm.id)!.outputs[0], count: kMaxBlock)
+        }
+        return rms(y[...])
+    }
+    let quiet = loudness(velocity: 0), full = loudness(velocity: 1)
+    check(quiet < 1e-5 && full > 0.01, "fm: velocity 0 is silent, 127 is full (\(quiet) / \(full))")
     // pitch: one sine operator at ratio 1 plays middle C
     var sine = FMPresets.all[0].vced
     sine[134] = 31                                               // algorithm 32: all carriers

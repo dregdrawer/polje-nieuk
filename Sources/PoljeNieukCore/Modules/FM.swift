@@ -427,7 +427,9 @@ public final class FMNode: DSPNode {
                     if carrier[op] { sum += y }
                 }
                 fb2[v] = fb1[v]; fb1[v] = out[w + alg.fbSource]
-                o[i] += sum * gain
+                // a patched velocity also sets the note's loudness (0 = silent), on top of each operator's
+                // own velocity sensitivity (which shapes the tone, as on the DX7)
+                o[i] += sum * gain * (hasVel ? vel[v] : 1)
                 if !gate[v] && !heard {
                     active[v] = false
                     for op in 0..<6 { eg[w + op] = -96; stage[w + op] = 4; out[w + op] = 0 }
