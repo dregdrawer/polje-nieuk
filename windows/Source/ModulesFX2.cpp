@@ -622,7 +622,13 @@ class ParametricEQNode : public DSPNode, public SpectrumSource {
 public:
     static constexpr int ringSize = 8192;
     ParametricEQNode(const ModuleSpec& s, double sr) : DSPNode(s, sr) {
-        ring.assign(ringSize, 0); last.assign(size_t(2 + 3 * 8), NAN);
+        ring.assign(ringSize, 0); inRing.assign(ringSize, 0); last.assign(size_t(2 + 3 * 8), NAN);
+    }
+    bool copyRecentInput(float* o, int count) const override {
+        int n = std::min(count, ringSize), r = ringW - n;
+        if (r < 0) r += ringSize;
+        for (int i = 0; i < n; ++i) { o[i] = inRing[size_t(r)]; if (++r >= ringSize) r = 0; }
+        return true;
     }
     void copyRecent(float* o, int count) const override {
         int n = std::min(count, ringSize), r = ringW - n;
@@ -643,6 +649,7 @@ public:
         float* oL = out(0); float* oR = out(1);
         for (int i = 0; i < frames; ++i) {
             float l = inL[i], r = inR[i];
+            inRing[size_t(ringW)] = (l + r) * 0.5f;           // pre-EQ mono feed for the analyzer
             for (int b = 0; b < n; ++b) {
                 auto& q = bands[b];
                 float yl = q.b0 * l + q.zL1; q.zL1 = q.b1 * l - q.a1 * yl + q.zL2; q.zL2 = q.b2 * l - q.a2 * yl;
@@ -660,6 +667,7 @@ private:
     struct Biquad { float b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0, zL1 = 0, zL2 = 0, zR1 = 0, zR2 = 0; };
     Biquad bands[8];
     std::vector<float> ring, last;
+    std::vector<float> inRing;                          // the input, before the bands
     int ringW = 0;
 };
 

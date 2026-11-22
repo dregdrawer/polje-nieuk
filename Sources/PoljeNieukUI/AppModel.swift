@@ -1193,7 +1193,7 @@ public final class AppModel: ObservableObject {
         case let r as RollNode: (key, lanes, empty, ptr) = ("grid", RollNode.rows, 0, r.grid)
         default: return
         }
-        let steps = 32
+        let steps = StepPattern.steps
         if rescaleBase[id] == nil {
             let len = Int((patch.nodes[i].params["len"] ?? spec.params[li].def).rounded())
             rescaleBase[id] = (old, Array(UnsafeBufferPointer(start: ptr, count: lanes * steps)), len)

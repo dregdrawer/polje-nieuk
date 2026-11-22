@@ -316,7 +316,7 @@ final class ModalNode: DSPNode {
 
 public enum DrumSynthLayout {
     public static let voices = 4
-    public static let steps = 32
+    public static let steps = StepPattern.steps
     /// Per voice: 0 engine, 1 tune, 2 harmonics, 3 timbre, 4 morph, 5 model, 6 attack, 7 decay (envelope),
     /// 8 LPG decay, 9 LPG colour, 10 level, 11 pan, 12 mute, 13 solo
     public static let perVoice = 14
@@ -335,7 +335,7 @@ public enum DrumSynthLayout {
     }
 
     static func params() -> [ParamSpec] {
-        var p: [ParamSpec] = [.integer("len", "length", 1, steps, 16),
+        var p: [ParamSpec] = [StepPattern.length("len", def: 16),
                               .choice("div", "division", Divisions.names, def: Divisions.index("1/16")),
                               ParamSpec("swing", "swing", 0, 0.5, 0, unit: "%"),
                               .choice("sel", "voice", names, def: 0),
@@ -419,7 +419,8 @@ public final class DrumSynthNode: DSPNode {
     public override func setData(_ key: String, _ values: [Float]) {
         guard key == "hits" else { return }
         let n = DrumSynthLayout.voices * DrumSynthLayout.steps
-        for k in 0..<n { hits[k] = k < values.count && values[k].isFinite ? values[k] : 0 }
+        let v = StepPattern.widen(values, lanes: DrumSynthLayout.voices)    // a 32-step pattern from before
+        for k in 0..<n { hits[k] = k < v.count && v[k].isFinite ? v[k] : 0 }
     }
 
     public override func process(frames: Int, inputs: UnsafePointer<UnsafePointer<Float>>, connected: UInt64, ctx: ProcessContext) {

@@ -171,6 +171,18 @@ final class SpectrumAnalyzer {
 
     func update(from src: SpectrumSource) {
         input.withUnsafeMutableBufferPointer { src.copyRecent(into: $0.baseAddress!, count: Self.n) }
+        analyze()
+    }
+    /// The input side of an eq.
+    func updateIfDue(input src: InputSpectrumSource) {
+        let now = CACurrentMediaTime()
+        guard now - lastIn >= 1.0 / 30 else { return }
+        lastIn = now
+        input.withUnsafeMutableBufferPointer { src.copyRecentInput(into: $0.baseAddress!, count: Self.n) }
+        analyze()
+    }
+    private var lastIn: CFTimeInterval = 0
+    private func analyze() {
         vDSP_vmul(input, 1, window, 1, &input, 1, vDSP_Length(Self.n))
         let half = Self.n / 2
         re.withUnsafeMutableBufferPointer { rp in
@@ -204,6 +216,7 @@ struct EQCurveView: View {
     let patchNode: PatchNode
     let spec: ModuleSpec
     var analyzer = SpectrumAnalyzer()
+    var analyzerIn = SpectrumAnalyzer()       // what goes in (the eq's own input)
     @State var dragBand: Int?
 
     static let fLo = 20.0, fHi = 20000.0, range: Double = 18
@@ -257,6 +270,27 @@ struct EQCurveView: View {
         }
     }
 
+    /// A spectrum as a path across the width (-90…0 dBFS over the height); closed = down to the bottom, for filling.
+    func spectrumPath(_ a: SpectrumAnalyzer, _ w: CGFloat, _ h: CGFloat, closed: Bool) -> Path {
+        let half = SpectrumAnalyzer.n / 2
+        let binHz = sampleRate / Double(SpectrumAnalyzer.n)
+        var spec = Path()
+        var col = 0
+        while col <= Int(w) {
+            // max of the bins under this pixel column
+            let f0 = f(CGFloat(col), w), f1 = f(CGFloat(col + 1), w)
+            let k0 = max(1, Int(f0 / binHz)), k1 = min(half - 1, max(k0, Int(f1 / binHz)))
+            var m: Float = -120
+            for k in k0...k1 { m = max(m, a.db[k]) }
+            let pt = CGPoint(x: CGFloat(col), y: h - CGFloat(min(max((m + 90) / 90, 0), 1)) * h)
+            if col == 0 { if closed { spec.move(to: CGPoint(x: 0, y: h)); spec.addLine(to: pt) } else { spec.move(to: pt) } }
+            else { spec.addLine(to: pt) }
+            col += 2
+        }
+        if closed { spec.addLine(to: CGPoint(x: w, y: h)); spec.closeSubpath() }
+        return spec
+    }
+
     func draw(_ ctx: LiveGC, _ size: CGSize, band dragBand: Int?) {
         let w = size.width, h = size.height
         ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
@@ -267,29 +301,16 @@ struct EQCurveView: View {
         for db in [-12.0, 0, 12] {
             ctx.fill(Path(CGRect(x: 0, y: y(db, h), width: w, height: 0.5)), with: .color(db == 0 ? Theme.dim.opacity(0.7) : Theme.faint.opacity(0.6)))
         }
-        // live spectrum (post-EQ), only when something is patched in and audio is running
+        // live spectrum, only when something is patched in and audio is running: what goes in, filled;
+        // what comes out (after the bands), as an outline over it
         if connected && model.isRunning, let src = node as? SpectrumSource {
             analyzer.updateIfDue(from: src)
-            let half = SpectrumAnalyzer.n / 2
-            let binHz = sampleRate / Double(SpectrumAnalyzer.n)
-            var spec = Path()
-            spec.move(to: CGPoint(x: 0, y: h))
-            var col = 0
-            while col <= Int(w) {
-                // max of the bins under this pixel column
-                let f0 = f(CGFloat(col), w), f1 = f(CGFloat(col + 1), w)
-                let k0 = max(1, Int(f0 / binHz)), k1 = min(half - 1, max(k0, Int(f1 / binHz)))
-                var m: Float = -120
-                for k in k0...k1 { m = max(m, analyzer.db[k]) }
-                // -90…0 dBFS mapped to the full height
-                let yy = h - CGFloat(min(max((m + 90) / 90, 0), 1)) * h
-                spec.addLine(to: CGPoint(x: CGFloat(col), y: yy))
-                col += 2
+            if let i = node as? InputSpectrumSource {
+                analyzerIn.updateIfDue(input: i)
+                let inSpec = spectrumPath(analyzerIn, w, h, closed: true)
+                ctx.fill(inSpec, with: .color(Theme.text.opacity(0.11)))
             }
-            spec.addLine(to: CGPoint(x: w, y: h))
-            spec.closeSubpath()
-            ctx.fill(spec, with: .color(Theme.text.opacity(0.13)))
-            ctx.stroke(spec, with: .color(Theme.text.opacity(0.25)), lineWidth: 0.6)
+            ctx.stroke(spectrumPath(analyzer, w, h, closed: false), with: .color(Theme.text.opacity(0.55)), lineWidth: 0.8)
         }
         // response curve
         let p = node.params

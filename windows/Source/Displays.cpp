@@ -476,7 +476,7 @@ public:
         if (auto* n = dynamic_cast<DrumsNode*>(dsp())) return n->hits.data();
         return nullptr;
     }
-    bool isOn(int s, int r) { auto* c = cells(); return c && c[(r + base()) * 32 + s] > 0.5f; }
+    bool isOn(int s, int r) { auto* c = cells(); return c && c[(r + base()) * StepPattern::steps + s] > 0.5f; }
     float rowY(int r, float rh, float h) const { return !isRoll() ? float(r) * rh : h - float(r + 1) * rh; }
     int rowAt(float y, float rh) const { int i = int(std::floor(y / rh)); return !isRoll() ? i : rows() - 1 - i; }
     Rect thumb(Pt size, int b) const {
@@ -489,7 +489,7 @@ public:
         std::vector<LivePart> list { part("grid", gridRect(r), [this, m] {
                 auto* d = dsp();
                 int64_t h = m->isRunning && d ? int64_t(d->readouts[0]) : -1;
-                if (auto* c = cells()) LiveSig::mix(h, LiveSig::floats(c, 32 * stored()));
+                if (auto* c = cells()) LiveSig::mix(h, LiveSig::floats(c, StepPattern::steps * stored()));
                 LiveSig::mix(h, LiveSig::patch(node));
                 return h;
             }, [this, m](GC& g, Pt size) {
@@ -534,7 +534,7 @@ public:
         int step = int((pt.x - i.getX()) / cw), row = rowAt(pt.y - i.getY(), rh);
         if (step < 0 || step >= L || row < 0 || row >= rows()) return;
         if (!paint) paint = isOn(step, row) ? 0.0f : 1.0f;
-        if (auto* c = cells()) c[(row + base()) * 32 + step] = *paint == 1 ? 1.0f : 0.0f;
+        if (auto* c = cells()) c[(row + base()) * StepPattern::steps + step] = *paint == 1 ? 1.0f : 0.0f;
     }
     bool press(Pt pt, Rect r, const PointerInfo&) override {
         if (isRoll() && barRect(r).expanded(3, 0).contains(pt)) { scrolling = true; scrollTo(pt, r); return true; }
@@ -547,7 +547,7 @@ public:
         paint.reset();
         auto* c = cells();
         if (!c) return;
-        model.setData(id, isRoll() ? "grid" : "hits", std::vector<float>(c, c + 32 * stored()));
+        model.setData(id, isRoll() ? "grid" : "hits", std::vector<float>(c, c + StepPattern::steps * stored()));
     }
 private:
     std::optional<float> paint;
@@ -572,6 +572,36 @@ public:
     float val(int i) { return model.value(node, i, spec); }
     int voiceIndex() const { auto it = node.data.find("voice"); return it == node.data.end() || it->second.empty() ? 0 : int(it->second[0]); }
 
+    // the envelope: each rate gets a fixed share of the width (so moving one handle doesn't shift the others).
+    // Points: start (level 4: where the attack starts and the release ends), the ends of stages 1, 2, 3, key off
+    // (sustain = level 3), and the end of the release. Every one is a handle.
+    static constexpr float segMax = 1.2f, sustainLen = 0.6f;
+    float unit(Rect e) const { return (e.getWidth() - 12) / (segMax * 4 + sustainLen); }
+    float envY(float l, Rect e) const { return e.getBottom() - 5 - std::clamp(l, 0.0f, 99.0f) / 99 * (e.getHeight() - 10); }
+    std::vector<Pt> envPoints(Rect r) {
+        auto e = envRect(r); int b = FMLayout::base(sel()); float u = unit(e);
+        auto len = [&](int k) { return segMax - val(b + FMLayout::R + k) / 99; };
+        float x = e.getX() + 6;
+        std::vector<Pt> out { { x, envY(val(b + FMLayout::L + 3), e) } };
+        for (int k = 0; k < 3; ++k) { x += len(k) * u; out.push_back({ x, envY(val(b + FMLayout::L + k), e) }); }
+        x += sustainLen * u; out.push_back({ x, envY(val(b + FMLayout::L + 2), e) });
+        x += len(3) * u; out.push_back({ x, envY(val(b + FMLayout::L + 3), e) });
+        return out;
+    }
+    std::optional<int> grabbed;
+    void dragHandle(Pt pt, Rect r) {
+        if (!grabbed) return;
+        int k = *grabbed;
+        auto e = envRect(r); auto pts = envPoints(r); float u = unit(e);
+        float level = std::clamp(std::round((e.getBottom() - 5 - pt.y) / (e.getHeight() - 10) * 99), 0.0f, 99.0f);
+        auto rate = [&] { return std::clamp(std::round((segMax - std::clamp((pt.x - pts[size_t(k - 1)].x) / u, 0.2f, segMax)) * 99), 0.0f, 99.0f); };
+        auto n = std::to_string(sel() + 1);
+        if (k == 0) setParam("o" + n + "l4", level);                                     // where the attack starts (and the release ends)
+        else if (k <= 3) { setParam("o" + n + "r" + std::to_string(k), rate()); setParam("o" + n + "l" + std::to_string(k), level); }
+        else if (k == 4) setParam("o" + n + "l3", level);                                // key off: the sustain level
+        else setParam("o" + n + "r4", rate());                                           // the release: its time only
+    }
+
     void paintStatic(GC& g, Rect r) override {
         for (auto pr : { std::make_pair(prevRect(r), "<"), std::make_pair(nextRect(r), ">") }) {
             g.fillRounded(pr.first, 2, Theme::row());
@@ -595,20 +625,20 @@ public:
             g.textLeft(juce::String(op + 1), { t.getX() + 5, t.getY() + 8 }, 10, Theme::text(), true);
             g.textRight(juce::String(lvl), { t.getRight() - 4, t.getY() + 8 }, 8, Theme::dim());
         }
+        // the selected operator's envelope; the little circles are handles: drag up / down for level, sideways for rate
         auto e = envRect(r);
         int b = FMLayout::base(sel());
         g.fill(e, Theme::row());
-        float rates[4], levels[4];
-        for (int k = 0; k < 4; ++k) { rates[k] = val(b + FMLayout::R + k); levels[k] = val(b + FMLayout::L + k); }
-        auto len = [](float rate) { return 1.2f - rate / 99; };
-        float segs[5] = { len(rates[0]), len(rates[1]), len(rates[2]), 0.6f, len(rates[3]) };
-        float total = 0; for (float s : segs) total += s;
-        auto y = [&](float l) { return e.getBottom() - 3 - l / 99 * (e.getHeight() - 6); };
-        float pts[5] = { levels[0], levels[1], levels[2], levels[2], levels[3] };
-        juce::Path path; float x = e.getX();
-        path.startNewSubPath(x, y(levels[3]));
-        for (int k = 0; k < 5; ++k) { x += segs[k] / total * e.getWidth(); path.lineTo(x, y(pts[k])); }
+        auto pts = envPoints(r);
+        juce::Path path;
+        path.startNewSubPath(pts[0]);
+        for (size_t k = 1; k < pts.size(); ++k) path.lineTo(pts[k]);
         g.stroke(path, Theme::text().withMultipliedAlpha(0.8f), 1);
+        for (auto q : pts) {
+            Rect c(q.x - 3.5f, q.y - 3.5f, 7, 7);
+            g.g.setColour(Theme::box()); g.g.fillEllipse(c);
+            g.g.setColour(Theme::text()); g.g.drawEllipse(c.reduced(0.5f), 1);
+        }
         g.textRight("op " + juce::String(sel() + 1) + " envelope", { e.getRight() - 4, e.getY() + 7 }, 8, Theme::faint());
     }
 
@@ -659,8 +689,16 @@ public:
         menu.showMenuAsync(juce::PopupMenu::Options().withMousePosition());
     }
 
-    bool press(Pt pt, Rect r, const PointerInfo&) override { return inner(r).contains(pt); }
+    bool press(Pt pt, Rect r, const PointerInfo&) override {
+        auto pts = envPoints(r);
+        grabbed.reset();
+        float best = 9;
+        for (int k = 0; k < int(pts.size()); ++k) if (pts[size_t(k)].getDistanceFrom(pt) < best) { best = pts[size_t(k)].getDistanceFrom(pt); grabbed = k; }
+        return grabbed.has_value() || inner(r).contains(pt);
+    }
+    void drag(Pt pt, Rect r, const PointerInfo&) override { dragHandle(pt, r); }
     void release(Pt pt, Rect r, const PointerInfo& info) override {
+        if (grabbed) { grabbed.reset(); return; }
         if (info.moved) return;
         int count = std::max(int(model.fmVoices(id).second.size()), 1);
         int k = voiceIndex();
@@ -770,14 +808,14 @@ public:
             g.fill(Rect(0, 0, w, h), Theme::row());
             g.fill(Rect(0, h / 2, w, 0.5f), Theme::faint());
             juce::Path path;
-            if (shape == 4) {
-                // random: the last six values and the glide now under way, scrolling left as it plays
+            if (shape == 4 || shape == 5) {
+                // random: the last six values and the glide now under way, scrolling left as it plays (square random: steps)
                 float ph = std::clamp(fin(r[1]), 0.0f, 1.0f);
                 for (int i = 0; i <= 120; ++i) {
                     float u = float(i) / 120 * 6 + ph;
                     int k = std::min(int(u), 6); float f = u - float(k);
                     float a0 = r[size_t(2 + k)] * depth + offset, a1 = r[size_t(3 + k)] * depth + offset;
-                    float kk = (1 - std::cos(juce::MathConstants<float>::pi * f)) / 2;
+                    float kk = shape == 5 ? 1.0f : (1 - std::cos(juce::MathConstants<float>::pi * f)) / 2;
                     Pt pt { float(i) / 120 * w, y(a0 + (a1 - a0) * kk) };
                     if (i == 0) path.startNewSubPath(pt); else path.lineTo(pt);
                 }
@@ -792,7 +830,7 @@ public:
             }
             g.stroke(path, Theme::text().withMultipliedAlpha(0.75f), 1);
             float ph = std::clamp(fin(r[1]), 0.0f, 1.0f);
-            float px = shape == 4 ? w : ph * w;
+            float px = shape >= 4 ? w : ph * w;
             g.fill(Rect(px, 0, 0.5f, h), Theme::dim());
             g.fillEllipse(Rect(px - 3, y(r[0]) - 3, 6, 6), Theme::text());
             float bx = w + 8;
@@ -1275,6 +1313,10 @@ public:
             for (int i = 0; i < N; ++i) window[size_t(i)] = 0.5f - 0.5f * std::cos(2 * juce::MathConstants<float>::pi * float(i) / float(N));
         }
         src->copyRecent(buf.data(), N);
+        analyze(db);
+        if (src->copyRecentInput(buf.data(), N)) { if (dbIn.empty()) dbIn.assign(N / 2, -120); analyze(dbIn); hasIn = true; }
+    }
+    void analyze(std::vector<float>& out) {
         for (int i = 0; i < N; ++i) fft[size_t(i)] = { buf[size_t(i)] * window[size_t(i)], 0 };
         // in-place radix-2 FFT
         for (int i = 1, j = 0; i < N; ++i) { int bit = N >> 1; for (; j & bit; bit >>= 1) j ^= bit; j ^= bit; if (i < j) std::swap(fft[size_t(i)], fft[size_t(j)]); }
@@ -1287,7 +1329,7 @@ public:
             }
         }
         float scale = 8.0f / float(N);
-        for (int k = 1; k < N / 2; ++k) { float v = 20 * std::log10(std::max(std::abs(fft[size_t(k)]) * scale, 1e-7f)); db[size_t(k)] = v > db[size_t(k)] ? v : db[size_t(k)] - 1.2f; }
+        for (int k = 1; k < N / 2; ++k) { float v = 20 * std::log10(std::max(std::abs(fft[size_t(k)]) * scale, 1e-7f)); out[size_t(k)] = v > out[size_t(k)] ? v : out[size_t(k)] - 1.2f; }
     }
     void draw(GC& g, Pt size) {
         auto* d = dsp();
@@ -1300,19 +1342,25 @@ public:
         bool connected = model.isPortConnected(id, 0, false) || model.isPortConnected(id, 1, false);
         if (connected && model.isRunning)
             if (auto* src = dynamic_cast<SpectrumSource*>(d)) {
+                // what goes in, filled; what comes out (after the bands), as an outline over it
                 updateSpectrum(src);
                 const int half = N / 2; double binHz = sr / N;
-                juce::Path sp; sp.startNewSubPath(0, h);
-                for (int col = 0; col <= int(w); col += 2) {
-                    double f0 = f(float(col), w), f1 = f(float(col + 1), w);
-                    int k0 = std::max(1, int(f0 / binHz)), k1 = std::min(half - 1, std::max(k0, int(f1 / binHz)));
-                    float m = -120;
-                    for (int k = k0; k <= k1; ++k) m = std::max(m, db[size_t(k)]);
-                    sp.lineTo(float(col), h - std::clamp((m + 90) / 90, 0.0f, 1.0f) * h);
-                }
-                sp.lineTo(w, h); sp.closeSubPath();
-                g.fill(sp, Theme::text().withMultipliedAlpha(0.13f));
-                g.stroke(sp, Theme::text().withMultipliedAlpha(0.25f), 0.6f);
+                auto spectrum = [&](const std::vector<float>& dbs, bool closed) {
+                    juce::Path sp;
+                    for (int col = 0; col <= int(w); col += 2) {
+                        double f0 = f(float(col), w), f1 = f(float(col + 1), w);
+                        int k0 = std::max(1, int(f0 / binHz)), k1 = std::min(half - 1, std::max(k0, int(f1 / binHz)));
+                        float m = -120;
+                        for (int k = k0; k <= k1; ++k) m = std::max(m, dbs[size_t(k)]);
+                        float yy = h - std::clamp((m + 90) / 90, 0.0f, 1.0f) * h;
+                        if (col == 0) { if (closed) { sp.startNewSubPath(0, h); sp.lineTo(0, yy); } else sp.startNewSubPath(0, yy); }
+                        else sp.lineTo(float(col), yy);
+                    }
+                    if (closed) { sp.lineTo(w, h); sp.closeSubPath(); }
+                    return sp;
+                };
+                if (hasIn) g.fill(spectrum(dbIn, true), Theme::text().withMultipliedAlpha(0.11f));
+                g.stroke(spectrum(db, false), Theme::text().withMultipliedAlpha(0.55f), 0.8f);
             }
         auto& p = d->params;
         juce::Path path;
@@ -1361,7 +1409,8 @@ public:
 private:
     int band = -1;
     double lastFFT = 0;
-    std::vector<float> window, db, buf;
+    std::vector<float> window, db, dbIn, buf;
+    bool hasIn = false;
     std::vector<std::complex<float>> fft;
 };
 

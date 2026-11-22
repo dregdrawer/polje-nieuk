@@ -6,7 +6,7 @@ import Foundation
 
 public enum RackLayout {
     public static let pads = 16
-    public static let steps = 32
+    public static let steps = StepPattern.steps
     public static let perPad = 7                  // tune, attack, decay, level, pan, mute, solo
     public static let globals = 5                 // length, division, swing, selected pad, master
     public static func base(_ pad: Int) -> Int { globals + pad * perPad }
@@ -14,7 +14,7 @@ public enum RackLayout {
                                   "hi tom", "crash", "ride", "cowbell", "shaker", "clave", "808", "zap"]
 
     static func params() -> [ParamSpec] {
-        var p: [ParamSpec] = [.integer("len", "length", 1, steps, 16),
+        var p: [ParamSpec] = [StepPattern.length("len", def: 16),
                               .choice("div", "division", Divisions.names, def: Divisions.index("1/16")),
                               ParamSpec("swing", "swing", 0, 0.5, 0, unit: "%"),
                               .choice("sel", "pad", (1...pads).map { "\($0)" }, def: 0),
@@ -83,7 +83,8 @@ public final class RackNode: DSPNode {
     public override func setData(_ key: String, _ values: [Float]) {
         guard key == "hits" else { return }
         let n = RackLayout.pads * RackLayout.steps
-        for k in 0..<n { hits[k] = k < values.count && values[k].isFinite ? values[k] : 0 }
+        let v = StepPattern.widen(values, lanes: RackLayout.pads)          // a 32-step pattern from before
+        for k in 0..<n { hits[k] = k < v.count && v[k].isFinite ? v[k] : 0 }
     }
 
     // MARK: Samples (main thread)

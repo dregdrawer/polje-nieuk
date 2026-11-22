@@ -973,7 +973,7 @@ void AppModel::rescalePattern(const juce::String& id, const ModuleSpec& spec, fl
     else if (auto* dr = dynamic_cast<DrumsNode*>(n)) { key = "hits"; lanes = DrumsNode::lanes; ptr = dr->hits.data(); }
     else if (auto* ro = dynamic_cast<RollNode*>(n)) { key = "grid"; lanes = RollNode::rows; ptr = ro->grid.data(); }
     else return;
-    const int steps = 32;
+    const int steps = StepPattern::steps;
     if (!rescaleBase.count(id)) {
         int len = int(std::round(paramOr(patch.nodes[size_t(i)], "len", spec.params[size_t(li)].def)));
         rescaleBase[id] = { from, std::vector<float>(ptr, ptr + lanes * steps), len, 0 };

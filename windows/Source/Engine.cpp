@@ -498,7 +498,7 @@ Patch Patch::migrated() const {
             if (n.kind != "roll") continue;
             if (n.data.count("notes") && !n.data.count("grid")) {
                 // straight onto the full 7-octave grid (v14), at the notes they played
-                const int steps = 32, rows = 84, shown = 24, lowest = -36;
+                const int steps = 128, rows = 84, shown = 24, lowest = -36;
                 int low = n.params.count("low") ? int(std::round(n.params["low"])) : -12;
                 std::vector<float> g(size_t(steps * rows), 0.0f);
                 auto& old = n.data["notes"];
@@ -531,13 +531,28 @@ Patch Patch::migrated() const {
             if (n.kind != "roll" || !n.data.count("grid") || n.data["grid"].size() != size_t(32 * 24)) continue;
             int low = n.params.count("low") ? int(std::round(n.params["low"])) : -12;
             auto old = n.data["grid"];
-            std::vector<float> g(size_t(32 * 84), 0.0f);
+            std::vector<float> g(size_t(128 * 84), 0.0f);
             for (int r = 0; r < 24; ++r) {
                 int row = r + low + 36;
                 if (row < 0 || row >= 84) continue;
-                for (int s = 0; s < 32; ++s) if (old[size_t(r * 32 + s)] > 0.5f) g[size_t(row * 32 + s)] = 1;
+                for (int s = 0; s < 32; ++s) if (old[size_t(r * 32 + s)] > 0.5f) g[size_t(row * 128 + s)] = 1;
             }
             n.data["grid"] = g;
+        }
+    if (version < 15)   // step patterns go up to 128 steps (stored 128 per lane, was 32): the same steps, spread out
+        for (auto& n : p.nodes) {
+            std::string key; int lanes = 0;
+            if (n.kind == "rack") { key = "hits"; lanes = 16; }
+            else if (n.kind == "drumsynth") { key = "hits"; lanes = 4; }
+            else if (n.kind == "drums") { key = "hits"; lanes = 8; }
+            else if (n.kind == "roll") { key = "grid"; lanes = 84; }
+            else continue;
+            if (!n.data.count(key)) continue;
+            auto& v = n.data[key];
+            if (int(v.size()) != lanes * 32) continue;
+            std::vector<float> out(size_t(lanes * 128), 0.0f);
+            for (int l = 0; l < lanes; ++l) for (int s = 0; s < 32; ++s) out[size_t(l * 128 + s)] = v[size_t(l * 32 + s)];
+            v = out;
         }
     if (version < 13)   // lfo lost its s&h shape; s&h (4) and random (5) both become random (now 4)
         for (auto& n : p.nodes)

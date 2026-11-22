@@ -226,7 +226,7 @@ final class LFONode: DSPNode {
     private var beatZero: Double = 0                 // synced to the beat: where a reset put the start
 
     override func process(frames: Int, inputs: UnsafePointer<UnsafePointer<Float>>, connected: UInt64, ctx: ProcessContext) {
-        let shape = clampIndex(params[0], 5)
+        let shape = clampIndex(params[0], 6)
         let sync = params[1] > 0.5
         let rate = Double(params[2])
         let div = Divisions.beats(params[3])
@@ -275,10 +275,13 @@ final class LFONode: DSPNode {
             case 1: v = p < 0.5 ? 4 * p - 1 : 3 - 4 * p
             case 2: v = 2 * p - 1
             case 3: v = p < 0.5 ? 1 : -1
-            default:
+            case 4:
                 // random: glide smoothly (cosine) from the last random value to the next over each cycle
                 let k = (1 - cosf(.pi * p)) / 2
                 v = prevHeld + (held - prevHeld) * k
+            default:
+                // square random: a new random value at each cycle, held (steps)
+                v = held
             }
             out[i] = v * depth + offset
         }

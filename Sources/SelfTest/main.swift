@@ -218,12 +218,24 @@ for n in chain {
 
 print("Old patch migration")
 do {
+    // v15: 32-step patterns spread onto 128 steps per lane — the same steps, nothing moves
+    var o = Patch(); o.version = 14
+    var h = [Float](repeating: 0, count: 16 * 32); h[0] = 1; h[1 * 32 + 5] = 1; h[15 * 32 + 31] = 1
+    o.nodes = [PatchNode(kind: "rack", x: 0, y: 0, data: ["hits": h])]
+    let w = o.migrated().nodes[0].data["hits"] ?? []
+    let on = w.indices.filter { w[$0] > 0.5 }.map { ($0 / RackLayout.steps, $0 % RackLayout.steps) }
+    check(w.count == 16 * 128 && on.map(\.0) == [0, 1, 15] && on.map(\.1) == [0, 5, 31],
+          "older samplerack pattern: same lanes and steps on the 128-step grid (\(on))")
+    check(ModuleRegistry.spec("rack")!.params[0].snapped(50) == 64 && ModuleRegistry.spec("roll")!.params[0].snapped(100) == 128,
+          "lengths go 1 … 32, then 64 and 128")
+}
+do {
     // v14: a 2-octave roll grid (relative to its "lowest note") moves onto the full 7-octave range, same notes
     var g = [Float](repeating: 0, count: 32 * 24); g[0 * 32 + 0] = 1; g[7 * 32 + 1] = 1
     var o = Patch(); o.version = 13
     o.nodes = [PatchNode(kind: "roll", x: 0, y: 0, params: ["low": -5], data: ["grid": g])]
     let m = o.migrated().nodes[0].data["grid"] ?? []
-    let on = m.indices.filter { m[$0] > 0.5 }.map { ($0 / 32 + RollNode.lowest, $0 % 32) }
+    let on = m.indices.filter { m[$0] > 0.5 }.map { ($0 / RollNode.steps + RollNode.lowest, $0 % RollNode.steps) }
     check(m.count == RollNode.steps * RollNode.rows && on.map(\.0) == [-5, 2] && on.map(\.1) == [0, 1],
           "older roll: notes keep their pitch on the 7-octave grid (\(on))")
 }
@@ -1229,7 +1241,13 @@ print("lfo~")
 do {
     check(Divisions.beats(16) == 32 && Divisions.beats(17) == 64 && ModuleRegistry.spec("lfo")!.params[3].max == 17,
           "lfo~ syncs up to every 8 and 16 bars")
-    check(ModuleRegistry.spec("lfo")!.params[0].max == 4, "shapes: sine, triangle, saw, square, random (no s&h)")
+    check(ModuleRegistry.spec("lfo")!.params[0].max == 5, "shapes: sine, triangle, saw, square, random, square random")
+    // square random: a new value each cycle, held in between (steps, no glide)
+    let (_, sq) = runSource("lfo", params: ["shape": 5, "rate": 4, "depth": 1], seconds: 2)
+    var changes = 0
+    for i in 1..<sq[0].count where abs(sq[0][i] - sq[0][i - 1]) > 1e-6 { changes += 1 }
+    check(changes >= 6 && changes <= 9 && Set(sq[0].map { ($0 * 1000).rounded() }).count > 3,
+          "square random: steps once a cycle (\(changes) changes in 2 s at 4 Hz)")
     var old = Patch(); old.version = 12
     old.nodes = [4, 5, 2].map { PatchNode(kind: "lfo", x: 0, y: 0, params: ["shape": Float($0)]) }
     check(old.migrated().nodes.map { $0.params["shape"]! } == [4, 4, 2], "older patches: s&h and random both become random")
@@ -1371,7 +1389,7 @@ do {
     var p3 = p2
     p3.nodes[2].data["pitch"] = (0..<16).map { Float($0) }; p3.nodes[2].data["gate"] = (0..<16).map { Float($0 % 2) }
     var notes = [Float](repeating: -1, count: 32); notes[3] = 7; p3.nodes[3].data["grid"] = RollNode.grid(fromNotes: notes)
-    var dh = [Float](repeating: 0, count: 256); dh[40] = 1; p3.nodes[4].data["hits"] = dh
+    var dh = [Float](repeating: 0, count: DrumsNode.steps * DrumsNode.lanes); dh[40] = 1; p3.nodes[4].data["hits"] = dh
     hist.commit(p3); h.load(p3)
     func matches(_ p: Patch) -> Bool {
         let d = h.node(ds.id)!, si = ModuleRegistry.spec("drumsynth")!.paramIndex("swing")!
@@ -1381,7 +1399,7 @@ do {
             && engine(sq.id, "pitch") == steps64(p.nodes[2].data["pitch"] ?? [Float](repeating: 0, count: 16))
             && engine(sq.id, "gate") == steps64(p.nodes[2].data["gate"] ?? [Float](repeating: 1, count: 16))
             && engine(rl.id, "grid") == (p.nodes[3].data["grid"] ?? [Float](repeating: 0, count: RollNode.steps * RollNode.rows))
-            && engine(dr.id, "hits") == (p.nodes[4].data["hits"] ?? [Float](repeating: 0, count: 256))
+            && engine(dr.id, "hits") == (p.nodes[4].data["hits"] ?? [Float](repeating: 0, count: DrumsNode.steps * DrumsNode.lanes))
     }
     check(matches(p3), "after three edits the engine plays what the patch says")
     var ok = true, trail: [String] = []
@@ -1824,7 +1842,7 @@ do {
 
 print("lfo~ random")
 do {
-    let (_, o) = runSource("lfo", params: ["shape": 5, "rate": 4, "depth": 1], seconds: 4)
+    let (_, o) = runSource("lfo", params: ["shape": 4, "rate": 4, "depth": 1], seconds: 4)
     let x = o[0]
     var maxJump: Float = 0
     for i in 1..<x.count { maxJump = max(maxJump, abs(x[i] - x[i - 1])) }

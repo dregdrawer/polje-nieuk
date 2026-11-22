@@ -103,8 +103,9 @@ RackNode::RackNode(const ModuleSpec& s, double sr) : DSPNode(s, sr) {
 
 void RackNode::setData(const std::string& key, const std::vector<float>& values) {
     if (key != "hits") return;
+    auto v = StepPattern::widen(values, RackLayout::pads);      // a 32-step pattern from before
     for (int k = 0; k < RackLayout::pads * RackLayout::steps; ++k)
-        hits[size_t(k)] = k < int(values.size()) && std::isfinite(values[size_t(k)]) ? values[size_t(k)] : 0.0f;
+        hits[size_t(k)] = k < int(v.size()) && std::isfinite(v[size_t(k)]) ? v[size_t(k)] : 0.0f;
 }
 
 void RackNode::install(int k, const StereoAudio& a, const std::string& name) {
@@ -240,7 +241,8 @@ DrumSynthNode::~DrumSynthNode() = default;
 
 void DrumSynthNode::setData(const std::string& key, const std::vector<float>& values) {
     if (key != "hits") return;
-    for (int k = 0; k < int(hits.size()); ++k) hits[size_t(k)] = k < int(values.size()) && std::isfinite(values[size_t(k)]) ? values[size_t(k)] : 0.0f;
+    auto v = StepPattern::widen(values, DrumSynthLayout::voices);   // a 32-step pattern from before
+    for (int k = 0; k < int(hits.size()); ++k) hits[size_t(k)] = k < int(v.size()) && std::isfinite(v[size_t(k)]) ? v[size_t(k)] : 0.0f;
 }
 
 void DrumSynthNode::process(int frames, const float* const* in, uint64_t con, ProcessContext& ctx) {

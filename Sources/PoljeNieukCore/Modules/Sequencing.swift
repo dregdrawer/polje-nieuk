@@ -472,7 +472,7 @@ public final class RollNode: DSPNode {
     // 0 length, 1 division, 2 view (the lowest note shown — the scrollbar), 3 gate length
     // outputs: pitch, gate, vel — a step with a chord sends all its notes down the same cables (up to 4;
     // the lowest first, which is what a mono module plays)
-    public static let steps = 32
+    public static let steps = StepPattern.steps
     /// Every note it can play: 7 octaves, row 0 = `lowest` semitones (C-3) … row 83 = B3.
     public static let rows = 84
     public static let lowest = -36
@@ -497,7 +497,8 @@ public final class RollNode: DSPNode {
 
     public override func setData(_ key: String, _ values: [Float]) {
         guard key == "grid" else { return }
-        for k in 0..<Self.steps * Self.rows { grid[k] = k < values.count && values[k].isFinite && values[k] > 0.5 ? 1 : 0 }
+        let v = StepPattern.widen(values, lanes: Self.rows)                // a 32-step pattern from before
+        for k in 0..<Self.steps * Self.rows { grid[k] = k < v.count && v[k].isFinite && v[k] > 0.5 ? 1 : 0 }
     }
 
     @inline(__always) public func isOn(_ step: Int, _ row: Int) -> Bool { grid[row * Self.steps + step] > 0.5 }
@@ -513,13 +514,14 @@ public final class RollNode: DSPNode {
         }
         return g
     }
-    /// A grid from before v14 (2 octaves counted from the "lowest note" setting) on the full range.
+    /// A grid from before v14 (2 octaves counted from the "lowest note" setting, 32 steps) on the full range.
     public static func grid(fromShown old: [Float], low: Int) -> [Float] {
         var g = [Float](repeating: 0, count: steps * rows)
+        let os = StepPattern.legacySteps
         for r in 0..<shown {
             let row = r + low - lowest
             guard row >= 0 && row < rows else { continue }
-            for s in 0..<steps where r * steps + s < old.count && old[r * steps + s] > 0.5 { g[row * steps + s] = 1 }
+            for s in 0..<os where r * os + s < old.count && old[r * os + s] > 0.5 { g[row * steps + s] = 1 }
         }
         return g
     }
@@ -566,7 +568,7 @@ public final class RollNode: DSPNode {
 public final class DrumsNode: DSPNode {
     // 0 length, 1 division, 2 trigger length (ms)
     // outputs: 1…8 triggers
-    public static let steps = 32
+    public static let steps = StepPattern.steps
     public static let lanes = 8
     public let hits: UnsafeMutablePointer<Float>       // lane * steps + step
     private var step = -1
@@ -582,7 +584,8 @@ public final class DrumsNode: DSPNode {
 
     public override func setData(_ key: String, _ values: [Float]) {
         guard key == "hits" else { return }
-        for k in 0..<min(values.count, Self.steps * Self.lanes) { hits[k] = values[k].isFinite ? values[k] : 0 }
+        let v = StepPattern.widen(values, lanes: Self.lanes)               // a 32-step pattern from before
+        for k in 0..<min(v.count, Self.steps * Self.lanes) { hits[k] = v[k].isFinite ? v[k] : 0 }
     }
 
     public override func process(frames: Int, inputs: UnsafePointer<UnsafePointer<Float>>, connected: UInt64, ctx: ProcessContext) {

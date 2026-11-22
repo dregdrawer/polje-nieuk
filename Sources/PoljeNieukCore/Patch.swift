@@ -77,7 +77,7 @@ public struct PatchGroup: Codable, Equatable, Identifiable, Sendable {
 }
 
 public struct Patch: Codable, Equatable, Sendable {
-    public static let currentVersion = 14
+    public static let currentVersion = 15
     public var version: Int = Patch.currentVersion
     public var nodes: [PatchNode] = []
     public var cables: [PatchCable] = []
@@ -212,9 +212,23 @@ public extension Patch {
             // v14: roll holds notes over its whole range (7 octaves) and scrolls; "lowest note" is now where
             // the view sits — the old 2-octave grid moves to the notes it played
             for i in p.nodes.indices where p.nodes[i].kind == "roll" {
-                if let g = p.nodes[i].data["grid"], g.count == RollNode.steps * RollNode.shown {
+                if let g = p.nodes[i].data["grid"], g.count == StepPattern.legacySteps * RollNode.shown {
                     p.nodes[i].data["grid"] = RollNode.grid(fromShown: g, low: Int((p.nodes[i].params["low"] ?? -12).rounded()))
                 }
+            }
+        }
+        if version < 15 {
+            // v15: step patterns go up to 128 steps (stored 128 per lane, was 32): the same steps, spread out
+            for i in p.nodes.indices {
+                let (key, lanes): (String, Int)
+                switch p.nodes[i].kind {
+                case "rack": (key, lanes) = ("hits", RackLayout.pads)
+                case "drumsynth": (key, lanes) = ("hits", DrumSynthLayout.voices)
+                case "drums": (key, lanes) = ("hits", DrumsNode.lanes)
+                case "roll": (key, lanes) = ("grid", RollNode.rows)
+                default: continue
+                }
+                if let v = p.nodes[i].data[key] { p.nodes[i].data[key] = StepPattern.widen(v, lanes: lanes) }
             }
         }
         if version < 13 {

@@ -405,6 +405,37 @@ final class FMDisplay: NativeDisplay {
     }
     private func value(_ i: Int) -> Float { model.value(node, i, spec) }
 
+    // the envelope: each rate gets a fixed share of the width (so moving one handle doesn't shift the others).
+    // Points: start (the level it starts from and releases to — the DX7's level 4), the ends of stages 1, 2, 3,
+    // key off (sustain = level 3), and the end of the release. Every one is a handle.
+    private static let segMax: CGFloat = 1.2, sustainLen: CGFloat = 0.6
+    private func unit(_ e: CGRect) -> CGFloat { (e.width - 12) / (Self.segMax * 4 + Self.sustainLen) }
+    private func envY(_ l: Float, _ e: CGRect) -> CGFloat { e.maxY - 5 - CGFloat(min(max(l, 0), 99) / 99) * (e.height - 10) }
+    private func envPoints(_ r: CGRect) -> [CGPoint] {
+        let e = envRect(r), b = FMLayout.base(sel), u = unit(e)
+        func len(_ k: Int) -> CGFloat { Self.segMax - CGFloat(value(b + FMLayout.R + k) / 99) }
+        let levels = (0..<4).map { value(b + FMLayout.L + $0) }
+        var x = e.minX + 6
+        var out = [CGPoint(x: x, y: envY(levels[3], e))]
+        for k in 0..<3 { x += len(k) * u; out.append(CGPoint(x: x, y: envY(levels[k], e))) }
+        x += Self.sustainLen * u; out.append(CGPoint(x: x, y: envY(levels[2], e)))
+        x += len(3) * u; out.append(CGPoint(x: x, y: envY(levels[3], e)))
+        return out
+    }
+    private var grabbed: Int?
+    private func dragHandle(_ p: CGPoint, _ r: CGRect) {
+        guard let k = grabbed else { return }
+        let e = envRect(r), pts = envPoints(r), u = unit(e), n = sel + 1
+        let level = min(max(Float((e.maxY - 5 - p.y) / (e.height - 10) * 99).rounded(), 0), 99)
+        func rate() -> Float { min(max(Float((Self.segMax - min(max((p.x - pts[k - 1].x) / u, 0.2), Self.segMax)) * 99).rounded(), 0), 99) }
+        switch k {
+        case 0: setParam("o\(n)l4", level)                                 // where the attack starts (and the release ends)
+        case 1, 2, 3: setParam("o\(n)r\(k)", rate()); setParam("o\(n)l\(k)", level)
+        case 4: setParam("o\(n)l3", level)                                 // key off: the sustain level
+        default: setParam("o\(n)r4", rate())                               // the release: its time only
+        }
+    }
+
     override func paintStatic(_ g: LiveGC, _ r: CGRect) {
         // ◀ name ▶  syx
         for (rect, s) in [(prevRect(r), "◀"), (nextRect(r), "▶")] {
@@ -433,23 +464,20 @@ final class FMDisplay: NativeDisplay {
             g.draw(LiveText("\(op + 1)", size: 10, color: Theme.text, bold: true), at: CGPoint(x: t.minX + 5, y: t.minY + 8), anchor: .leading)
             g.draw(LiveText("\(lvl)", size: 8, color: Theme.dim), at: CGPoint(x: t.maxX - 4, y: t.minY + 8), anchor: .trailing)
         }
-        // the selected operator's envelope: rates as segment lengths, levels as heights; sustain between key on and off
+        // the selected operator's envelope: rates as segment lengths, levels as heights; sustain between key on
+        // and off. The little circles are handles: drag one up / down for its level, sideways for its rate.
         let e = envRect(r), b = FMLayout.base(sel)
         g.fill(Path(e), with: .color(Theme.row))
-        let rates = (0..<4).map { value(b + FMLayout.R + $0) }, levels = (0..<4).map { value(b + FMLayout.L + $0) }
-        func len(_ rate: Float) -> CGFloat { CGFloat(1.2 - rate / 99) }
-        let segs = [len(rates[0]), len(rates[1]), len(rates[2]), 0.6, len(rates[3])]
-        let total = segs.reduce(0, +)
-        func y(_ l: Float) -> CGFloat { e.maxY - 3 - CGFloat(l / 99) * (e.height - 6) }
-        var x = e.minX
+        let pts = envPoints(r)
         var p = Path()
-        p.move(to: CGPoint(x: x, y: y(levels[3])))
-        let pts = [levels[0], levels[1], levels[2], levels[2], levels[3]]
-        for (k, s) in segs.enumerated() {
-            x += s / total * e.width
-            p.addLine(to: CGPoint(x: x, y: y(pts[k])))
-        }
+        p.move(to: pts[0])
+        for q in pts.dropFirst() { p.addLine(to: q) }
         g.stroke(p, with: .color(Theme.text.opacity(0.8)), lineWidth: 1)
+        for q in pts {
+            let c = CGRect(x: q.x - 3.5, y: q.y - 3.5, width: 7, height: 7)
+            g.fill(Path(ellipseIn: c), with: .color(Theme.box))
+            g.stroke(Path(ellipseIn: c.insetBy(dx: 0.5, dy: 0.5)), with: .color(Theme.text), lineWidth: 1)
+        }
         g.draw(LiveText("op \(sel + 1) envelope", size: 8, color: Theme.faint), at: CGPoint(x: e.maxX - 4, y: e.minY + 7), anchor: .trailing)
     }
 
@@ -486,8 +514,15 @@ final class FMDisplay: NativeDisplay {
         m.panelMenu = .init(items: items, at: m.toScreen(CGPoint(x: node.x + at.x, y: node.y + at.y)))
     }
 
-    override func press(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) -> Bool { inner(r).contains(p) }
+    override func press(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) -> Bool {
+        let pts = envPoints(r)
+        grabbed = pts.indices.min { hypot(pts[$0].x - p.x, pts[$0].y - p.y) < hypot(pts[$1].x - p.x, pts[$1].y - p.y) }
+            .flatMap { hypot(pts[$0].x - p.x, pts[$0].y - p.y) < 9 ? $0 : nil }
+        return grabbed != nil || inner(r).contains(p)
+    }
+    override func drag(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) { dragHandle(p, r) }
     override func release(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) {
+        if grabbed != nil { grabbed = nil; return }
         guard !info.moved else { return }
         let count = model.fmVoices(id).voices.count
         let k = Int(node.data["voice"]?.first ?? 0)

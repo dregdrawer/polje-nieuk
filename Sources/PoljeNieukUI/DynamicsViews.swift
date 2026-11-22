@@ -137,15 +137,15 @@ struct LFOView: View {
         ctx.fill(Path(CGRect(x: 0, y: 0, width: w, height: h)), with: .color(Theme.row))
         ctx.fill(Path(CGRect(x: 0, y: h / 2, width: w, height: 0.5)), with: .color(Theme.faint))
         var p = Path()
-        if shape == 4 {
+        if shape == 4 || shape == 5 {
             // random: the last six values and the glide now under way, scrolling left as it plays;
-            // the newest point is the current output, on the right edge
+            // the newest point is the current output, on the right edge. Square random: steps.
             let ph = min(max(fin(r[1]), 0), 1)
             for i in 0...120 {
                 let u = Float(i) / 120 * 6 + ph               // cycles since the oldest value
                 let k = min(Int(u), 6), f = u - Float(k)
                 let a0 = r[2 + k] * depth + offset, a1 = r[3 + k] * depth + offset
-                let kk = (1 - cosf(.pi * f)) / 2
+                let kk: Float = shape == 5 ? 1 : (1 - cosf(.pi * f)) / 2
                 let pt = CGPoint(x: CGFloat(i) / 120 * w, y: y(a0 + (a1 - a0) * kk))
                 if i == 0 { p.move(to: pt) } else { p.addLine(to: pt) }
             }
@@ -166,7 +166,7 @@ struct LFOView: View {
         ctx.stroke(p, with: .color(Theme.text.opacity(0.75)), lineWidth: 1)
         // playhead and current value
         let ph = CGFloat(min(max(fin(r[1]), 0), 1))
-        let px = shape == 4 ? w : ph * w
+        let px = shape >= 4 ? w : ph * w
         ctx.fill(Path(CGRect(x: px, y: 0, width: 0.5, height: h)), with: .color(Theme.dim))
         let cur = CGPoint(x: px, y: y(r[0]))
         ctx.fill(Path(ellipseIn: CGRect(x: cur.x - 3, y: cur.y - 3, width: 6, height: 6)), with: .color(Theme.text))

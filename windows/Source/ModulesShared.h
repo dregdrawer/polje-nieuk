@@ -10,6 +10,8 @@ class SpectrumSource {
 public:
     virtual ~SpectrumSource() = default;
     virtual void copyRecent(float* out, int count) const = 0;
+    /// eq: what goes in, too (the display draws both)
+    virtual bool copyRecentInput(float*, int) const { return false; }
 };
 
 /// scope: the last finished sweep per channel (points × min / max).
@@ -147,16 +149,29 @@ private:
     float cvNow = 0, noteNow = 0;
 };
 
+/// Step patterns (samplerack, drumsynth, drums, roll): kept at 128 steps per lane; the length goes 1 ... 32, 64, 128.
+namespace StepPattern {
+    constexpr int steps = 128, legacySteps = 32;
+    /// a pattern saved at 32 steps per lane, spread onto 128 (the same steps, the rest empty)
+    inline std::vector<float> widen(const std::vector<float>& v, int lanes) {
+        if (int(v.size()) != lanes * legacySteps) return v;
+        std::vector<float> out(size_t(lanes * steps), 0.0f);
+        for (int l = 0; l < lanes; ++l) for (int s = 0; s < legacySteps; ++s) out[size_t(l * steps + s)] = v[size_t(l * legacySteps + s)];
+        return out;
+    }
+}
+
 class RollNode : public DSPNode {
 public:
     // every note it can play: 7 octaves, row 0 = `lowest` (C-3); 2 octaves on screen, scroll for the rest
-    static constexpr int steps = 32, rows = 84, shown = 24, lowest = -36, voices = kMaxVoices;
+    static constexpr int steps = StepPattern::steps, rows = 84, shown = 24, lowest = -36, voices = kMaxVoices;
     using DSPNode::DSPNode;
     void process(int frames, const float* const* in, uint64_t con, ProcessContext& ctx) override;
     std::map<std::string, std::vector<float>> defaultData() const override { return { { "grid", std::vector<float>(steps * rows, 0.0f) } }; }
     void setData(const std::string& key, const std::vector<float>& values) override {
         if (key != "grid") return;
-        for (int k = 0; k < steps * rows; ++k) grid[size_t(k)] = k < int(values.size()) && std::isfinite(values[size_t(k)]) && values[size_t(k)] > 0.5f ? 1.0f : 0.0f;
+        auto v = StepPattern::widen(values, rows);              // a 32-step pattern from before
+        for (int k = 0; k < steps * rows; ++k) grid[size_t(k)] = k < int(v.size()) && std::isfinite(v[size_t(k)]) && v[size_t(k)] > 0.5f ? 1.0f : 0.0f;
     }
     bool isOn(int step, int row) const { return grid[size_t(row * steps + step)] > 0.5f; }
     std::array<float, steps * rows> grid {};
@@ -169,13 +184,14 @@ private:
 
 class DrumsNode : public DSPNode {
 public:
-    static constexpr int steps = 32, lanes = 8;
+    static constexpr int steps = StepPattern::steps, lanes = 8;
     using DSPNode::DSPNode;
     void process(int frames, const float* const* in, uint64_t con, ProcessContext& ctx) override;
     std::map<std::string, std::vector<float>> defaultData() const override { return { { "hits", std::vector<float>(steps * lanes, 0.0f) } }; }
     void setData(const std::string& key, const std::vector<float>& values) override {
         if (key != "hits") return;
-        for (int k = 0; k < std::min(int(values.size()), steps * lanes); ++k) hits[size_t(k)] = std::isfinite(values[size_t(k)]) ? values[size_t(k)] : 0.0f;
+        auto v = StepPattern::widen(values, lanes);             // a 32-step pattern from before
+        for (int k = 0; k < std::min(int(v.size()), steps * lanes); ++k) hits[size_t(k)] = std::isfinite(v[size_t(k)]) ? v[size_t(k)] : 0.0f;
     }
     std::array<float, steps * lanes> hits {};
 private:
@@ -193,7 +209,7 @@ namespace Chords {
 
 
 namespace RackLayout {
-    constexpr int pads = 16, steps = 32, perPad = 7, globals = 5;
+    constexpr int pads = 16, steps = StepPattern::steps, perPad = 7, globals = 5;
     inline int base(int pad) { return globals + pad * perPad; }
     extern const std::vector<std::string> kitNames;
 }
@@ -229,7 +245,7 @@ private:
 };
 
 namespace DrumSynthLayout {
-    constexpr int voices = 4, steps = 32, perVoice = 14, shown = 12, globals = 5;
+    constexpr int voices = 4, steps = StepPattern::steps, perVoice = 14, shown = 12, globals = 5;
     inline int base(int v) { return globals + v * perVoice; }
     extern const std::vector<std::string> names;
     extern const std::vector<int> engines;

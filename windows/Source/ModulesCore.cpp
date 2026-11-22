@@ -151,7 +151,7 @@ class LFONode : public DSPNode {
 public:
     using DSPNode::DSPNode;
     void process(int frames, const float* const* in, uint64_t con, ProcessContext& ctx) override {
-        int shape = clampIndex(params[0], 5);
+        int shape = clampIndex(params[0], 6);
         bool sync = params[1] > 0.5f;
         double rate = params[2], div = Divisions::beats(params[3]);
         float depth = params[4], offset = params[5];
@@ -185,7 +185,8 @@ public:
                 case 1: v = p < 0.5f ? 4 * p - 1 : 3 - 4 * p; break;
                 case 2: v = 2 * p - 1; break;
                 case 3: v = p < 0.5f ? 1.0f : -1.0f; break;
-                default: { float k = (1 - std::cos(juce::MathConstants<float>::pi * p)) / 2; v = prevHeld + (held - prevHeld) * k; }
+                case 4: { float k = (1 - std::cos(juce::MathConstants<float>::pi * p)) / 2; v = prevHeld + (held - prevHeld) * k; break; }
+                default: v = held;          // square random: a new random value at each cycle, held
             }
             o[i] = v * depth + offset;
         }

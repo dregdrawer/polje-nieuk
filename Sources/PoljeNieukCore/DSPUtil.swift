@@ -181,3 +181,22 @@ public enum PatternRescale {
         return (out, newLen)
     }
 }
+
+/// Step patterns (samplerack, drumsynth, drums, roll): kept at 128 steps; the length goes 1 … 32, then 64, 128.
+public enum StepPattern {
+    public static let steps = 128
+    public static let legacySteps = 32
+    public static let lengths: [Float] = (1...32).map(Float.init) + [64, 128]
+    static func length(_ key: String, def: Int) -> ParamSpec {
+        var p = ParamSpec.integer(key, "length", 1, steps, def)
+        p.allowed = lengths
+        return p
+    }
+    /// A pattern saved at 32 steps per lane, spread onto 128 (the same steps, the rest empty).
+    public static func widen(_ v: [Float], lanes: Int) -> [Float] {
+        guard v.count == lanes * legacySteps else { return v }
+        var out = [Float](repeating: 0, count: lanes * steps)
+        for l in 0..<lanes { for s in 0..<legacySteps { out[l * steps + s] = v[l * legacySteps + s] } }
+        return out
+    }
+}

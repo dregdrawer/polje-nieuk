@@ -85,8 +85,12 @@ public protocol SpectrumSource: AnyObject {
     /// Main thread: copies the most recent `count` samples (oldest first) into `out`.
     func copyRecent(into out: UnsafeMutablePointer<Float>, count: Int)
 }
+/// eq: what goes in as well as what comes out (the display draws both).
+public protocol InputSpectrumSource: AnyObject {
+    func copyRecentInput(into out: UnsafeMutablePointer<Float>, count: Int)
+}
 
-final class ParametricEQNode: DSPNode, SpectrumSource {
+final class ParametricEQNode: DSPNode, SpectrumSource, InputSpectrumSource {
     static let ringSize = 8192
     private let ring: UnsafeMutablePointer<Float> = {
         let p = UnsafeMutablePointer<Float>.allocate(capacity: ParametricEQNode.ringSize)
@@ -94,7 +98,24 @@ final class ParametricEQNode: DSPNode, SpectrumSource {
         return p
     }()
     private var ringW = 0
-    deinit { ring.deallocate() }
+    /// the input, before the bands (same position as `ring`)
+    private let inRing: UnsafeMutablePointer<Float> = {
+        let p = UnsafeMutablePointer<Float>.allocate(capacity: ParametricEQNode.ringSize)
+        p.initialize(repeating: 0, count: ParametricEQNode.ringSize)
+        return p
+    }()
+    deinit { ring.deallocate(); inRing.deallocate() }
+
+    func copyRecentInput(into out: UnsafeMutablePointer<Float>, count: Int) {
+        let n = min(count, Self.ringSize)
+        var r = ringW - n
+        if r < 0 { r += Self.ringSize }
+        for i in 0..<n {
+            out[i] = inRing[r]
+            r += 1
+            if r >= Self.ringSize { r = 0 }
+        }
+    }
 
     func copyRecent(into out: UnsafeMutablePointer<Float>, count: Int) {
         let n = min(count, Self.ringSize)
@@ -132,6 +153,7 @@ final class ParametricEQNode: DSPNode, SpectrumSource {
         let oL = outputs[0], oR = outputs[1]
         for i in 0..<frames {
             var l = inL[i], r = inR[i]
+            inRing[ringW] = (l + r) * 0.5                 // pre-EQ mono feed for the analyzer
             for b in 0..<n {
                 let q = bands[b]
                 let yl = q.b0 * l + q.zL1
