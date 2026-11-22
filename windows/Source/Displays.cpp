@@ -462,21 +462,24 @@ public:
     using NativeDisplay::NativeDisplay;
     bool isRoll() const { return spec.kind == "roll"; }
     Rect inner(Rect r) const { return r.reduced(0, isRoll() ? 4.0f : 3.0f); }
-    // roll: the grid, with a scrollbar beside it (all 7 octaves, 2 on screen)
-    static constexpr float bar = 7;
-    Rect gridRect(Rect r) const { auto i = inner(r); return isRoll() ? i.withTrimmedRight(bar + 3) : i; }
-    Rect barRect(Rect r) const { auto i = inner(r); return Rect(i.getRight() - bar, i.getY(), bar, i.getHeight()); }
+    // roll: the grid with a scrollbar beside it (all 7 octaves, 2 on screen) and the velocity lane under it
+    static constexpr float bar = 7, lane = 30, laneGap = 4;
+    Rect gridRect(Rect r) const { auto i = inner(r); return isRoll() ? Rect(i.getX(), i.getY(), i.getWidth() - bar - 3, i.getHeight() - lane - laneGap) : i; }
+    Rect barRect(Rect r) const { auto g = gridRect(r); return Rect(g.getRight() + 3, g.getY(), bar, g.getHeight()); }
+    Rect laneRect(Rect r) const { auto g = gridRect(r); return Rect(g.getX(), g.getBottom() + laneGap, g.getWidth(), lane); }
     int rows() const { return isRoll() ? RollNode::shown : DrumsNode::lanes; }
     int stored() const { return isRoll() ? RollNode::rows : DrumsNode::lanes; }
     int maxBase() const { return RollNode::rows - RollNode::shown; }
     int base() const { return isRoll() ? std::clamp(int(std::round(p("low", -12))) - RollNode::lowest, 0, maxBase()) : 0; }
     int len() const { return int(std::round(p("len", 16))); }
+    RollNode* roll() { return dynamic_cast<RollNode*>(dsp()); }
     float* cells() {
-        if (auto* n = dynamic_cast<RollNode*>(dsp())) return n->grid.data();
+        if (auto* n = roll()) return n->grid.data();
         if (auto* n = dynamic_cast<DrumsNode*>(dsp())) return n->hits.data();
         return nullptr;
     }
-    bool isOn(int s, int r) { auto* c = cells(); return c && c[(r + base()) * StepPattern::steps + s] > 0.5f; }
+    static constexpr int S = StepPattern::steps;
+    bool isOn(int s, int r) { auto* c = cells(); return c && c[(r + base()) * S + s] > 0.5f; }
     float rowY(int r, float rh, float h) const { return !isRoll() ? float(r) * rh : h - float(r + 1) * rh; }
     int rowAt(float y, float rh) const { int i = int(std::floor(y / rh)); return !isRoll() ? i : rows() - 1 - i; }
     Rect thumb(Pt size, int b) const {
@@ -484,12 +487,18 @@ public:
         float t = maxBase() > 0 ? float(b) / float(maxBase()) : 0;
         return Rect(0, (1 - t) * (size.y - h), size.x, h);      // high notes at the top
     }
+    std::optional<float> stepVelocity(int s) {
+        auto* n = roll(); if (!n) return std::nullopt;
+        std::optional<float> v;
+        for (int row = 0; row < RollNode::rows; ++row) if (n->starts(s, row)) v = std::max(v.value_or(0.0f), n->vel[size_t(row * S + s)]);
+        return v;
+    }
     std::vector<LivePart> parts(Rect r) override {
         auto* m = &model;
         std::vector<LivePart> list { part("grid", gridRect(r), [this, m] {
                 auto* d = dsp();
                 int64_t h = m->isRunning && d ? int64_t(d->readouts[0]) : -1;
-                if (auto* c = cells()) LiveSig::mix(h, LiveSig::floats(c, StepPattern::steps * stored()));
+                if (auto* c = cells()) LiveSig::mix(h, LiveSig::floats(c, S * stored()));
                 LiveSig::mix(h, LiveSig::patch(node));
                 return h;
             }, [this, m](GC& g, Pt size) {
@@ -508,15 +517,43 @@ public:
                 drawStepGrid(g, size, L, divOf(node));
                 int ps = m->isRunning ? int(d->readouts[0]) : -1;
                 if (ps >= 0 && ps < L) g.fill(Rect(float(ps) * cw, 0, cw, size.y), Theme::text().withMultipliedAlpha(0.12f));
-                for (int s = 0; s < L; ++s)
+                if (auto* n = roll()) {
+                    // notes as bars as long as they last
                     for (int r = 0; r < R; ++r)
-                        if (isOn(s, r)) g.fill(Rect(float(s) * cw + 1, rowY(r, rh, size.y) + 1, cw - 2, rh - 2), s == ps ? Theme::text() : Theme::text().withMultipliedAlpha(0.75f));
+                        for (int s = 0; s < L; ++s) if (n->starts(s, r + B)) {
+                            int l = std::min(n->noteLength(s, r + B), L - s);
+                            bool playing = ps >= s && ps < s + l;
+                            g.fillRounded(Rect(float(s) * cw + 1, rowY(r, rh, size.y) + 1, float(l) * cw - 2, rh - 2), 1.5f, playing ? Theme::text() : Theme::text().withMultipliedAlpha(0.75f));
+                        }
+                } else {
+                    for (int s = 0; s < L; ++s)
+                        for (int r = 0; r < R; ++r)
+                            if (isOn(s, r)) g.fill(Rect(float(s) * cw + 1, rowY(r, rh, size.y) + 1, cw - 2, rh - 2), s == ps ? Theme::text() : Theme::text().withMultipliedAlpha(0.75f));
+                }
             }) };
-        if (isRoll())
+        if (isRoll()) {
             list.push_back(part("scroll", barRect(r), [this] { return int64_t(base()); }, [this](GC& g, Pt size) {
                 g.fillRounded(Rect(0, 0, size.x, size.y), 2, Theme::row());
                 g.fillRounded(thumb(size, base()), 2, Theme::dim());
             }));
+            list.push_back(part("velocity", laneRect(r), [this] {
+                auto* n = roll(); if (!n) return int64_t(0);
+                int64_t h = LiveSig::floats(n->grid.data(), S * RollNode::rows);
+                LiveSig::mix(h, LiveSig::floats(n->vel.data(), S * RollNode::rows));
+                LiveSig::mix(h, LiveSig::patch(node));
+                return h;
+            }, [this](GC& g, Pt size) {
+                g.fill(Rect(0, 0, size.x, size.y), Theme::row());
+                int L = len(); float cw = size.x / float(std::max(L, 1));
+                for (int s = 0; s < L; ++s) {
+                    auto v = stepVelocity(s);
+                    if (!v) continue;
+                    float hh = *v * (size.y - 2), x = float(s) * cw + cw / 2;
+                    g.fill(Rect(x - 0.75f, size.y - hh, 1.5f, hh), Theme::text().withMultipliedAlpha(0.75f));
+                    g.g.setColour(Theme::text()); g.g.fillEllipse(x - 2.5f, size.y - hh - 2.5f, 5, 5);
+                }
+            }));
+        }
         return list;
     }
     void scrollTo(Pt pt, Rect r) {
@@ -527,31 +564,102 @@ public:
         int li = spec.paramIndex("low");
         if (li >= 0 && nb != base()) model.setParam(id, li, float(RollNode::lowest + nb));
     }
-    void edit(Pt pt, Rect r) {
-        auto i = gridRect(r);
-        int L = len();
+    std::optional<std::pair<int, int>> cell(Pt pt, Rect r) {
+        auto i = gridRect(r); int L = len();
         float cw = i.getWidth() / float(std::max(L, 1)), rh = i.getHeight() / float(rows());
-        int step = int((pt.x - i.getX()) / cw), row = rowAt(pt.y - i.getY(), rh);
-        if (step < 0 || step >= L || row < 0 || row >= rows()) return;
-        if (!paint) paint = isOn(step, row) ? 0.0f : 1.0f;
-        if (auto* c = cells()) c[(row + base()) * StepPattern::steps + step] = *paint == 1 ? 1.0f : 0.0f;
+        int step = int(std::floor((pt.x - i.getX()) / cw)), row = rowAt(pt.y - i.getY(), rh);
+        if (step < 0 || step >= L || row < 0 || row >= rows()) return std::nullopt;
+        return std::make_pair(step, row);
+    }
+    void paintCell(Pt pt, Rect r) {
+        auto c = cell(pt, r); if (!c) return;
+        if (!paint) paint = isOn(c->first, c->second) ? 0.0f : 1.0f;
+        if (auto* cs = cells()) cs[(c->second + base()) * S + c->first] = *paint == 1 ? 1.0f : 0.0f;
+    }
+    void setNote(RollNode& n, int start, int row, int length, int L) {
+        int e = start + 1;
+        while (e < S && n.carries(e, row)) { n.grid[size_t(row * S + e)] = 0; ++e; }
+        n.grid[size_t(row * S + start)] = 1;
+        for (int k = 1; k < std::max(length, 1); ++k) if (start + k < L) n.grid[size_t(row * S + start + k)] = 2;
+        int end = start + std::max(length, 1);
+        if (end < S && n.carries(end, row)) n.grid[size_t(row * S + end)] = 1;
+    }
+    void deleteNote(RollNode& n, int start, int row) {
+        n.grid[size_t(row * S + start)] = 0;
+        int e = start + 1;
+        while (e < S && n.carries(e, row)) { n.grid[size_t(row * S + e)] = 0; ++e; }
+        n.vel[size_t(row * S + start)] = RollNode::defaultVelocity;
+    }
+    void setVelocity(Pt pt, Rect r) {
+        auto* n = roll(); if (!n) return;
+        auto l = laneRect(r); int L = len();
+        float cw = l.getWidth() / float(std::max(L, 1));
+        int s = int(std::floor((pt.x - l.getX()) / cw));
+        if (s < 0 || s >= L) return;
+        float v = std::clamp((l.getBottom() - pt.y) / (l.getHeight() - 2), 0.02f, 1.0f);
+        for (int row = 0; row < RollNode::rows; ++row) if (n->starts(s, row)) n->vel[size_t(row * S + s)] = v;
+    }
+    void commit() {
+        if (auto* n = roll()) {
+            model.setData(id, { { "grid", std::vector<float>(n->grid.begin(), n->grid.end()) }, { "vel", std::vector<float>(n->vel.begin(), n->vel.end()) } });
+        } else if (auto* c = cells()) model.setData(id, "hits", std::vector<float>(c, c + S * stored()));
     }
     bool press(Pt pt, Rect r, const PointerInfo&) override {
-        if (isRoll() && barRect(r).expanded(3, 0).contains(pt)) { scrolling = true; scrollTo(pt, r); return true; }
+        mode = Mode::none;
+        if (isRoll() && barRect(r).expanded(3, 0).contains(pt)) { mode = Mode::scroll; scrollTo(pt, r); return true; }
+        if (isRoll() && laneRect(r).contains(pt)) { mode = Mode::velocity; setVelocity(pt, r); return true; }
         if (!gridRect(r).contains(pt)) return false;
-        paint.reset(); edit(pt, r); return true;
+        if (auto* n = roll()) {
+            auto c = cell(pt, r); if (!c) return true;
+            int row = c->second + base();
+            if (auto st = n->noteStart(c->first, row)) { noteStart = *st; noteRow = row; created = false; }
+            else { setNote(*n, c->first, row, 1, len()); n->vel[size_t(row * S + c->first)] = RollNode::defaultVelocity; noteStart = c->first; noteRow = row; created = true; }
+            mode = Mode::note;
+            return true;
+        }
+        paint.reset(); mode = Mode::paint; paintCell(pt, r); return true;
     }
-    void drag(Pt pt, Rect r, const PointerInfo&) override { if (scrolling) scrollTo(pt, r); else edit(pt, r); }
-    void release(Pt, Rect, const PointerInfo&) override {
-        if (scrolling) { scrolling = false; return; }
+    void drag(Pt pt, Rect r, const PointerInfo& info) override {
+        switch (mode) {
+            case Mode::scroll: scrollTo(pt, r); break;
+            case Mode::velocity: setVelocity(pt, r); break;
+            case Mode::paint: paintCell(pt, r); break;
+            case Mode::note: {
+                auto* n = roll(); if (!n || !info.moved) break;
+                auto i = gridRect(r); int L = len();
+                float cw = i.getWidth() / float(std::max(L, 1));
+                int col = int(std::floor((pt.x - i.getX()) / cw));
+                setNote(*n, noteStart, noteRow, std::clamp(col - noteStart + 1, 1, L - noteStart), L);
+                break;
+            }
+            default: break;
+        }
+    }
+    void release(Pt, Rect, const PointerInfo& info) override {
+        if (mode == Mode::scroll) { mode = Mode::none; return; }
+        if (mode == Mode::note && !info.moved && !created) if (auto* n = roll()) deleteNote(*n, noteStart, noteRow);
         paint.reset();
-        auto* c = cells();
-        if (!c) return;
-        model.setData(id, isRoll() ? "grid" : "hits", std::vector<float>(c, c + StepPattern::steps * stored()));
+        mode = Mode::none;
+        commit();
+    }
+    /// the scroll wheel over the grid: move through the octaves (up = higher)
+    bool wheel(Pt pt, Rect r, float dy) override {
+        if (!isRoll() || !inner(r).contains(pt)) return false;
+        rest += dy * 8;
+        int rowsBy = int(rest);
+        if (rowsBy == 0) return true;
+        rest -= float(rowsBy);
+        int li = spec.paramIndex("low");
+        int low = int(std::round(p("low", -12)));
+        int nl = std::clamp(low + rowsBy, RollNode::lowest, RollNode::lowest + RollNode::rows - RollNode::shown);
+        if (li >= 0 && nl != low) model.setParam(id, li, float(nl));
+        return true;
     }
 private:
+    enum class Mode { none, scroll, paint, note, velocity } mode = Mode::none;
     std::optional<float> paint;
-    bool scrolling = false;
+    int noteStart = 0, noteRow = 0; bool created = false;
+    float rest = 0;
 };
 
 // ---------------------------------------------------------------- fm: the voice (< name >, bank, load a sysex), six operators, the selected one's envelope

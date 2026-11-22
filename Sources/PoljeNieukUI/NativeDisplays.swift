@@ -305,21 +305,24 @@ final class TuringDisplay: NativeDisplay {
 
 final class GridDisplay: NativeDisplay {
     private var paint: Float?
-    private var scrolling = false
+    private enum Grab { case none, scroll, paint, note(start: Int, row: Int, created: Bool), velocity }
+    private var grab = Grab.none
     private var isRoll: Bool { spec.kind == "roll" }
     private func inner(_ r: CGRect) -> CGRect { r.insetBy(dx: 0, dy: spec.kind == "drums" ? 3 : 4) }
-    /// roll: the grid, with a scrollbar beside it (all 7 octaves, 2 on screen)
-    private static let bar: CGFloat = 7
+    /// roll: the grid with a scrollbar beside it (all 7 octaves, 2 on screen), and the velocity lane under it
+    private static let bar: CGFloat = 7, lane: CGFloat = 30, laneGap: CGFloat = 4
     private func gridRect(_ r: CGRect) -> CGRect {
         let i = inner(r)
-        return isRoll ? CGRect(x: i.minX, y: i.minY, width: i.width - Self.bar - 3, height: i.height) : i
+        return isRoll ? CGRect(x: i.minX, y: i.minY, width: i.width - Self.bar - 3, height: i.height - Self.lane - Self.laneGap) : i
     }
-    private func barRect(_ r: CGRect) -> CGRect { let i = inner(r); return CGRect(x: i.maxX - Self.bar, y: i.minY, width: Self.bar, height: i.height) }
+    private func barRect(_ r: CGRect) -> CGRect { let g = gridRect(r); return CGRect(x: g.maxX + 3, y: g.minY, width: Self.bar, height: g.height) }
+    private func laneRect(_ r: CGRect) -> CGRect { let g = gridRect(r); return CGRect(x: g.minX, y: g.maxY + Self.laneGap, width: g.width, height: Self.lane) }
     private var view: GridEditor? {
         if let n = dsp as? RollNode { return GridEditor(kind: .roll(n), model: model, patchNode: node) }
         if let n = dsp as? DrumsNode { return GridEditor(kind: .drums(n), model: model, patchNode: node) }
         return nil
     }
+    private var roll: RollNode? { dsp as? RollNode }
     private var maxBase: Int { RollNode.rows - RollNode.shown }
     /// the scrollbar's thumb (bar-local): its size is the share of the range on screen
     private func thumb(_ size: CGSize, base: Int) -> CGRect {
@@ -327,6 +330,14 @@ final class GridDisplay: NativeDisplay {
         let t = maxBase > 0 ? CGFloat(base) / CGFloat(maxBase) : 0
         return CGRect(x: 0, y: (1 - t) * (size.height - h), width: size.width, height: h)      // high notes at the top
     }
+    /// the velocity of the notes starting at a step (the loudest, if a chord), or nil when none start there
+    private func stepVelocity(_ s: Int) -> Float? {
+        guard let n = roll else { return nil }
+        var v: Float?
+        for row in 0..<RollNode.rows where n.starts(s, row) { v = max(v ?? 0, n.vel[row * RollNode.steps + s]) }
+        return v
+    }
+
     override func parts(_ r: CGRect) -> [LivePart] {
         let m = model, d = dsp
         var list = [part("grid", gridRect(r), signature: { [weak self] in
@@ -347,6 +358,25 @@ final class GridDisplay: NativeDisplay {
                 g.fill(Path(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: 2), with: .color(Theme.row))
                 g.fill(Path(roundedRect: self.thumb(size, base: v.base), cornerRadius: 2), with: .color(Theme.dim))
             })
+            // velocity: a bar under each step where notes start, as tall as their velocity
+            list.append(part("velocity", laneRect(r), signature: { [weak self] in
+                guard let n = d as? RollNode, let self else { return 0 }
+                var h = LiveSig.floats(n.grid, RollNode.steps * RollNode.rows)
+                LiveSig.mix(&h, LiveSig.floats(n.vel, RollNode.steps * RollNode.rows))
+                LiveSig.mix(&h, LiveSig.patch(self.node))
+                return h
+            }) { [weak self] g, size in
+                guard let self, let v = self.view else { return }
+                g.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Theme.row))
+                let cw = size.width / CGFloat(max(v.len, 1))
+                for s in 0..<v.len {
+                    guard let vel = self.stepVelocity(s) else { continue }
+                    let h = CGFloat(vel) * (size.height - 2)
+                    let x = CGFloat(s) * cw + cw / 2
+                    g.fill(Path(CGRect(x: x - 0.75, y: size.height - h, width: 1.5, height: h)), with: .color(Theme.text.opacity(0.75)))
+                    g.fill(Path(ellipseIn: CGRect(x: x - 2.5, y: size.height - h - 2.5, width: 5, height: 5)), with: .color(Theme.text))
+                }
+            })
         }
         return list
     }
@@ -358,27 +388,91 @@ final class GridDisplay: NativeDisplay {
         guard let li = spec.paramIndex("low"), base != view?.base else { return }
         model.setParam(id, li, Float(RollNode.lowest + base))
     }
-    private func edit(_ p: CGPoint, _ r: CGRect) {
-        guard let v = view else { return }
+    private func cell(_ p: CGPoint, _ r: CGRect) -> (step: Int, row: Int)? {
+        guard let v = view else { return nil }
         let i = gridRect(r)
         let cw = i.width / CGFloat(max(v.len, 1)), rh = i.height / CGFloat(v.rows)
-        let step = Int((p.x - i.minX) / cw), row = v.rowAt(p.y - i.minY, rh)
-        guard step >= 0 && step < v.len && row >= 0 && row < v.rows else { return }
-        if paint == nil { paint = v.isOn(step, row) ? 0 : 1 }
-        v.set(step, row, paint == 1)
+        let step = Int(floor((p.x - i.minX) / cw)), row = v.rowAt(p.y - i.minY, rh)
+        guard step >= 0 && step < v.len && row >= 0 && row < v.rows else { return nil }
+        return (step, row)
     }
+    /// drums: paint cells on / off
+    private func edit(_ p: CGPoint, _ r: CGRect) {
+        guard let v = view, let c = cell(p, r) else { return }
+        if paint == nil { paint = v.isOn(c.step, c.row) ? 0 : 1 }
+        v.set(c.step, c.row, paint == 1)
+    }
+    /// roll: a note at `start` in `row` lasting `length` steps (cells after it carry it on)
+    private func setNote(_ n: RollNode, start: Int, row: Int, length: Int, len: Int) {
+        // clear what the note covered, then lay it down again at its new length
+        var e = start + 1
+        while e < RollNode.steps && n.carries(e, row) { n.grid[row * RollNode.steps + e] = 0; e += 1 }
+        n.grid[row * RollNode.steps + start] = 1
+        for k in 1..<max(length, 1) where start + k < len { n.grid[row * RollNode.steps + start + k] = 2 }
+        // a note right after it that now sits inside it: gone; one just after its end starts fresh
+        let end = start + max(length, 1)
+        if end < RollNode.steps && n.carries(end, row) { n.grid[row * RollNode.steps + end] = 1 }
+    }
+    private func deleteNote(_ n: RollNode, start: Int, row: Int) {
+        n.grid[row * RollNode.steps + start] = 0
+        var e = start + 1
+        while e < RollNode.steps && n.carries(e, row) { n.grid[row * RollNode.steps + e] = 0; e += 1 }
+        n.vel[row * RollNode.steps + start] = RollNode.defaultVelocity
+    }
+    private func setVelocity(_ p: CGPoint, _ r: CGRect) {
+        guard let n = roll, let v = view else { return }
+        let l = laneRect(r)
+        let cw = l.width / CGFloat(max(v.len, 1))
+        let s = Int(floor((p.x - l.minX) / cw))
+        guard s >= 0 && s < v.len else { return }
+        let vel = Float(min(max((l.maxY - p.y) / (l.height - 2), 0.02), 1))
+        for row in 0..<RollNode.rows where n.starts(s, row) { n.vel[row * RollNode.steps + s] = vel }
+    }
+
     override func press(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) -> Bool {
-        if isRoll && barRect(r).insetBy(dx: -3, dy: 0).contains(p) { scrolling = true; scroll(to: p, r); return true }
+        grab = .none
+        if isRoll && barRect(r).insetBy(dx: -3, dy: 0).contains(p) { grab = .scroll; scroll(to: p, r); return true }
+        if isRoll && laneRect(r).contains(p) { grab = .velocity; setVelocity(p, r); return true }
         guard gridRect(r).contains(p) else { return false }
-        paint = nil
+        if let n = roll, let v = view, let c = cell(p, r) {
+            let row = c.row + v.base
+            if let start = n.noteStart(c.step, row) {
+                grab = .note(start: start, row: row, created: false)          // drag to change its length; a click deletes it
+            } else {
+                setNote(n, start: c.step, row: row, length: 1, len: v.len)
+                n.vel[row * RollNode.steps + c.step] = RollNode.defaultVelocity
+                grab = .note(start: c.step, row: row, created: true)          // new: drag right to make it longer
+            }
+            return true
+        }
+        paint = nil; grab = .paint
         edit(p, r)
         return true
     }
-    override func drag(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) { if scrolling { scroll(to: p, r) } else { edit(p, r) } }
+    override func drag(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) {
+        switch grab {
+        case .scroll: scroll(to: p, r)
+        case .velocity: setVelocity(p, r)
+        case .paint: edit(p, r)
+        case .note(let start, let row, _):
+            guard let n = roll, let v = view, info.moved else { return }
+            let i = gridRect(r), cw = i.width / CGFloat(max(v.len, 1))
+            let col = Int(floor((p.x - i.minX) / cw))
+            setNote(n, start: start, row: row, length: min(max(col - start + 1, 1), v.len - start), len: v.len)
+        case .none: break
+        }
+    }
     override func release(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) {
-        if scrolling { scrolling = false; return }
-        paint = nil
-        view?.commit()
+        switch grab {
+        case .scroll: break
+        case .note(let start, let row, let created):
+            if !info.moved && !created, let n = roll { deleteNote(n, start: start, row: row) }
+            view?.commit()
+        default:
+            paint = nil
+            view?.commit()
+        }
+        grab = .none
     }
 }
 

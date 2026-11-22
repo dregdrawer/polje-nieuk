@@ -295,7 +295,9 @@ struct GridEditor: View {
 
     func commit() {
         switch kind {
-        case .roll(let n): model.setData(patchNode.id, "grid", (0..<RollNode.steps * RollNode.rows).map { n.grid[$0] })
+        case .roll(let n):
+            let count = RollNode.steps * RollNode.rows
+            model.setData(patchNode.id, ["grid": (0..<count).map { n.grid[$0] }, "vel": (0..<count).map { n.vel[$0] }])
         case .drums(let n): model.setData(patchNode.id, "hits", (0..<DrumsNode.steps * DrumsNode.lanes).map { n.hits[$0] })
         }
     }
@@ -349,10 +351,22 @@ struct GridEditor: View {
         if ps >= 0 && ps < len {
             ctx.fill(Path(CGRect(x: CGFloat(ps) * cw, y: 0, width: cw, height: size.height)), with: .color(Theme.text.opacity(0.12)))
         }
-        for s in 0..<len {
-            for r in 0..<rows where isOn(s, r) {
-                let rect = CGRect(x: CGFloat(s) * cw + 1, y: rowY(r, rh, size.height) + 1, width: cw - 2, height: rh - 2)
-                ctx.fill(Path(rect), with: .color(s == ps ? Theme.text : Theme.text.opacity(0.75)))
+        if case .roll(let n) = kind {
+            // notes as bars as long as they last (a note dragged longer spans several steps)
+            for r in 0..<rows {
+                for s in 0..<len where n.starts(s, r + base) {
+                    let l = min(n.noteLength(s, r + base), len - s)
+                    let rect = CGRect(x: CGFloat(s) * cw + 1, y: rowY(r, rh, size.height) + 1, width: CGFloat(l) * cw - 2, height: rh - 2)
+                    let playing = ps >= s && ps < s + l
+                    ctx.fill(Path(roundedRect: rect, cornerRadius: 1.5), with: .color(playing ? Theme.text : Theme.text.opacity(0.75)))
+                }
+            }
+        } else {
+            for s in 0..<len {
+                for r in 0..<rows where isOn(s, r) {
+                    let rect = CGRect(x: CGFloat(s) * cw + 1, y: rowY(r, rh, size.height) + 1, width: cw - 2, height: rh - 2)
+                    ctx.fill(Path(rect), with: .color(s == ps ? Theme.text : Theme.text.opacity(0.75)))
+                }
             }
         }
     }

@@ -1051,6 +1051,9 @@ void Canvas::mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDet
     if (finder) return;
     float raw = w.deltaY != 0 ? w.deltaY : w.deltaX;
     float dy = w.isReversed ? -raw : raw;
+    // over a piano roll's grid: scroll through its octaves
+    if (auto* it = itemAt(e.position); it && it->display && it->geo)
+        if (auto d = it->geo->display()) if (it->display->wheel(local(*it, e.position), *d, dy)) return;
     float factor = w.isSmooth ? std::exp(std::clamp(dy * 256, -40.0f, 40.0f) * 0.005f) : (dy > 0 ? 1.1f : (dy < 0 ? 1 / 1.1f : 1.0f));
     if (factor != 1) model.zoomBy(factor, e.position);
 }

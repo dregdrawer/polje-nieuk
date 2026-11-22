@@ -198,7 +198,7 @@ enum BoxLayout {
         case "keys": return 72
         case "seq": return 100
         case "turing": return 74
-        case "roll": return 168
+        case "roll": return 168 + 34          // the grid, then the velocity lane
         case "drums": return 8 * portRow + 6    // one lane per outlet row, lined up
         case "slider": return 180
         case "knob": return 100

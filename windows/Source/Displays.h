@@ -41,6 +41,8 @@ public:
     virtual void release(Pt, Rect, const PointerInfo&) {}
     virtual std::optional<std::vector<MenuItem>> menu(Pt, Rect) { return std::nullopt; }
     virtual std::optional<int> pad(Pt, Rect) { return std::nullopt; }
+    /// the scroll wheel over the display (true: taken; roll scrolls its octaves)
+    virtual bool wheel(Pt, Rect, float) { return false; }
     static std::unique_ptr<NativeDisplay> make(AppModel& m, const PatchNode& n, const ModuleSpec& s);
 
     AppModel& model;

@@ -478,30 +478,62 @@ public final class RollNode: DSPNode {
     public static let lowest = -36
     /// The rows on screen at once (2 octaves); scroll for the rest.
     public static let shown = 24
-    /// Notes on / off: row * steps + step (row 0 = lowest). Any number of notes per step.
+    /// Notes: row * steps + step (row 0 = lowest). 0 = nothing, 1 = a note starts here, 2 = the note from the step
+    /// before carries on (a longer note, drawn by dragging). Any number of notes per step.
     public let grid: UnsafeMutablePointer<Float>
+    /// Each note's velocity (0…1) at the step it starts; 0.8 unless set in the velocity lane.
+    public let vel: UnsafeMutablePointer<Float>
+    public static let defaultVelocity: Float = 0.8
     private var step = -1
-    private var gateLeft = 0
     private var clock = StepClock()
     public static let voices = kMaxVoices
-    /// each note's pitch row, kept while it's silent (so a release doesn't slide)
+    /// per voice: the note's row (kept while it's silent, so a release doesn't slide), whether it's playing,
+    /// how long its gate stays open, its velocity, and a short gap before a new note on the same voice
     private var held = [Float](repeating: 0, count: RollNode.voices)
     private var on = [Bool](repeating: false, count: RollNode.voices)
+    private var gateLeft = [Int](repeating: 0, count: RollNode.voices)
+    private var noteVel = [Float](repeating: 0.8, count: RollNode.voices)
+    private var gap = [Int](repeating: 0, count: RollNode.voices)
+    private var taken = [Bool](repeating: false, count: RollNode.voices)
 
     public override init(spec: ModuleSpec, sampleRate: Double) {
         grid = .allocate(capacity: Self.steps * Self.rows); grid.initialize(repeating: 0, count: Self.steps * Self.rows)
+        vel = .allocate(capacity: Self.steps * Self.rows); vel.initialize(repeating: Self.defaultVelocity, count: Self.steps * Self.rows)
         super.init(spec: spec, sampleRate: sampleRate)
     }
-    deinit { grid.deallocate() }
+    deinit { grid.deallocate(); vel.deallocate() }
     public override var defaultData: [String: [Float]] { ["grid": [Float](repeating: 0, count: Self.steps * Self.rows)] }
 
     public override func setData(_ key: String, _ values: [Float]) {
+        if key == "vel" {
+            for k in 0..<Self.steps * Self.rows { vel[k] = k < values.count && values[k].isFinite ? min(max(values[k], 0), 1) : Self.defaultVelocity }
+            return
+        }
         guard key == "grid" else { return }
         let v = StepPattern.widen(values, lanes: Self.rows)                // a 32-step pattern from before
-        for k in 0..<Self.steps * Self.rows { grid[k] = k < v.count && v[k].isFinite && v[k] > 0.5 ? 1 : 0 }
+        for k in 0..<Self.steps * Self.rows {
+            let x = k < v.count && v[k].isFinite ? v[k] : 0
+            grid[k] = x > 1.5 ? 2 : (x > 0.5 ? 1 : 0)
+        }
     }
 
+    /// Something sounds at this cell (a note starts or carries on).
     @inline(__always) public func isOn(_ step: Int, _ row: Int) -> Bool { grid[row * Self.steps + step] > 0.5 }
+    @inline(__always) public func starts(_ step: Int, _ row: Int) -> Bool { let x = grid[row * Self.steps + step]; return x > 0.5 && x < 1.5 }
+    @inline(__always) public func carries(_ step: Int, _ row: Int) -> Bool { grid[row * Self.steps + step] > 1.5 }
+    /// The step a note covering this cell starts at (walking back over carried-on steps).
+    public func noteStart(_ step: Int, _ row: Int) -> Int? {
+        guard isOn(step, row) else { return nil }
+        var s = step
+        while s > 0 && carries(s, row) { s -= 1 }
+        return s
+    }
+    /// How many steps the note starting here lasts.
+    public func noteLength(_ start: Int, _ row: Int) -> Int {
+        var n = 1
+        while start + n < Self.steps && carries(start + n, row) { n += 1 }
+        return n
+    }
 
     /// The old one-note-per-step pattern (a row per step above `low`, -1 = rest) as a grid.
     public static func grid(fromNotes notes: [Float], low: Int = -12) -> [Float] {
@@ -531,6 +563,7 @@ public final class RollNode: DSPNode {
         let div = Divisions.beats(params[1])
         let low = Float(Self.lowest)
         let gateLen = min(max(params[3], 0.05), 1)
+        let gapLen = max(1, Int(sampleRate * 0.002))
         // notes on the cables: the most any step of the loop has (kept steady, so releases ring out)
         var V = 1
         for s in 0..<len {
@@ -543,21 +576,36 @@ public final class RollNode: DSPNode {
         for i in 0..<frames {
             if clock.tick(beat: ctx.beat[i], div: div, spb: ctx.samplesPerBeat, clockIn: nil, sampleRate: sampleRate) {
                 step = safeInt(floor(ctx.beat[i] / div)) % len
-                // this step's notes, lowest first, one per voice
-                var v = 0
-                for r in 0..<Self.rows where grid[r * Self.steps + step] > 0.5 && v < Self.voices {
-                    held[v] = Float(r); on[v] = true; v += 1
+                let next = (step + 1) % len
+                let full = max(16, clock.stepSamples), short = max(16, Int(Float(clock.stepSamples) * gateLen))
+                for k in 0..<Self.voices { taken[k] = false }
+                // notes carrying on from the last step keep their voice (no new gate)
+                for r in 0..<Self.rows where grid[r * Self.steps + step] > 1.5 {
+                    guard let v = (0..<Self.voices).first(where: { on[$0] && !taken[$0] && Int(held[$0]) == r }) else { continue }
+                    taken[v] = true
+                    gateLeft[v] = grid[r * Self.steps + next] > 1.5 && next != 0 ? full + 16 : short
                 }
-                for k in v..<Self.voices { on[k] = false }
-                gateLeft = v > 0 ? max(16, Int(Float(clock.stepSamples) * gateLen)) : 0
+                // notes starting here (and carried-on notes that lost their voice), lowest first, on free voices
+                for r in 0..<Self.rows where grid[r * Self.steps + step] > 0.5 {
+                    if (0..<Self.voices).contains(where: { taken[$0] && Int(held[$0]) == r }) { continue }
+                    guard let v = (0..<Self.voices).first(where: { !taken[$0] }) else { break }
+                    taken[v] = true
+                    if on[v] && gateLeft[v] > 0 { gap[v] = gapLen }      // a new note right after one: let the gate fall first
+                    held[v] = Float(r); on[v] = true
+                    noteVel[v] = vel[r * Self.steps + step]
+                    gateLeft[v] = grid[r * Self.steps + next] > 1.5 && next != 0 ? full + 16 : short
+                }
+                for k in 0..<Self.voices where !taken[k] { on[k] = false; gateLeft[k] = 0 }
             }
             for v in 0..<V {
-                let g = gateLeft > 0 && on[v]
+                let g = gateLeft[v] > 0 && on[v] && gap[v] == 0
                 outVoice(0, v)[i] = pitchCV(low + held[v])
                 outVoice(1, v)[i] = g ? kGateHigh : 0
-                outVoice(2, v)[i] = g ? 0.8 : 0
+                outVoice(2, v)[i] = g ? noteVel[v] : 0
             }
-            if gateLeft > 0 { gateLeft -= 1 }
+            for v in 0..<Self.voices {
+                if gap[v] > 0 { gap[v] -= 1 } else if gateLeft[v] > 0 { gateLeft[v] -= 1 }
+            }
         }
         readouts[0] = Float(step)
     }

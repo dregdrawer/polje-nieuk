@@ -168,18 +168,37 @@ public:
     using DSPNode::DSPNode;
     void process(int frames, const float* const* in, uint64_t con, ProcessContext& ctx) override;
     std::map<std::string, std::vector<float>> defaultData() const override { return { { "grid", std::vector<float>(steps * rows, 0.0f) } }; }
+    // grid: 0 nothing, 1 a note starts, 2 the note from the step before carries on; vel: each note's velocity
+    static constexpr float defaultVelocity = 0.8f;
+    RollNode(const ModuleSpec& s, double sr) : DSPNode(s, sr) { vel.fill(defaultVelocity); }
     void setData(const std::string& key, const std::vector<float>& values) override {
+        if (key == "vel") {
+            for (int k = 0; k < steps * rows; ++k) vel[size_t(k)] = k < int(values.size()) && std::isfinite(values[size_t(k)]) ? std::clamp(values[size_t(k)], 0.0f, 1.0f) : defaultVelocity;
+            return;
+        }
         if (key != "grid") return;
         auto v = StepPattern::widen(values, rows);              // a 32-step pattern from before
-        for (int k = 0; k < steps * rows; ++k) grid[size_t(k)] = k < int(v.size()) && std::isfinite(v[size_t(k)]) && v[size_t(k)] > 0.5f ? 1.0f : 0.0f;
+        for (int k = 0; k < steps * rows; ++k) {
+            float x = k < int(v.size()) && std::isfinite(v[size_t(k)]) ? v[size_t(k)] : 0.0f;
+            grid[size_t(k)] = x > 1.5f ? 2.0f : (x > 0.5f ? 1.0f : 0.0f);
+        }
     }
     bool isOn(int step, int row) const { return grid[size_t(row * steps + step)] > 0.5f; }
-    std::array<float, steps * rows> grid {};
+    bool starts(int step, int row) const { float x = grid[size_t(row * steps + step)]; return x > 0.5f && x < 1.5f; }
+    bool carries(int step, int row) const { return grid[size_t(row * steps + step)] > 1.5f; }
+    std::optional<int> noteStart(int step, int row) const {
+        if (!isOn(step, row)) return std::nullopt;
+        int s = step; while (s > 0 && carries(s, row)) --s;
+        return s;
+    }
+    int noteLength(int start, int row) const { int n = 1; while (start + n < steps && carries(start + n, row)) ++n; return n; }
+    std::array<float, steps * rows> grid {}, vel {};
 private:
-    int step = -1, gateLeft = 0;
+    int step = -1;
     StepClock clock;
-    float held[voices] = {};
-    bool on[voices] = {};
+    float held[voices] = {}, noteVel[voices] = { 0.8f, 0.8f, 0.8f, 0.8f };
+    bool on[voices] = {}, taken[voices] = {};
+    int gateLeft[voices] = {}, gap[voices] = {};
 };
 
 class DrumsNode : public DSPNode {

@@ -236,6 +236,7 @@ void RollNode::process(int frames, const float* const*, uint64_t, ProcessContext
     double div = Divisions::beats(params[1]);
     float low = float(lowest);            // params[2] is only where the view sits
     float gateLen = std::clamp(params[3], 0.05f, 1.0f);
+    int gapLen = std::max(1, int(sampleRate * 0.002));
     int V = 1;
     for (int s = 0; s < len; ++s) {
         int c = 0;
@@ -247,18 +248,42 @@ void RollNode::process(int frames, const float* const*, uint64_t, ProcessContext
     for (int i = 0; i < frames; ++i) {
         if (clock.tick(ctx.beat[i], div, ctx.samplesPerBeat, nullptr)) {
             step = safeInt(std::floor(ctx.beat[i] / div)) % len;
-            int v = 0;
-            for (int r = 0; r < rows && v < voices; ++r) if (grid[size_t(r * steps + step)] > 0.5f) { held[v] = float(r); on[v] = true; ++v; }
-            for (int k = v; k < voices; ++k) on[k] = false;
-            gateLeft = v > 0 ? std::max(16, int(float(clock.stepSamples) * gateLen)) : 0;
+            int next = (step + 1) % len;
+            int full = std::max(16, clock.stepSamples), shortG = std::max(16, int(float(clock.stepSamples) * gateLen));
+            for (int k = 0; k < voices; ++k) taken[k] = false;
+            // notes carrying on from the last step keep their voice (no new gate)
+            for (int r = 0; r < rows; ++r) {
+                if (grid[size_t(r * steps + step)] <= 1.5f) continue;
+                int v = -1;
+                for (int k = 0; k < voices; ++k) if (on[k] && !taken[k] && int(held[k]) == r) { v = k; break; }
+                if (v < 0) continue;
+                taken[v] = true;
+                gateLeft[v] = grid[size_t(r * steps + next)] > 1.5f && next != 0 ? full + 16 : shortG;
+            }
+            // notes starting here (and carried-on notes that lost their voice), lowest first, on free voices
+            for (int r = 0; r < rows; ++r) {
+                if (grid[size_t(r * steps + step)] <= 0.5f) continue;
+                bool has = false;
+                for (int k = 0; k < voices; ++k) if (taken[k] && int(held[k]) == r) { has = true; break; }
+                if (has) continue;
+                int v = -1;
+                for (int k = 0; k < voices; ++k) if (!taken[k]) { v = k; break; }
+                if (v < 0) break;
+                taken[v] = true;
+                if (on[v] && gateLeft[v] > 0) gap[v] = gapLen;      // a new note right after one: let the gate fall first
+                held[v] = float(r); on[v] = true;
+                noteVel[v] = vel[size_t(r * steps + step)];
+                gateLeft[v] = grid[size_t(r * steps + next)] > 1.5f && next != 0 ? full + 16 : shortG;
+            }
+            for (int k = 0; k < voices; ++k) if (!taken[k]) { on[k] = false; gateLeft[k] = 0; }
         }
         for (int v = 0; v < V; ++v) {
-            bool g = gateLeft > 0 && on[v];
+            bool g = gateLeft[v] > 0 && on[v] && gap[v] == 0;
             outVoice(0, v)[i] = pitchCV(low + held[v]);
             outVoice(1, v)[i] = g ? kGateHigh : 0.0f;
-            outVoice(2, v)[i] = g ? 0.8f : 0.0f;
+            outVoice(2, v)[i] = g ? noteVel[v] : 0.0f;
         }
-        if (gateLeft > 0) --gateLeft;
+        for (int v = 0; v < voices; ++v) { if (gap[v] > 0) --gap[v]; else if (gateLeft[v] > 0) --gateLeft[v]; }
     }
     readouts[0] = float(step);
 }

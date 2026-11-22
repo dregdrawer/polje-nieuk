@@ -1237,6 +1237,23 @@ do {
     check(abs(Double(ups) / 0.3 - 261.63) < 6, "fm: one operator at ratio 1 plays middle C (\(Double(ups) / 0.3) Hz)")
 }
 
+print("roll note lengths and velocity")
+do {
+    // one note at middle C lasting 4 steps (1/16 at 120 BPM = 125 ms each), velocity 0.5
+    var g = [Float](repeating: 0, count: RollNode.steps * RollNode.rows), v = [Float](repeating: RollNode.defaultVelocity, count: g.count)
+    let row = -RollNode.lowest
+    g[row * RollNode.steps + 0] = 1
+    for s in 1...3 { g[row * RollNode.steps + s] = 2 }
+    v[row * RollNode.steps + 0] = 0.5
+    let o = runNotes("roll", params: ["len": 8, "gatelen": 0.8], data: ["grid": g, "vel": v], seconds: 0.9)
+    let gate = o[1][0], vel = o[2][0]
+    func at(_ t: Double) -> Int { Int(t * sr) }
+    let held = (at(0.01)..<at(0.44)).allSatisfy { gate[$0] > 0.2 }
+    let ends = gate[at(0.52)] < 0.1
+    check(held && ends, "a note 4 steps long holds its gate across them, then lets go")
+    check(abs(vel[at(0.2)] - 0.5) < 1e-4, "its velocity comes out of the vel outlet (\(vel[at(0.2)]))")
+}
+
 print("lfo~")
 do {
     check(Divisions.beats(16) == 32 && Divisions.beats(17) == 64 && ModuleRegistry.spec("lfo")!.params[3].max == 17,

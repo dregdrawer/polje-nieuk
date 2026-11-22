@@ -296,7 +296,7 @@ float readoutHeight(const std::string& k) {
     if (k == "keys") return 72;
     if (k == "seq") return 100;
     if (k == "turing") return 74;
-    if (k == "roll") return 168;
+    if (k == "roll") return 168 + 34;          // the grid, then the velocity lane
     if (k == "drums") return 8 * portRow + 6;
     if (k == "slider") return 180;
     if (k == "knob") return 100;

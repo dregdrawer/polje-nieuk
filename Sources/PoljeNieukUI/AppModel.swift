@@ -1379,6 +1379,25 @@ public final class AppModel: ObservableObject {
         return nil
     }
 
+    /// roll: the scroll wheel over its grid moves through the octaves. True when a roll took it.
+    private var rollScrollRest: CGFloat = 0
+    func scrollRoll(at c: CGPoint, by delta: CGFloat, precise: Bool) -> Bool {
+        guard let i = topBox(at: c), patch.nodes[i].kind == "roll", let spec = ModuleRegistry.spec("roll"),
+              let li = spec.paramIndex("low") else { return false }
+        let n = patch.nodes[i]
+        let geo = BoxGeo(n, spec, hw, selected: false, model: self)
+        guard let d = geo.display, d.contains(CGPoint(x: c.x - n.x, y: c.y - n.y)) else { return false }
+        // a wheel notch = one row; a trackpad scrolls smoothly (about 12 points per row)
+        rollScrollRest += precise ? delta / 12 : (delta > 0 ? 1 : (delta < 0 ? -1 : 0))
+        let rows = Int(rollScrollRest.rounded(.towardZero))
+        guard rows != 0 else { return true }
+        rollScrollRest -= CGFloat(rows)
+        let low = Int((n.params["low"] ?? spec.params[li].def).rounded())
+        let new = min(max(low + rows, RollNode.lowest), RollNode.lowest + RollNode.rows - RollNode.shown)
+        if new != low { setParam(n.id, li, Float(new)) }
+        return true
+    }
+
     /// The box on top at a canvas point (boxes later in the patch are drawn over earlier ones), as its index.
     func topBox(at p: CGPoint) -> Int? {
         patch.nodes.indices.last { i in

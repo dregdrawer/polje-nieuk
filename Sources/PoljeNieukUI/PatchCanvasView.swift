@@ -237,6 +237,8 @@ struct PatchCanvasView: View {
                 let anchor = frame.width > 0 && frame.contains(p)
                     ? CGPoint(x: p.x - frame.minX, y: p.y - frame.minY)
                     : CGPoint(x: model.viewSize.width / 2, y: model.viewSize.height / 2)
+                // over a piano roll's grid: scroll through its octaves (up = higher)
+                if frame.contains(p), model.scrollRoll(at: model.toCanvas(anchor), by: dy, precise: precise) { return true }
                 if factor != 1 { model.zoom(by: factor, around: anchor) }
                 return true
             }
