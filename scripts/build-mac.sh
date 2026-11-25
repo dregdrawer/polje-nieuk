@@ -7,7 +7,8 @@ cd "$(dirname "$0")/.."
 # Pick an SDK the installed compiler understands (newest first, skipping ones built by a newer Swift).
 SDK=""
 for s in $(ls -d /Library/Developer/CommandLineTools/SDKs/MacOSX*.*.sdk /Library/Developer/CommandLineTools/SDKs/MacOSX[0-9]*.sdk 2>/dev/null | sort -rV); do
-  if echo 'print(1)' | swiftc -sdk "$s" -typecheck - >/dev/null 2>&1; then SDK="$s"; break; fi
+  # (a SwiftUI @State, not just print: a newer SDK can lack the SwiftUI macro plugin the installed tools need)
+  if printf 'import SwiftUI\nstruct V: View { @State var x = 0; var body: some View { Text("") } }\n' | swiftc -sdk "$s" -typecheck - >/dev/null 2>&1; then SDK="$s"; break; fi
 done
 [[ -z "$SDK" ]] && { echo "No usable macOS SDK found"; exit 1; }
 echo "Using SDK: $SDK"

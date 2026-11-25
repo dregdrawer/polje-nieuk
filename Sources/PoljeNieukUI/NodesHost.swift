@@ -163,6 +163,7 @@ private typealias PColor = UIColor
 
     /// Lay the bitmaps out for zoom `s` (device pixels: `px` per point) and mark them to be drawn.
     func drawAt(_ s: CGFloat, px: CGFloat) {
+        let sameZoom = si == s
         si = s
         func floorPx(_ v: CGFloat) -> CGFloat { (v * px).rounded(.down) / px }
         func ceilPx(_ v: CGFloat) -> CGFloat { (v * px).rounded(.up) / px }
@@ -170,9 +171,10 @@ private typealias PColor = UIColor
         frac = CGPoint(x: ox - floorPx(ox), y: oy - floorPx(oy))
         let size = CGSize(width: ceilPx(rect.width * s + frac.x) + 1 / px, height: ceilPx(rect.height * s + frac.y) + 1 / px)
         marginPx = ceilPx(margin * s)
+        let resized = root.bounds.size != size
         CATransaction.begin(); CATransaction.setDisableActions(true)
         root.anchorPoint = .zero
-        if root.bounds.size != size { root.bounds = CGRect(origin: .zero, size: size) }
+        if resized { root.bounds = CGRect(origin: .zero, size: size) }
         let cf = CGRect(x: -marginPx, y: -marginPx, width: size.width + 2 * marginPx, height: size.height + 2 * marginPx)
         if content.frame != cf { content.frame = cf }
         if content.contentsScale != px { content.contentsScale = px }
@@ -190,6 +192,9 @@ private typealias PColor = UIColor
         content.setNeedsDisplay()
         for p in parts.values { p.layer.setNeedsDisplay() }
         dirty = false
+        // the box changed size at the same zoom (collapsed, unfolded, resized): draw it now — left to the next
+        // frame, the old drawing would show squashed into the new size for a frame
+        if resized && sameZoom { displayNow() }
     }
 
     /// Place it for the canvas zoom `sw` (moved by a drag `d`, canvas points). A drawing made at another zoom is
