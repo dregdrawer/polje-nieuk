@@ -46,6 +46,39 @@ if let i = CommandLine.arguments.firstIndex(of: "--dump-specs"), i + 1 < Command
 
 // `selftest --render <patch.json> <seconds>`: renders a patch offline (no input) and prints every outlet's
 // RMS — the Windows (JUCE) engine has the same mode, so the two can be compared number for number.
+// `selftest --plugins [name …]`: list the installed plugins; load the named ones, play a note / a sine through
+// them and check what comes out (and that their state saves and loads).
+if let i = CommandLine.arguments.firstIndex(of: "--plugins") {
+    debugStatus = true
+    let all = PluginCatalog.scan()
+    print("\(all.count) plugins: \(all.filter { $0.format == "AU" }.count) AU, \(all.filter { $0.format == "VST3" }.count) VST3")
+    print("VST3 makers: " + Set(all.filter { $0.format == "VST3" }.map(\.vendor)).sorted().joined(separator: " | "))
+    for want in CommandLine.arguments[(i + 1)...] {
+        for info in all where info.name == want {
+            var loaded: HostedPlugin?, err: String?, done = false
+            PluginCatalog.load(info.id, sampleRate: 48000) { p, e in loaded = p; err = e; done = true }
+            let until = Date().addingTimeInterval(15)
+            while !done && Date() < until { RunLoop.main.run(until: Date().addingTimeInterval(0.01)) }
+            guard let p = loaded else { print("  \(info.format) \(want): FAILED \(err ?? "timeout")"); continue }
+            let n = 64
+            let inL = UnsafeMutablePointer<Float>.allocate(capacity: n), inR = UnsafeMutablePointer<Float>.allocate(capacity: n)
+            let oL = UnsafeMutablePointer<Float>.allocate(capacity: n), oR = UnsafeMutablePointer<Float>.allocate(capacity: n)
+            var peak: Float = 0, ph: Float = 0
+            p.note(on: true, pitch: 60, velocity: 0.8, offset: 0)
+            for b in 0..<1500 {
+                for k in 0..<n { ph += 440 / 48000; inL[k] = 0.3 * sinf(2 * .pi * ph); inR[k] = inL[k] }
+                if b == 750 { p.note(on: false, pitch: 60, velocity: 0, offset: 0) }
+                p.render(inL: inL, inR: inR, outL: oL, outR: oR, frames: n, beat: Double(b * n) / 24000, bpm: 120, playing: true)
+                for k in 0..<n { peak = max(peak, abs(oL[k]), abs(oR[k])) }
+            }
+            let st = p.state()
+            if let st { p.restore(st) }
+            print("  \(info.format) \(want) [\(p.vendor)] \(p.isInstrument ? "instrument" : "effect"): peak \(String(format: "%.3f", peak)), \(p.paramNames.count) params, state \(st?.count ?? -1) bytes, packs back \(st.map { PluginCatalog.unpack(PluginCatalog.pack($0)) == $0 } ?? false)")
+        }
+    }
+    exit(0)
+}
+
 if let i = CommandLine.arguments.firstIndex(of: "--render"), i + 2 < CommandLine.arguments.count {
     let data = try! Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[i + 1]))
     let p = try! JSONDecoder().decode(Patch.self, from: data).migrated()

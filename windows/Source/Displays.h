@@ -59,6 +59,8 @@ public:
     }
 };
 
+std::unique_ptr<NativeDisplay> makePluginDisplay(AppModel& m, const PatchNode& n, const ModuleSpec& s);
+
 /// A step grid's beat / bar lines (RackView.swift drawStepGrid).
 void drawStepGrid(GC& g, Pt size, int steps, std::optional<float> division);
 

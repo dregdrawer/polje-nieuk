@@ -387,6 +387,13 @@ public enum ModuleRegistry {
                    params: FMLayout.params(),
                    factory: { FMNode(spec: $0, sampleRate: $1) }),
 
+        ModuleSpec(kind: "plugin", name: "plugin", category: "Effects",
+                   summary: "Host an Audio Unit or VST3 plugin (effect or instrument): its editor opens in a window, four knobs move its parameters",
+                   aliases: ["vst", "vst3", "au", "audio unit", "auv3", "plug-in", "plugin", "host", "external"],
+                   inputs: ["L", "R", "pitch", "gate", "vel"], outputs: ["L", "R"],
+                   params: PluginLayout.params(),
+                   factory: { PluginNode(spec: $0, sampleRate: $1) }),
+
         ModuleSpec(kind: "chorus", name: "chorus", category: "Effects",
                    summary: "Stereo chorus / ensemble",
                    aliases: ["ensemble", "dimension"], inputs: ["L", "R"], outputs: ["L", "R"],

@@ -1572,6 +1572,9 @@ public final class AppModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
     }
 
+    /// Settle the edit so far into one undo step (for edits made outside the usual setters).
+    func checkpointNow() { checkpoint() }
+
     private func checkpoint() {
         checkpointWork?.cancel()
         checkpointWork = nil
@@ -1853,7 +1856,7 @@ public final class AppModel: ObservableObject {
 
     func scheduleAutosave() {
         autosaveWork?.cancel()
-        let snapshot = patch
+        let snapshot = withPluginStates(patch)
         let work = DispatchWorkItem { PatchStore.saveAutosave(snapshot) }
         autosaveWork = work
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1, execute: work)

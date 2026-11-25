@@ -373,7 +373,7 @@ AppModel::~AppModel() {
     audioJobs.removeAllJobs(true, 4000);
     devices.removeAudioCallback(this);
     devices.closeAudioDevice();
-    PatchStore::saveAutosave(patch);
+    PatchStore::saveAutosave(withPluginStates(patch));
     flushBuffersToDisk();
     settings().saveIfNeeded();
     background.removeAllJobs(false, 3000);
@@ -492,9 +492,10 @@ bool AppModel::hasContent(Pt c) {
 void AppModel::timerCallback() {
     double t = now();
     if (checkpointAt > 0 && t >= checkpointAt) checkpoint();
+    closeStalePluginEditors();
     if (autosaveAt > 0 && t >= autosaveAt) {
         autosaveAt = 0;
-        auto snapshot = patch;
+        auto snapshot = withPluginStates(patch);
         background.addJob([snapshot] { PatchStore::saveAutosave(snapshot); });
     }
     if (viewSaveAt > 0 && t >= viewSaveAt) { viewSaveAt = 0; saveView(); }
@@ -1387,7 +1388,7 @@ bool AppModel::openFile(const juce::File& f) {
     return true;
 }
 
-bool AppModel::saveFile(const juce::File& f) { return f.replaceWithText(patch.toJSON()); }
+bool AppModel::saveFile(const juce::File& f) { return f.replaceWithText(withPluginStates(patch).toJSON()); }
 
 void AppModel::scheduleAutosave() { autosaveAt = now() + 1; }
 

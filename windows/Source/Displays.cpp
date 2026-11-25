@@ -1834,6 +1834,7 @@ std::unique_ptr<NativeDisplay> NativeDisplay::make(AppModel& m, const PatchNode&
     if (k == "chord") return std::make_unique<ChordDisplay>(m, n, s);
     if (k == "wave") return std::make_unique<WaveDisplay>(m, n, s);
     if (k == "fm") return std::make_unique<FMDisplay>(m, n, s);
+    if (k == "plugin") return makePluginDisplay(m, n, s);
     if (k == "scope") return std::make_unique<ScopeDisplay>(m, n, s);
     if (k == "drumsynth") return std::make_unique<DrumSynthDisplay>(m, n, s);
     if (k == "rack") return std::make_unique<RackDisplay>(m, n, s);

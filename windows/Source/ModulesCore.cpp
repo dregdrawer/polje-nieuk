@@ -1,4 +1,5 @@
 // I/O, clock, mixer, LFO, controls and utilities — ports of IOClock.swift, Controls.swift, Utilities.swift.
+#include "ModulesPlugin.h"
 #include "Modules.h"
 
 namespace pn {
@@ -318,6 +319,7 @@ Factory factoryFor(const std::string& kind) {
     if (auto f = factorySeq(kind)) return f;
     if (auto f = factoryInst(kind)) return f;
     if (auto f = factoryFM(kind)) return f;
+    if (auto f = factoryPlugin(kind)) return f;
     return nullptr;
 }
 

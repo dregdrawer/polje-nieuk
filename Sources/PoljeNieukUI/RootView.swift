@@ -427,7 +427,7 @@ struct TopBar: View, Equatable {
             barMenu("file", alignRight: true, items: {
                 [MenuItem(title: "New…", action: { confirmNew = true }),
                  MenuItem(title: "Open…", action: { importing = true }),
-                 MenuItem(title: "Save As…", action: { exporting = true }),
+                 MenuItem(title: "Save As…", action: { model.storeAllPluginStates(); exporting = true }),
                  .divider,
                  MenuItem(title: "Set as default", action: { model.setAsDefault() }),
                  MenuItem(title: "Reset default", enabled: state.hasUserDefault, action: { model.resetDefault() })]

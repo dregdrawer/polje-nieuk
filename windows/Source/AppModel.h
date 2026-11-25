@@ -1,6 +1,7 @@
 // The app's state and every edit (AppModel.swift): the patch, undo, selection, cables, groups, automation,
 // audio devices, files, autosave, audio buffers. Same behaviour as the Mac / iPad app.
 #pragma once
+#include "ModulesPlugin.h"
 #include "UIBase.h"
 
 namespace pn {
@@ -177,6 +178,16 @@ public:
     void loadFMVoice(const juce::String& id, int k);
     bool loadSysex(const juce::String& id, const std::vector<uint8_t>& bytes, const juce::String& fileName);
     void resetFMBank(const juce::String& id);
+    // plugin box: installed VST3s, loading one, knob mapping, the editor window, state into the patch
+    const std::vector<PluginInfo>& plugins(bool rescan = false);
+    PluginNode* pluginNode(const juce::String& id);
+    void choosePlugin(const juce::String& id, const PluginInfo* info);
+    void mapPluginKnob(const juce::String& id, int k, int param);
+    void storePluginState(const juce::String& id);
+    Patch withPluginStates(Patch p);
+    void openPluginEditor(const juce::String& id);
+    void closePluginEditor(const juce::String& id);
+    void closeStalePluginEditors();
     std::optional<juce::String> outletName(const PatchNode& n, int port);   // samplerack / drumsynth pad outlet: the sample (voice)           // the box drawn on top there (index), or -1
     void connect(const juce::String& a, int ap, const juce::String& b, int bp);
     bool pickUpCable(const juce::String& node, int port, Pt point);

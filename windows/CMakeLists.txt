@@ -53,12 +53,12 @@ juce_add_binary_data(PoljeNieukData SOURCES Source/specs.json Source/fmpresets.b
 target_sources(PoljeNieuk PRIVATE
   Source/Main.cpp Source/Engine.cpp Source/Registry.cpp
   Source/ModulesCore.cpp Source/ModulesFX.cpp Source/ModulesMI.cpp Source/ModulesFX2.cpp
-  Source/ModulesBuffers.cpp Source/ModulesSeq.cpp Source/ModulesInst.cpp Source/ModulesFM.cpp
-  Source/UIBase.cpp Source/AppModel.cpp Source/Displays.cpp Source/Boxes.cpp Source/Canvas.cpp Source/Window.cpp)
+  Source/ModulesBuffers.cpp Source/ModulesSeq.cpp Source/ModulesInst.cpp Source/ModulesFM.cpp Source/ModulesPlugin.cpp
+  Source/UIBase.cpp Source/AppModel.cpp Source/Displays.cpp Source/Boxes.cpp Source/Canvas.cpp Source/Window.cpp Source/PluginUI.cpp)
 
 target_compile_definitions(PoljeNieuk PRIVATE
   JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_APPLICATION_NAME_STRING="polje nieuk" JUCE_APPLICATION_VERSION_STRING="0.8.0"
-  JUCE_DISPLAY_SPLASH_SCREEN=0)
+  JUCE_DISPLAY_SPLASH_SCREEN=0 JUCE_PLUGINHOST_VST3=1 JUCE_PLUGINHOST_AU=0)
 
 target_link_libraries(PoljeNieuk PRIVATE
   MutableDSP PoljeNieukData juce::juce_audio_utils juce::juce_audio_devices juce::juce_gui_extra
@@ -68,8 +68,8 @@ target_link_libraries(PoljeNieuk PRIVATE
 juce_add_console_app(pnrender PRODUCT_NAME "pnrender")
 target_sources(pnrender PRIVATE Source/RenderTest.cpp Source/Engine.cpp Source/Registry.cpp
   Source/ModulesCore.cpp Source/ModulesFX.cpp Source/ModulesMI.cpp Source/ModulesFX2.cpp
-  Source/ModulesBuffers.cpp Source/ModulesSeq.cpp Source/ModulesInst.cpp Source/ModulesFM.cpp)
+  Source/ModulesBuffers.cpp Source/ModulesSeq.cpp Source/ModulesInst.cpp Source/ModulesFM.cpp Source/ModulesPlugin.cpp)
 juce_generate_juce_header(pnrender)
-target_compile_definitions(pnrender PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+target_compile_definitions(pnrender PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_PLUGINHOST_VST3=1 JUCE_PLUGINHOST_AU=0)
 target_link_libraries(pnrender PRIVATE MutableDSP PoljeNieukData juce::juce_audio_utils juce::juce_audio_devices
   PUBLIC juce::juce_recommended_config_flags)

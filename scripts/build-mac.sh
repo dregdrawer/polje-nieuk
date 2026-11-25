@@ -26,7 +26,7 @@ for ARCH in "${ARCHS[@]}"; do
   A=$OUT/$ARCH
   mkdir -p $A/mi
   TARGET=$ARCH-apple-macos15.0
-  FLAGS=(-sdk "$SDK" -swift-version 5 -O -target $TARGET -I $A -L $A -I $MI/bridge/include)
+  FLAGS=(-sdk "$SDK" -swift-version 5 -O -target $TARGET -I $A -L $A -I $MI/bridge/include -I Vendor/vst3/bridge/include)
 
   # Eurorack DSP (C++): compile changed files only, then archive.
   for f in "${MISRC[@]}"; do
@@ -37,6 +37,16 @@ for ARCH in "${ARCHS[@]}"; do
   done
   rm -f $A/libMutableDSP.a
   ar rcs $A/libMutableDSP.a $A/mi/*.o
+  # the VST3 host (C++) for the plugin box
+  mkdir -p $A/vst3
+  for f in Vendor/vst3/bridge/vst3host.cpp Vendor/vst3/pluginterfaces/base/funknown.cpp; do
+    o=$A/vst3/$(basename $f .cpp).o
+    if [[ ! -f $o || $f -nt $o || Vendor/vst3/bridge/include/pn_vst3.h -nt $o ]]; then
+      clang++ -isysroot "$SDK" -target $TARGET -std=gnu++14 -O2 -IVendor/vst3 -w -c $f -o $o
+    fi
+  done
+  rm -f $A/libPluginBridge.a
+  ar rcs $A/libPluginBridge.a $A/vst3/*.o
 
   # the audio engine: whole-module optimised, and without the runtime exclusivity checks Swift otherwise
   # runs on every per-sample access to a module's stored arrays (only the audio thread touches them)
@@ -44,11 +54,11 @@ for ARCH in "${ARCHS[@]}"; do
     -emit-library -static -o $A/libPoljeNieukCore.a Sources/PoljeNieukCore/*.swift Sources/PoljeNieukCore/Modules/*.swift
   swiftc "${FLAGS[@]}" -parse-as-library -module-name PoljeNieukUI -emit-module -emit-module-path $A/PoljeNieukUI.swiftmodule \
     -emit-library -static -o $A/libPoljeNieukUI.a Sources/PoljeNieukUI/*.swift
-  swiftc "${FLAGS[@]}" -parse-as-library -lPoljeNieukCore -lPoljeNieukUI -lMutableDSP -lc++ Sources/PoljeNieukMac/*.swift -o "$A/polje nieuk"
+  swiftc "${FLAGS[@]}" -parse-as-library -lPoljeNieukCore -lPoljeNieukUI -lMutableDSP -lPluginBridge -lc++ Sources/PoljeNieukMac/*.swift -o "$A/polje nieuk"
   BINS+=("$A/polje nieuk")
   # the self-test runs on this Mac: build it for this Mac's own architecture
   if [[ $ARCH == $(uname -m) ]]; then
-    swiftc "${FLAGS[@]}" -lPoljeNieukCore -lPoljeNieukUI -lMutableDSP -lc++ Sources/SelfTest/main.swift -o $OUT/selftest
+    swiftc "${FLAGS[@]}" -lPoljeNieukCore -lPoljeNieukUI -lMutableDSP -lPluginBridge -lc++ Sources/SelfTest/main.swift -o $OUT/selftest
   fi
 done
 lipo -create "${BINS[@]}" -output "$OUT/polje nieuk"

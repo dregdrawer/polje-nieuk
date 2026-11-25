@@ -8580,6 +8580,101 @@
     },
     {
       "aliases" : [
+        "vst",
+        "vst3",
+        "au",
+        "audio unit",
+        "auv3",
+        "plug-in",
+        "plugin",
+        "host",
+        "external"
+      ],
+      "bypass" : "through",
+      "category" : "Effects",
+      "inputs" : [
+        "L",
+        "R",
+        "pitch",
+        "gate",
+        "vel"
+      ],
+      "kind" : "plugin",
+      "name" : "plugin",
+      "outputs" : [
+        "L",
+        "R"
+      ],
+      "outputsAreCV" : false,
+      "params" : [
+        {
+          "curve" : "linear",
+          "def" : 1,
+          "key" : "mix",
+          "kind" : "continuous",
+          "max" : 1,
+          "min" : 0,
+          "name" : "dry \/ wet",
+          "unit" : "%"
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "gain",
+          "kind" : "continuous",
+          "max" : 12,
+          "min" : -24,
+          "name" : "out level",
+          "unit" : "dB"
+        },
+        {
+          "curve" : "linear",
+          "def" : 0.5,
+          "key" : "m1",
+          "kind" : "continuous",
+          "max" : 1,
+          "min" : 0,
+          "name" : "knob 1",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0.5,
+          "key" : "m2",
+          "kind" : "continuous",
+          "max" : 1,
+          "min" : 0,
+          "name" : "knob 2",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0.5,
+          "key" : "m3",
+          "kind" : "continuous",
+          "max" : 1,
+          "min" : 0,
+          "name" : "knob 3",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0.5,
+          "key" : "m4",
+          "kind" : "continuous",
+          "max" : 1,
+          "min" : 0,
+          "name" : "knob 4",
+          "unit" : ""
+        }
+      ],
+      "polyOutputs" : [
+
+      ],
+      "summary" : "Host an Audio Unit or VST3 plugin (effect or instrument): its editor opens in a window, four knobs move its parameters"
+    },
+    {
+      "aliases" : [
         "ensemble",
         "dimension"
       ],

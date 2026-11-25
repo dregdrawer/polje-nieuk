@@ -1,0 +1,4 @@
+module PluginBridge {
+    header "pn_vst3.h"
+    export *
+}

@@ -22,9 +22,19 @@ let package = Package(
             publicHeadersPath: "bridge/include",
             cxxSettings: [.define("TEST"), .headerSearchPath("."), .unsafeFlags(["-w"])]
         ),
+        // A small VST3 host (our code) over Steinberg's VST3 interface headers (MIT). See Vendor/vst3.
+        .target(
+            name: "PluginBridge",
+            path: "Vendor/vst3",
+            exclude: ["pluginterfaces/LICENSE.txt", "pluginterfaces/README.md"],
+            sources: ["bridge/vst3host.cpp", "pluginterfaces/base/funknown.cpp"],
+            publicHeadersPath: "bridge/include",
+            cxxSettings: [.headerSearchPath("."), .unsafeFlags(["-w"])],
+            linkerSettings: [.linkedFramework("CoreFoundation")]
+        ),
         // the audio engine: no runtime exclusivity checks on every per-sample access to a module's stored arrays
         // (only the audio thread touches them while it runs). Release builds are whole-module optimised.
-        .target(name: "PoljeNieukCore", dependencies: ["MutableDSP"],
+        .target(name: "PoljeNieukCore", dependencies: ["MutableDSP", "PluginBridge"],
                 swiftSettings: [.unsafeFlags(["-enforce-exclusivity=unchecked"])]),
         .target(name: "PoljeNieukUI", dependencies: ["PoljeNieukCore"]),
         .executableTarget(name: "PoljeNieukMac", dependencies: ["PoljeNieukUI"]),

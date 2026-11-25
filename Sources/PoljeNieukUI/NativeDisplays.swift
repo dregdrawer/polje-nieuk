@@ -45,6 +45,7 @@ import PoljeNieukCore
         case "turing": return TuringDisplay(model: model, node: node, spec: spec)
         case "roll", "drums": return GridDisplay(model: model, node: node, spec: spec)
         case "fm": return FMDisplay(model: model, node: node, spec: spec)
+        case "plugin": return PluginDisplay(model: model, node: node, spec: spec)
         case "comp": return CompDisplay(model: model, node: node, spec: spec)
         case "lfo": return LFODisplay(model: model, node: node, spec: spec)
         case "chord": return ChordDisplay(model: model, node: node, spec: spec)
