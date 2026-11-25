@@ -84,7 +84,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleExecutable</key><string>polje nieuk</string>
   <key>CFBundleIconFile</key><string>polje nieuk</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.8</string>
+  <key>CFBundleShortVersionString</key><string>0.9</string>
   <key>LSMinimumSystemVersion</key><string>15.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSMicrophoneUsageDescription</key><string>polje nieuk processes audio from your modular through your audio interface.</string>
