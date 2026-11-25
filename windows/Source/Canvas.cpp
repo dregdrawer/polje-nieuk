@@ -1288,6 +1288,13 @@ ObjectFinder::ObjectFinder(AppModel& m, Pt canvasPoint) : model(m), at(canvasPoi
             headings.push_back({ juce::String(cat).toLowerCase(), juce::Rectangle<float>(x + 10, y, colW - 20, 12) });
             y += 14;
             for (auto& s : Registry::all()) if (s.category == cat) { entries.push_back({ &s, juce::Rectangle<float>(x, y, colW, 19) }); y += 19; }
+            if (cat == "Effects") {
+                // every installed VST3, a level down
+                y += 8;
+                headings.push_back({ "vst", juce::Rectangle<float>(x + 10, y, colW - 20, 12) });
+                y += 14;
+                entries.push_back({ nullptr, juce::Rectangle<float>(x, y, colW, 19) }); y += 19;
+            }
         }
         maxY = std::max(maxY, y);
     }
@@ -1309,7 +1316,8 @@ void ObjectFinder::paint(juce::Graphics& g) {
         auto& e = entries[i];
         bool h = int(i) == hoverIndex;
         if (h) { g.setColour(Theme::text()); g.fillRect(e.r); }
-        gc.textLeft(juce::String::fromUTF8(e.spec->name.c_str()), { e.r.getX() + 10, e.r.getCentreY() }, 11, h ? Theme::inverse() : Theme::text());
+        gc.textLeft(e.spec ? juce::String::fromUTF8(e.spec->name.c_str()) : juce::String("plugins"), { e.r.getX() + 10, e.r.getCentreY() }, 11, h ? Theme::inverse() : Theme::text());
+        if (!e.spec) gc.textRight(juce::String::fromUTF8("\xe2\x80\xba"), { e.r.getRight() - 10, e.r.getCentreY() }, 11, h ? Theme::inverse() : Theme::text());
     }
     g.setColour(Theme::border());
     g.drawRoundedRectangle(b.translated(0, scroll).reduced(0.5f), 3, 1);
@@ -1321,7 +1329,8 @@ void ObjectFinder::mouseMove(const juce::MouseEvent& e) {
     for (size_t i = 0; i < entries.size(); ++i) if (entries[i].r.contains(p)) h = int(i);
     if (h != hoverIndex) {
         hoverIndex = h;
-        setTooltip(h >= 0 ? juce::String::fromUTF8(entries[size_t(h)].spec->summary.c_str()) : juce::String());
+        auto* sp = h >= 0 ? entries[size_t(h)].spec : nullptr;
+        setTooltip(sp ? juce::String::fromUTF8(sp->summary.c_str()) : h >= 0 ? juce::String("Every installed VST3 plugin, by company") : juce::String());
         repaint();
     }
 }
@@ -1329,6 +1338,13 @@ void ObjectFinder::mouseExit(const juce::MouseEvent&) { hoverIndex = -1; repaint
 void ObjectFinder::mouseUp(const juce::MouseEvent& e) {
     auto p = e.position.translated(0, scroll);
     for (auto& en : entries) if (en.r.contains(p)) {
+        if (!en.spec) {
+            juce::PopupMenu menu;
+            auto* m = &model; auto where = at; auto close = onClose;
+            addPluginList(menu, model, {}, [m, where, close](const PluginInfo& info) { m->addPluginBox(info, where); if (close) close(); });
+            menu.showMenuAsync(juce::PopupMenu::Options().withMousePosition());
+            return;
+        }
         if (model.replaceTarget.isNotEmpty()) model.replaceNode(model.replaceTarget, en.spec->kind);
         else model.addNode(en.spec->kind, at);
         model.finderAt.reset(); model.replaceTarget = {};

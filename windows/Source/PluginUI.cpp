@@ -129,6 +129,32 @@ void AppModel::closeStalePluginEditors() {
     }
 }
 
+void addPluginList(juce::PopupMenu& menu, AppModel& m, const juce::String& cur, std::function<void(const PluginInfo&)> pick) {
+    auto& all = m.plugins();
+    // by company (the folder the plugin sits in); loose ones at the end
+    std::map<juce::String, juce::PopupMenu> groups;
+    juce::PopupMenu loose;
+    for (auto& p : all) {
+        auto info = p;
+        auto item = [pick, info] { pick(info); };
+        if (p.vendor.isEmpty()) loose.addItem(p.name, true, p.id == cur, item);
+        else groups[p.vendor].addItem(p.name, true, p.id == cur, item);
+    }
+    for (auto& [v, sub] : groups) menu.addSubMenu(v, sub);
+    if (loose.getNumItems() > 0) { if (!groups.empty()) menu.addSeparator(); for (juce::PopupMenu::MenuItemIterator it(loose); it.next();) menu.addItem(it.getItem()); }
+    if (all.empty()) menu.addItem("no VST3 plugins found", false, false, [] {});
+    menu.addSeparator();
+    auto* mm = &m;
+    menu.addItem("Rescan plugins", [mm] { mm->plugins(true); });
+}
+
+void AppModel::addPluginBox(const PluginInfo& info, Pt at) {
+    if (replaceTarget.isNotEmpty()) replaceNode(replaceTarget, "plugin"); else addNode("plugin", at);
+    if (!selectedNodes.empty()) choosePlugin(*selectedNodes.begin(), &info);
+    finderAt.reset(); replaceTarget = {};
+    changed();
+}
+
 // ---------------------------------------------------------------- the display
 
 class PluginDisplay : public NativeDisplay {
@@ -186,22 +212,7 @@ public:
             menu.addItem("Remove plugin", [m, nid] { m->choosePlugin(nid, nullptr); });
             menu.addSeparator();
         }
-        auto cur = n ? n->pluginID : juce::String();
-        auto& all = m->plugins();
-        // by company (the folder the plugin sits in); loose ones at the end
-        std::map<juce::String, juce::PopupMenu> groups;
-        juce::PopupMenu loose;
-        for (auto& p : all) {
-            auto info = p;
-            auto item = [m, nid, info] { m->choosePlugin(nid, &info); };
-            if (p.vendor.isEmpty()) loose.addItem(p.name, true, p.id == cur, item);
-            else groups[p.vendor].addItem(p.name, true, p.id == cur, item);
-        }
-        for (auto& [v, sub] : groups) menu.addSubMenu(v, sub);
-        if (loose.getNumItems() > 0) { if (!groups.empty()) menu.addSeparator(); for (juce::PopupMenu::MenuItemIterator it(loose); it.next();) menu.addItem(it.getItem()); }
-        if (all.empty()) menu.addItem("no VST3 plugins found", false, false, [] {});
-        menu.addSeparator();
-        menu.addItem("Rescan plugins", [m] { m->plugins(true); });
+        addPluginList(menu, *m, n ? n->pluginID : juce::String(), [m, nid](const PluginInfo& info) { m->choosePlugin(nid, &info); });
         menu.showMenuAsync(juce::PopupMenu::Options().withMousePosition());
     }
 

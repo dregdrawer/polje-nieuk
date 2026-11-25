@@ -188,6 +188,7 @@ public:
     void openPluginEditor(const juce::String& id);
     void closePluginEditor(const juce::String& id);
     void closeStalePluginEditors();
+    void addPluginBox(const PluginInfo& info, Pt at);     // module list ▸ plugins: a box with that plugin in it
     std::optional<juce::String> outletName(const PatchNode& n, int port);   // samplerack / drumsynth pad outlet: the sample (voice)           // the box drawn on top there (index), or -1
     void connect(const juce::String& a, int ap, const juce::String& b, int bp);
     bool pickUpCable(const juce::String& node, int port, Pt point);

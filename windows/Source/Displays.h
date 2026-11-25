@@ -59,6 +59,8 @@ public:
     }
 };
 
+/// Every installed VST3, by company, into `menu`; `pick` gets the one chosen (the plugin box and the module list).
+void addPluginList(juce::PopupMenu& menu, AppModel& m, const juce::String& current, std::function<void(const PluginInfo&)> pick);
 std::unique_ptr<NativeDisplay> makePluginDisplay(AppModel& m, const PatchNode& n, const ModuleSpec& s);
 
 /// A step grid's beat / bar lines (RackView.swift drawStepGrid).

@@ -384,7 +384,21 @@ struct ObjectFinder: View {
                                               ["Modulation", "Loop & Grain"],
                                               ["Effects"]]
 
+    /// The plugins sub-list is showing (in place of the modules).
+    @State private var showPlugins = false
+
     var body: some View {
+        if showPlugins {
+            let at = canvasPoint, m = model
+            PanelMenuView(items: [MenuItem(title: "‹ modules", keepOpen: true, action: { showPlugins = false }), .divider]
+                          + m.pluginList { info in m.addPluginBox(info, at: at) },
+                          maxHeight: maxHeight, close: { })
+        } else {
+            modules
+        }
+    }
+
+    private var modules: some View {
         ScrollView(.vertical) {
             list
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
@@ -420,6 +434,15 @@ struct ObjectFinder: View {
                             .padding(.top, 8).padding(.bottom, 2)
                         ForEach(ModuleRegistry.all.filter { $0.category == cat }, id: \.kind) { s in
                             ModuleItem(spec: s) { create(s) }
+                        }
+                        if cat == "Effects" {
+                            // every installed AU / VST3, a level down
+                            Text("vst / au")
+                                .font(Theme.monoSmall)
+                                .foregroundStyle(Theme.faint)
+                                .padding(.horizontal, 10)
+                                .padding(.top, 8).padding(.bottom, 2)
+                            PanelRow(item: MenuItem(title: "plugins"), trailing: "›") { showPlugins = true }
                         }
                     }
                 }

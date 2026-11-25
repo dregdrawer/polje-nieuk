@@ -85,8 +85,14 @@ extension AppModel {
             items.append(MenuItem(title: "Remove plugin", action: { [weak self] in self?.choosePlugin(id, nil) }))
             items.append(.divider)
         }
+        items += pluginList(current: n?.pluginID ?? "") { [weak self] p in self?.choosePlugin(id, p) }
+        return items
+    }
+
+    /// Every installed plugin: AU instruments, AU effects and VST3, each by company; `pick` gets the one chosen.
+    func pluginList(current cur: String = "", _ pick: @escaping (PluginInfo) -> Void) -> [MenuItem] {
+        var items: [MenuItem] = []
         let all = plugins
-        let cur = n?.pluginID ?? ""
         func byVendor(_ list: [PluginInfo]) -> [MenuItem] {
             var groups: [(String, [PluginInfo])] = []
             for p in list {
@@ -95,19 +101,26 @@ extension AppModel {
             }
             return groups.map { v, ps in
                 MenuItem(title: "\(v)  (\(ps.count))", submenu: ps.map { p in
-                    MenuItem(title: p.name, checked: p.id == cur, action: { [weak self] in self?.choosePlugin(id, p) })
+                    MenuItem(title: p.name, checked: p.id == cur, action: { pick(p) })
                 })
             }
         }
         let inst = all.filter { $0.format == "AU" && $0.instrument }, fx = all.filter { $0.format == "AU" && !$0.instrument }
         let vst = all.filter { $0.format == "VST3" }
-        if !inst.isEmpty { items.append(MenuItem(title: "Instruments (AU)", submenu: byVendor(inst))) }
-        if !fx.isEmpty { items.append(MenuItem(title: "Effects (AU)", submenu: byVendor(fx))) }
-        if !vst.isEmpty { items.append(MenuItem(title: "VST3", submenu: byVendor(vst))) }
+        if !inst.isEmpty { items.append(MenuItem(title: "Instruments (AU)  (\(inst.count))", submenu: byVendor(inst))) }
+        if !fx.isEmpty { items.append(MenuItem(title: "Effects (AU)  (\(fx.count))", submenu: byVendor(fx))) }
+        if !vst.isEmpty { items.append(MenuItem(title: "VST3  (\(vst.count))", submenu: byVendor(vst))) }
         if all.isEmpty { items.append(MenuItem(title: "no plugins found", enabled: false)) }
         items.append(.divider)
-        items.append(MenuItem(title: "Rescan plugins", action: { Self.pluginCache = nil; PluginCatalog.cached = nil }))
+        items.append(MenuItem(title: "Rescan plugins", keepOpen: true, action: { Self.pluginCache = nil; PluginCatalog.cached = nil }))
         return items
+    }
+
+    /// The module list's plugin rows: a new plugin box with that plugin in it (or the box being replaced becomes one).
+    func addPluginBox(_ info: PluginInfo, at p: CGPoint) {
+        if let target = replaceTarget { replaceNode(target, with: "plugin") } else { addNode(kind: "plugin", at: p) }
+        if let id = selectedNodes.first { choosePlugin(id, info) }
+        finderAt = nil
     }
 
     func pluginKnobMenu(_ id: UUID, _ k: Int) -> [MenuItem] {
