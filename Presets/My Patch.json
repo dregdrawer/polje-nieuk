@@ -1,0 +1,1042 @@
+{
+  "cables" : [
+    {
+      "fromNode" : "049E099F-8165-4602-97E9-6AF967656030",
+      "fromPort" : 1,
+      "id" : "45E7E767-14AE-4D5C-B5DD-C8C266E28CA6",
+      "toNode" : "CCF7F0A3-DC4F-4103-BA04-BDDA0EAF0C62",
+      "toPort" : 1
+    },
+    {
+      "fromNode" : "049E099F-8165-4602-97E9-6AF967656030",
+      "fromPort" : 0,
+      "id" : "5B0DB34A-F9B7-48F1-99E1-FE8867A61C2A",
+      "toNode" : "CCF7F0A3-DC4F-4103-BA04-BDDA0EAF0C62",
+      "toPort" : 0
+    },
+    {
+      "fromNode" : "CCF7F0A3-DC4F-4103-BA04-BDDA0EAF0C62",
+      "fromPort" : 0,
+      "id" : "14BA66B8-4A92-45D7-8104-C245406F2E02",
+      "toNode" : "58B334EC-A91A-4422-9F0C-E62A18619014",
+      "toPort" : 0
+    },
+    {
+      "fromNode" : "58B334EC-A91A-4422-9F0C-E62A18619014",
+      "fromPort" : 0,
+      "id" : "4EB96407-C6AE-4BFB-8A4A-7FEFAEED45C7",
+      "toNode" : "E8447F95-9EDA-453B-8DDD-4B7336179350",
+      "toPort" : 0
+    },
+    {
+      "fromNode" : "58B334EC-A91A-4422-9F0C-E62A18619014",
+      "fromPort" : 1,
+      "id" : "C8A8B2B3-8723-4294-A500-D5595D26AE95",
+      "toNode" : "E8447F95-9EDA-453B-8DDD-4B7336179350",
+      "toPort" : 1
+    },
+    {
+      "fromNode" : "15BC20A2-7948-4DF2-B64F-D20D00F02CF9",
+      "fromPort" : 0,
+      "id" : "4BCF72AF-9A28-402A-A771-F59B9A2922BB",
+      "toNode" : "3917C9AB-A860-470A-90BF-654AC244D875",
+      "toPort" : 1001
+    },
+    {
+      "fromNode" : "15BC20A2-7948-4DF2-B64F-D20D00F02CF9",
+      "fromPort" : 0,
+      "id" : "B3A37926-3C44-4F86-BD76-8D3FCE07F10A",
+      "toNode" : "3917C9AB-A860-470A-90BF-654AC244D875",
+      "toPort" : 1003
+    },
+    {
+      "fromNode" : "AA533929-9BDD-4DFD-BA2E-A323DE7208E0",
+      "fromPort" : 1,
+      "id" : "D07EECEE-9926-4DA3-AC0D-939D5BEBA6D2",
+      "toNode" : "626BC77C-9106-40C9-8AD1-EB920FA2F540",
+      "toPort" : 1
+    },
+    {
+      "fromNode" : "AA533929-9BDD-4DFD-BA2E-A323DE7208E0",
+      "fromPort" : 0,
+      "id" : "3B310D65-7611-4315-BDFD-DA7FF2F99827",
+      "toNode" : "626BC77C-9106-40C9-8AD1-EB920FA2F540",
+      "toPort" : 0
+    },
+    {
+      "fromNode" : "626BC77C-9106-40C9-8AD1-EB920FA2F540",
+      "fromPort" : 0,
+      "id" : "FEF465AF-8901-4ABD-AAC4-51D94EB58081",
+      "toNode" : "BF8F85E7-D2C6-41FD-B3D2-36E21F7DFC41",
+      "toPort" : 0
+    },
+    {
+      "fromNode" : "BF8F85E7-D2C6-41FD-B3D2-36E21F7DFC41",
+      "fromPort" : 0,
+      "id" : "47C938EF-BC76-4649-87BC-74FAEABCB299",
+      "toNode" : "7FB01998-F3C9-4FF5-85E4-F07E16A911F7",
+      "toPort" : 0
+    },
+    {
+      "fromNode" : "BF8F85E7-D2C6-41FD-B3D2-36E21F7DFC41",
+      "fromPort" : 1,
+      "id" : "D046A78A-8E6A-4154-9FEC-96DE7C11CCF0",
+      "toNode" : "7FB01998-F3C9-4FF5-85E4-F07E16A911F7",
+      "toPort" : 1
+    },
+    {
+      "fromNode" : "15BC20A2-7948-4DF2-B64F-D20D00F02CF9",
+      "fromPort" : 1,
+      "id" : "82EE4183-0FCD-4D86-A70E-4C6F31615BEA",
+      "toNode" : "3917C9AB-A860-470A-90BF-654AC244D875",
+      "toPort" : 1005
+    },
+    {
+      "fromNode" : "15BC20A2-7948-4DF2-B64F-D20D00F02CF9",
+      "fromPort" : 1,
+      "id" : "B3FD25C3-FB8E-4E34-9C7E-C67755899F78",
+      "toNode" : "3917C9AB-A860-470A-90BF-654AC244D875",
+      "toPort" : 1007
+    },
+    {
+      "fromNode" : "E47805DF-8AE3-4B03-8DF4-1E8AC6087847",
+      "fromPort" : 1,
+      "id" : "150FD44F-F642-4D19-89B7-7225E2C45D4A",
+      "toNode" : "A9806B40-5595-4130-9995-F1FC6F3B6EED",
+      "toPort" : 1
+    },
+    {
+      "fromNode" : "E47805DF-8AE3-4B03-8DF4-1E8AC6087847",
+      "fromPort" : 0,
+      "id" : "00C9D0CA-32D5-4FE4-83F8-38F782A5A39B",
+      "toNode" : "A9806B40-5595-4130-9995-F1FC6F3B6EED",
+      "toPort" : 0
+    },
+    {
+      "fromNode" : "A9806B40-5595-4130-9995-F1FC6F3B6EED",
+      "fromPort" : 0,
+      "id" : "6AF20BE1-28CE-45B7-98BA-C46526528F6D",
+      "toNode" : "4CD506E6-0DFB-454B-9F5C-1A79E03708A9",
+      "toPort" : 0
+    },
+    {
+      "fromNode" : "4CD506E6-0DFB-454B-9F5C-1A79E03708A9",
+      "fromPort" : 0,
+      "id" : "81F5D86E-A1B5-429E-8420-7939EE1DF99B",
+      "toNode" : "5096A2E6-FC22-4415-9264-9D16430290F8",
+      "toPort" : 0
+    },
+    {
+      "fromNode" : "4CD506E6-0DFB-454B-9F5C-1A79E03708A9",
+      "fromPort" : 1,
+      "id" : "B2F6A77F-93B0-4BAC-B9C3-CF23496FF50B",
+      "toNode" : "5096A2E6-FC22-4415-9264-9D16430290F8",
+      "toPort" : 1
+    },
+    {
+      "fromNode" : "15BC20A2-7948-4DF2-B64F-D20D00F02CF9",
+      "fromPort" : 2,
+      "id" : "EB64AA2C-67D5-44BC-9A5B-9B1D76BD0FEB",
+      "toNode" : "3917C9AB-A860-470A-90BF-654AC244D875",
+      "toPort" : 1009
+    },
+    {
+      "fromNode" : "15BC20A2-7948-4DF2-B64F-D20D00F02CF9",
+      "fromPort" : 2,
+      "id" : "89BB31AB-BCD4-433C-AF13-FB1FA7C08FBB",
+      "toNode" : "3917C9AB-A860-470A-90BF-654AC244D875",
+      "toPort" : 1011
+    },
+    {
+      "fromNode" : "7FB01998-F3C9-4FF5-85E4-F07E16A911F7",
+      "fromPort" : 0,
+      "id" : "0ECFED3C-60CD-4B4E-86C7-FDEC157A186D",
+      "toNode" : "D9EC180D-3B24-4F93-9E54-DCAA981745D1",
+      "toPort" : 0
+    },
+    {
+      "fromNode" : "D9EC180D-3B24-4F93-9E54-DCAA981745D1",
+      "fromPort" : 0,
+      "id" : "537851BD-CC45-4EA4-A13D-1EB55D88B984",
+      "toNode" : "3917C9AB-A860-470A-90BF-654AC244D875",
+      "toPort" : 2
+    },
+    {
+      "fromNode" : "7FB01998-F3C9-4FF5-85E4-F07E16A911F7",
+      "fromPort" : 1,
+      "id" : "9DF98F40-2159-4640-91C3-F65A67AED0F8",
+      "toNode" : "D9EC180D-3B24-4F93-9E54-DCAA981745D1",
+      "toPort" : 1
+    },
+    {
+      "fromNode" : "D9EC180D-3B24-4F93-9E54-DCAA981745D1",
+      "fromPort" : 1,
+      "id" : "7E28A54B-1CD9-4870-9DC4-7A85CFD9C21B",
+      "toNode" : "3917C9AB-A860-470A-90BF-654AC244D875",
+      "toPort" : 3
+    },
+    {
+      "fromNode" : "E8447F95-9EDA-453B-8DDD-4B7336179350",
+      "fromPort" : 0,
+      "id" : "0224728E-F781-451A-A8B0-0DA8A6E44442",
+      "toNode" : "3556F4DD-CD22-4AF1-B834-AC63D2E046A7",
+      "toPort" : 0
+    },
+    {
+      "fromNode" : "3556F4DD-CD22-4AF1-B834-AC63D2E046A7",
+      "fromPort" : 0,
+      "id" : "0CF0207B-5C1D-456F-B3AE-7365E7C5ECE8",
+      "toNode" : "3917C9AB-A860-470A-90BF-654AC244D875",
+      "toPort" : 0
+    },
+    {
+      "fromNode" : "E8447F95-9EDA-453B-8DDD-4B7336179350",
+      "fromPort" : 1,
+      "id" : "53432EF5-D3D0-490D-B64E-A9CE548EE0C1",
+      "toNode" : "3556F4DD-CD22-4AF1-B834-AC63D2E046A7",
+      "toPort" : 1
+    },
+    {
+      "fromNode" : "3556F4DD-CD22-4AF1-B834-AC63D2E046A7",
+      "fromPort" : 1,
+      "id" : "2E3B7E95-E1C1-46F0-B006-967AE611BB75",
+      "toNode" : "3917C9AB-A860-470A-90BF-654AC244D875",
+      "toPort" : 1
+    },
+    {
+      "fromNode" : "5096A2E6-FC22-4415-9264-9D16430290F8",
+      "fromPort" : 0,
+      "id" : "D8E28D6A-1F8D-4B89-A770-0ECC54F9F1CE",
+      "toNode" : "7C259E7A-267B-4704-B899-88BF08AC0380",
+      "toPort" : 0
+    },
+    {
+      "fromNode" : "7C259E7A-267B-4704-B899-88BF08AC0380",
+      "fromPort" : 0,
+      "id" : "D1D4646E-EB0F-431C-B76D-E15D759FFA47",
+      "toNode" : "3917C9AB-A860-470A-90BF-654AC244D875",
+      "toPort" : 4
+    },
+    {
+      "fromNode" : "5096A2E6-FC22-4415-9264-9D16430290F8",
+      "fromPort" : 1,
+      "id" : "42882CD7-7D83-4974-81E6-2EED014BF1AB",
+      "toNode" : "7C259E7A-267B-4704-B899-88BF08AC0380",
+      "toPort" : 1
+    },
+    {
+      "fromNode" : "7C259E7A-267B-4704-B899-88BF08AC0380",
+      "fromPort" : 1,
+      "id" : "BC3A2C2B-BAA4-4511-BFED-94D98E39F7BC",
+      "toNode" : "3917C9AB-A860-470A-90BF-654AC244D875",
+      "toPort" : 5
+    },
+    {
+      "fromNode" : "3917C9AB-A860-470A-90BF-654AC244D875",
+      "fromPort" : 0,
+      "id" : "F00AF200-9DE2-473D-9651-805F76881208",
+      "toNode" : "B5D2EDB2-8E85-41C4-B83F-194D6B240FDC",
+      "toPort" : 0
+    },
+    {
+      "fromNode" : "B5D2EDB2-8E85-41C4-B83F-194D6B240FDC",
+      "fromPort" : 0,
+      "id" : "30D6EEDE-E04F-4758-AD69-12DE0A0223D1",
+      "toNode" : "E5C1AC9A-A544-45CB-8F7C-1D4238E6C117",
+      "toPort" : 0
+    },
+    {
+      "fromNode" : "3917C9AB-A860-470A-90BF-654AC244D875",
+      "fromPort" : 1,
+      "id" : "BE650641-8548-4642-BD6A-AB0BF8CC0DCC",
+      "toNode" : "B5D2EDB2-8E85-41C4-B83F-194D6B240FDC",
+      "toPort" : 1
+    },
+    {
+      "fromNode" : "B5D2EDB2-8E85-41C4-B83F-194D6B240FDC",
+      "fromPort" : 1,
+      "id" : "4349F2E3-7AF1-4CA4-8843-53E525EBFC3E",
+      "toNode" : "E5C1AC9A-A544-45CB-8F7C-1D4238E6C117",
+      "toPort" : 1
+    },
+    {
+      "fromNode" : "D851831A-E7C7-4679-962B-044CB6C6B38A",
+      "fromPort" : 0,
+      "id" : "36472909-8F36-4B4C-AB22-5B5BDF30F383",
+      "toNode" : "E47805DF-8AE3-4B03-8DF4-1E8AC6087847",
+      "toPort" : 1002
+    },
+    {
+      "fromNode" : "2413937B-0D36-43F1-81C6-D44E5D253E33",
+      "fromPort" : 0,
+      "id" : "04E0B25B-D4CF-417B-96CA-E7E28ABEE512",
+      "toNode" : "049E099F-8165-4602-97E9-6AF967656030",
+      "toPort" : 1002
+    },
+    {
+      "fromNode" : "5227BB08-121B-44A8-A7C9-E62362BD0BF9",
+      "fromPort" : 0,
+      "id" : "2EBF9660-B609-4987-A0FB-91BA30CC57CC",
+      "toNode" : "634EF12A-1898-46A7-8EB2-F9FDBCFC5051",
+      "toPort" : 0
+    },
+    {
+      "fromNode" : "634EF12A-1898-46A7-8EB2-F9FDBCFC5051",
+      "fromPort" : 0,
+      "id" : "62D4C0D4-58BA-4BAB-8BF9-FEBA03986F79",
+      "toNode" : "94948CBD-8A70-4B8C-AF3F-48010DB314DF",
+      "toPort" : 0
+    },
+    {
+      "fromNode" : "634EF12A-1898-46A7-8EB2-F9FDBCFC5051",
+      "fromPort" : 1,
+      "id" : "165901C1-CD31-4BDD-B1B2-482C7C8805BF",
+      "toNode" : "94948CBD-8A70-4B8C-AF3F-48010DB314DF",
+      "toPort" : 1
+    },
+    {
+      "fromNode" : "94948CBD-8A70-4B8C-AF3F-48010DB314DF",
+      "fromPort" : 0,
+      "id" : "A98A52B3-27BA-49CC-AA43-CF1D3CF5769B",
+      "toNode" : "A8AED8AD-DB92-4AAD-B720-66A868713B0F",
+      "toPort" : 0
+    },
+    {
+      "fromNode" : "94948CBD-8A70-4B8C-AF3F-48010DB314DF",
+      "fromPort" : 1,
+      "id" : "38B6E02F-A1E6-4888-BE18-47AEC4550796",
+      "toNode" : "A8AED8AD-DB92-4AAD-B720-66A868713B0F",
+      "toPort" : 1
+    },
+    {
+      "fromNode" : "304EACA5-BAF5-4878-8E37-D60CEA939DA6",
+      "fromPort" : 0,
+      "id" : "C60171B8-000F-4459-86E7-4577D1B5B654",
+      "toNode" : "5227BB08-121B-44A8-A7C9-E62362BD0BF9",
+      "toPort" : 0
+    },
+    {
+      "fromNode" : "304EACA5-BAF5-4878-8E37-D60CEA939DA6",
+      "fromPort" : 1,
+      "id" : "D7DD52B2-0FF8-4759-992A-2A48E72506FA",
+      "toNode" : "5227BB08-121B-44A8-A7C9-E62362BD0BF9",
+      "toPort" : 1
+    },
+    {
+      "fromNode" : "A8AED8AD-DB92-4AAD-B720-66A868713B0F",
+      "fromPort" : 0,
+      "id" : "E89BD46B-BD46-4E6C-88E3-2CC147110B07",
+      "toNode" : "3917C9AB-A860-470A-90BF-654AC244D875",
+      "toPort" : 6
+    },
+    {
+      "fromNode" : "A8AED8AD-DB92-4AAD-B720-66A868713B0F",
+      "fromPort" : 1,
+      "id" : "204FED9D-C988-40D9-A8C8-68A797272D5D",
+      "toNode" : "3917C9AB-A860-470A-90BF-654AC244D875",
+      "toPort" : 7
+    },
+    {
+      "fromNode" : "15BC20A2-7948-4DF2-B64F-D20D00F02CF9",
+      "fromPort" : 3,
+      "id" : "FC249A43-0D48-46ED-BE9D-F264F5F14FB6",
+      "toNode" : "3917C9AB-A860-470A-90BF-654AC244D875",
+      "toPort" : 1013
+    },
+    {
+      "fromNode" : "15BC20A2-7948-4DF2-B64F-D20D00F02CF9",
+      "fromPort" : 3,
+      "id" : "EAA49CB0-237C-4BC4-986E-9FE827FAAB7D",
+      "toNode" : "3917C9AB-A860-470A-90BF-654AC244D875",
+      "toPort" : 1015
+    },
+    {
+      "fromNode" : "49B890FE-8EC8-4CD4-828E-A20688476863",
+      "fromPort" : 0,
+      "id" : "7921D1FA-89A1-4570-A465-77AC49AB32A2",
+      "toNode" : "D9EC180D-3B24-4F93-9E54-DCAA981745D1",
+      "toPort" : 1005
+    },
+    {
+      "fromNode" : "D9B1ECE8-24E7-4A72-9EDE-CD1839CCE712",
+      "fromPort" : 0,
+      "id" : "9B178AE2-3161-4E5B-A0A3-00B468CCB46C",
+      "toNode" : "3556F4DD-CD22-4AF1-B834-AC63D2E046A7",
+      "toPort" : 1005
+    },
+    {
+      "fromNode" : "36CF88FF-5C89-4E59-94B1-7737CF9A4150",
+      "fromPort" : 0,
+      "id" : "47893E09-3847-4AD2-84DD-D18602C710BD",
+      "toNode" : "7C259E7A-267B-4704-B899-88BF08AC0380",
+      "toPort" : 1008
+    },
+    {
+      "fromNode" : "0FE137C2-99CC-44C2-8C5B-158991382FB7",
+      "fromPort" : 0,
+      "id" : "EDA6099E-1196-4BE0-BBED-05618100A6CE",
+      "toNode" : "B4E417DA-E0CD-45E9-A270-942131E224B1",
+      "toPort" : 0
+    },
+    {
+      "fromNode" : "0FE137C2-99CC-44C2-8C5B-158991382FB7",
+      "fromPort" : 1,
+      "id" : "1A11C4B1-A69C-47A3-815B-2A5D2D7C2B1C",
+      "toNode" : "B4E417DA-E0CD-45E9-A270-942131E224B1",
+      "toPort" : 1
+    },
+    {
+      "fromNode" : "B4E417DA-E0CD-45E9-A270-942131E224B1",
+      "fromPort" : 0,
+      "id" : "F963ECA6-FBFD-4082-8D55-8E05BADB19BF",
+      "toNode" : "E5C1AC9A-A544-45CB-8F7C-1D4238E6C117",
+      "toPort" : 0
+    },
+    {
+      "fromNode" : "B4E417DA-E0CD-45E9-A270-942131E224B1",
+      "fromPort" : 1,
+      "id" : "D3D02F2A-1416-4598-B0A9-57CF7E1D13CA",
+      "toNode" : "E5C1AC9A-A544-45CB-8F7C-1D4238E6C117",
+      "toPort" : 1
+    }
+  ],
+  "nodes" : [
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "0FE137C2-99CC-44C2-8C5B-158991382FB7",
+      "kind" : "in",
+      "params" : {
+
+      },
+      "x" : -457,
+      "y" : 1750
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "500410C9-BA16-4112-A8A8-D0290F94A1EB",
+      "kind" : "clock",
+      "params" : {
+        "source" : 1
+      },
+      "x" : -449,
+      "y" : 1842
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "3917C9AB-A860-470A-90BF-654AC244D875",
+      "kind" : "mix",
+      "params" : {
+        "chans" : 2,
+        "g1" : 0.11992434,
+        "g2" : 0.11992434,
+        "g3" : 0.19073068,
+        "g4" : 0.19073068,
+        "g5" : 0.1944044,
+        "g6" : 0.1944044,
+        "g7" : 0.81167996,
+        "g8" : 0.81167996,
+        "master" : 0.6105655
+      },
+      "x" : 1608,
+      "y" : 768
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "E5C1AC9A-A544-45CB-8F7C-1D4238E6C117",
+      "kind" : "out",
+      "params" : {
+        "gain" : -20.428104
+      },
+      "x" : 2223,
+      "y" : 764
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "CCF7F0A3-DC4F-4103-BA04-BDDA0EAF0C62",
+      "kind" : "shapes",
+      "params" : {
+        "attack" : 14.76998,
+        "decay" : 1303.9796,
+        "shape" : 16
+      },
+      "x" : 432,
+      "y" : 312
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+        "gate" : [
+          0,
+          0,
+          1,
+          0,
+          1,
+          1,
+          1,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "pitch" : [
+          0,
+          -5,
+          12,
+          0,
+          -10,
+          5,
+          10,
+          0,
+          -24,
+          -24,
+          -24,
+          0,
+          0,
+          0,
+          0,
+          -24
+        ]
+      },
+      "id" : "049E099F-8165-4602-97E9-6AF967656030",
+      "kind" : "seq",
+      "params" : {
+        "gatelen" : 0.10468749,
+        "scale" : 5,
+        "transpose" : -6
+      },
+      "x" : 48,
+      "y" : 312
+    },
+    {
+      "bypassed" : true,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "58B334EC-A91A-4422-9F0C-E62A18619014",
+      "kind" : "delay",
+      "params" : {
+        "algo" : 0,
+        "div" : 8,
+        "fb" : 0.9482353,
+        "time" : 366.70975
+      },
+      "x" : 696,
+      "y" : 312
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "E8447F95-9EDA-453B-8DDD-4B7336179350",
+      "kind" : "reverb",
+      "params" : {
+        "algo" : 2,
+        "mix" : 0.6155947
+      },
+      "x" : 960,
+      "y" : 312
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "dh" : 182,
+      "id" : "15BC20A2-7948-4DF2-B64F-D20D00F02CF9",
+      "kind" : "knob",
+      "params" : {
+        "v1" : 0.07994956,
+        "v2" : 0.12715378,
+        "v3" : 0.12960292,
+        "v4" : 0.54112
+      },
+      "w" : 736,
+      "x" : 1294,
+      "y" : -135
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "626BC77C-9106-40C9-8AD1-EB920FA2F540",
+      "kind" : "shapes",
+      "params" : {
+        "attack" : 28.382347,
+        "colour" : 0.53613985,
+        "decay" : 1303.9796,
+        "level" : 0.6807385,
+        "shape" : 16,
+        "timbre" : 0.8758545
+      },
+      "x" : 432,
+      "y" : 792
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+        "gate" : [
+          0,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "pitch" : [
+          -24,
+          -5,
+          8,
+          -19,
+          -2,
+          -24,
+          -24,
+          0,
+          15,
+          -15,
+          0,
+          -10,
+          0,
+          0,
+          -24,
+          5
+        ]
+      },
+      "id" : "AA533929-9BDD-4DFD-BA2E-A323DE7208E0",
+      "kind" : "seq",
+      "params" : {
+        "gatelen" : 0.10468749,
+        "len" : 16,
+        "scale" : 5,
+        "transpose" : -6
+      },
+      "x" : 48,
+      "y" : 792
+    },
+    {
+      "bypassed" : true,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "BF8F85E7-D2C6-41FD-B3D2-36E21F7DFC41",
+      "kind" : "delay",
+      "params" : {
+        "algo" : 0,
+        "div" : 8,
+        "fb" : 0.45926312,
+        "time" : 366.70975,
+        "tone" : 2259.5466
+      },
+      "x" : 696,
+      "y" : 792
+    },
+    {
+      "bypassed" : true,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "7FB01998-F3C9-4FF5-85E4-F07E16A911F7",
+      "kind" : "reverb",
+      "params" : {
+        "algo" : 2,
+        "mix" : 0.7421664,
+        "size" : 0.5982126
+      },
+      "x" : 960,
+      "y" : 792
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "A9806B40-5595-4130-9995-F1FC6F3B6EED",
+      "kind" : "shapes",
+      "params" : {
+        "attack" : 43.411266,
+        "colour" : 0.53613985,
+        "decay" : 389.31952,
+        "level" : 0.6807385,
+        "shape" : 16,
+        "timbre" : 0.8758545
+      },
+      "x" : 432,
+      "y" : 1272
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+        "gate" : [
+          1,
+          1,
+          1,
+          1,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          0,
+          1,
+          1,
+          1,
+          1
+        ],
+        "pitch" : [
+          13,
+          11,
+          15,
+          -13,
+          -8,
+          -3,
+          10,
+          14,
+          15,
+          -15,
+          -18,
+          15,
+          -17,
+          14,
+          -2,
+          5
+        ]
+      },
+      "id" : "E47805DF-8AE3-4B03-8DF4-1E8AC6087847",
+      "kind" : "seq",
+      "params" : {
+        "gatelen" : 0.10468749,
+        "len" : 16,
+        "scale" : 5,
+        "transpose" : -6
+      },
+      "x" : 48,
+      "y" : 1272
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "4CD506E6-0DFB-454B-9F5C-1A79E03708A9",
+      "kind" : "delay",
+      "params" : {
+        "algo" : 0,
+        "div" : 8,
+        "fb" : 0.45926312,
+        "time" : 366.70975,
+        "tone" : 2259.5466
+      },
+      "x" : 696,
+      "y" : 1272
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "5096A2E6-FC22-4415-9264-9D16430290F8",
+      "kind" : "reverb",
+      "params" : {
+        "algo" : 2,
+        "mix" : 0.43522742,
+        "size" : 0.5982126
+      },
+      "x" : 960,
+      "y" : 1272
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "D9EC180D-3B24-4F93-9E54-DCAA981745D1",
+      "kind" : "peq",
+      "params" : {
+        "f1" : 156.95758,
+        "f2" : 798.65063,
+        "g1" : 8.248023,
+        "g2" : -6.028989
+      },
+      "x" : 1224,
+      "y" : 792
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "3556F4DD-CD22-4AF1-B834-AC63D2E046A7",
+      "kind" : "peq",
+      "params" : {
+        "f1" : 101.410904,
+        "f2" : 824.8304,
+        "g1" : -10.000274,
+        "g2" : 12.603798
+      },
+      "x" : 1224,
+      "y" : 312
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "7C259E7A-267B-4704-B899-88BF08AC0380",
+      "kind" : "peq",
+      "params" : {
+        "f1" : 124.77983,
+        "f3" : 6262.951,
+        "g1" : -2.2715113,
+        "g3" : 12.510124
+      },
+      "x" : 1224,
+      "y" : 1272
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "B5D2EDB2-8E85-41C4-B83F-194D6B240FDC",
+      "kind" : "comp",
+      "params" : {
+        "gain" : 14.677546,
+        "peak" : 0.49950063
+      },
+      "x" : 1913,
+      "y" : 782
+    },
+    {
+      "bypassed" : true,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "D851831A-E7C7-4679-962B-044CB6C6B38A",
+      "kind" : "lfo",
+      "params" : {
+        "div" : 13,
+        "rate" : 0.41687572,
+        "sync" : 0
+      },
+      "x" : -271,
+      "y" : 1457
+    },
+    {
+      "bypassed" : true,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "2413937B-0D36-43F1-81C6-D44E5D253E33",
+      "kind" : "lfo",
+      "params" : {
+        "div" : 13,
+        "rate" : 0.41687572,
+        "sync" : 0
+      },
+      "x" : -254,
+      "y" : 565
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "5227BB08-121B-44A8-A7C9-E62362BD0BF9",
+      "kind" : "shapes",
+      "params" : {
+        "attack" : 43.411266,
+        "colour" : 0.53613985,
+        "decay" : 1304.1035,
+        "level" : 0.8620092,
+        "shape" : 16,
+        "timbre" : 0.8758545
+      },
+      "x" : 918,
+      "y" : 1815
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "634EF12A-1898-46A7-8EB2-F9FDBCFC5051",
+      "kind" : "delay",
+      "params" : {
+        "algo" : 0,
+        "div" : 8,
+        "fb" : 0.45926312,
+        "time" : 366.70975,
+        "tone" : 2259.5466
+      },
+      "x" : 1182,
+      "y" : 1815
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "94948CBD-8A70-4B8C-AF3F-48010DB314DF",
+      "kind" : "reverb",
+      "params" : {
+        "algo" : 2,
+        "mix" : 0.7306315,
+        "size" : 0.5982126
+      },
+      "x" : 1446,
+      "y" : 1815
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "A8AED8AD-DB92-4AAD-B720-66A868713B0F",
+      "kind" : "peq",
+      "params" : {
+        "f1" : 124.77983,
+        "f3" : 8657.863,
+        "g1" : -2.2715113,
+        "g3" : 3.6105523
+      },
+      "x" : 1710,
+      "y" : 1815
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "dh" : 302,
+      "id" : "304EACA5-BAF5-4878-8E37-D60CEA939DA6",
+      "kind" : "keys",
+      "params" : {
+
+      },
+      "w" : 1192,
+      "x" : -297,
+      "y" : 2059
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "49B890FE-8EC8-4CD4-828E-A20688476863",
+      "kind" : "lfo",
+      "params" : {
+        "rate" : 0.15828085
+      },
+      "x" : 962,
+      "y" : 1010
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "D9B1ECE8-24E7-4A72-9EDE-CD1839CCE712",
+      "kind" : "lfo",
+      "params" : {
+        "depth" : 0.2881394,
+        "offset" : 0.18159485,
+        "rate" : 0.039808758
+      },
+      "x" : 979,
+      "y" : 518
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "36CF88FF-5C89-4E59-94B1-7737CF9A4150",
+      "kind" : "lfo",
+      "params" : {
+        "offset" : -0.12106317,
+        "rate" : 0.07937862
+      },
+      "x" : 916,
+      "y" : 1536
+    },
+    {
+      "bypassed" : false,
+      "collapsed" : false,
+      "data" : {
+
+      },
+      "id" : "B4E417DA-E0CD-45E9-A270-942131E224B1",
+      "kind" : "mix",
+      "params" : {
+        "master" : 1.3701329
+      },
+      "x" : 1894,
+      "y" : 1156
+    }
+  ],
+  "version" : 10
+}
