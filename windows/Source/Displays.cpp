@@ -59,7 +59,7 @@ static void drawReadout(GC& g, Pt size, const std::string& kind, DSPNode* node) 
         bool on = r[0] > 0.5f;
         g.fillEllipse(Rect(0, mid - 3.5f, 7, 7), on ? Theme::text() : Theme::faint());
         g.textLeft(on ? "repeating" : "waiting", { 13, mid }, 11, on ? Theme::text() : Theme::dim());
-    } else if (kind == "gain" || kind == "mix") {
+    } else if (kind == "gain" || kind == "mix" || kind == "smix") {
         drawMeter(g, Rect(0, mid - 5, w, 4), r[0]);
         drawMeter(g, Rect(0, mid + 1, w, 4), r[1]);
     }
@@ -77,23 +77,100 @@ public:
 
 // ---------------------------------------------------------------- rec: REC / idle and the time, and "open file location"
 
+/// The newest recordings in the recordings folder (read at most once a second), newest first.
+struct RecentRecording { juce::File file; double seconds; };
+static std::vector<RecentRecording> recentRecordings(int n) {
+    static std::vector<RecentRecording> cache;
+    static double at = -10;
+    static std::map<juce::String, double> lengths;
+    double now = juce::Time::getMillisecondCounterHiRes() / 1000;
+    if (now - at > 1) {
+        at = now;
+        auto files = recordingsDirectory().findChildFiles(juce::File::findFiles, false, "*.wav;*.aif;*.aiff;*.flac;*.mp3");
+        std::sort(files.begin(), files.end(), [](const juce::File& a, const juce::File& b) { return a.getLastModificationTime() > b.getLastModificationTime(); });
+        cache.clear();
+        juce::AudioFormatManager fm; fm.registerBasicFormats();
+        for (int i = 0; i < std::min(24, files.size()); ++i) {
+            auto key = files[i].getFullPathName() + juce::String(files[i].getLastModificationTime().toMilliseconds());
+            if (!lengths.count(key)) {
+                std::unique_ptr<juce::AudioFormatReader> r(fm.createReaderFor(files[i]));
+                lengths[key] = r ? double(r->lengthInSamples) / std::max(r->sampleRate, 1.0) : 0;
+            }
+            cache.push_back({ files[i], lengths[key] });
+        }
+    }
+    return std::vector<RecentRecording>(cache.begin(), cache.begin() + std::min(n, int(cache.size())));
+}
+
 class RecDisplay : public NativeDisplay {
 public:
     using NativeDisplay::NativeDisplay;
+    static constexpr float listTop = 48, rowH = 15;
     Rect line(Rect r) const { return Rect(r.getX(), r.getY(), r.getWidth(), 20); }
     Rect button(Rect r) const { return Rect(r.getX(), r.getY() + 24, r.getWidth(), 18); }
+    Rect rowRect(int k, Rect r) const { return Rect(r.getX(), r.getY() + listTop + float(k) * rowH, r.getWidth(), rowH); }
+    int rows(Rect r) const { return std::min(12, std::max(int((r.getHeight() - listTop) / rowH), 0)); }
+    juce::File dragFile;
     std::vector<LivePart> parts(Rect r) override {
         auto* m = &model; auto nid = id; auto kind = spec.kind;
-        return { part("readout", line(r), [this, m, nid] { return LiveSig::readouts(m->node(nid), 24, 200) + LiveSig::patch(node) * 3 + (m->isRunning ? 1 : 0); },
+        std::vector<LivePart> list { part("readout", line(r), [this, m, nid] { return LiveSig::readouts(m->node(nid), 24, 200) + LiveSig::patch(node) * 3 + (m->isRunning ? 1 : 0); },
                       [m, nid, kind](GC& g, Pt size) { drawReadout(g, size, kind, m->node(nid)); }) };
+        int n = rows(r);
+        if (n > 0) {
+            Rect listRect(r.getX(), r.getY() + listTop, r.getWidth(), std::max(r.getHeight() - listTop, 1.0f));
+            list.push_back(part("recent", listRect, [n] {
+                int64_t h = 0;
+                for (auto& it : recentRecordings(n)) LiveSig::mix(h, it.file.getFullPathName().hashCode() + int64_t(it.seconds * 10));
+                return h + CustomColours::version * 2 + (Theme::light ? 1 : 0);
+            }, [n](GC& g, Pt size) {
+                auto items = recentRecordings(n);
+                for (size_t k = 0; k < items.size(); ++k) {
+                    Rect q(0, float(k) * rowH, size.x, rowH - 1);
+                    g.fillRounded(q, 2, Theme::row());
+                    auto name = items[k].file.getFileNameWithoutExtension();
+                    if (name.startsWith("polje nieuk ")) name = name.substring(12);
+                    double s = items[k].seconds;
+                    auto len = s >= 60 ? juce::String::formatted("%d:%02d", int(s) / 60, int(s) % 60) : juce::String::formatted("%.1fs", s);
+                    g.textLeft(juce::String::fromUTF8("\xe2\x89\xa1"), { 4, q.getCentreY() }, 9, Theme::dim());
+                    g.textLeft(fitText(name, 8, q.getWidth() - 60), { 14, q.getCentreY() }, 8, Theme::text());
+                    g.textRight(len, { q.getRight() - 4, q.getCentreY() }, 8, Theme::dim());
+                }
+            }, 15));
+        }
+        return list;
     }
     void paintStatic(GC& g, Rect r) override {
         auto b = button(r);
         g.fillRounded(b, 2, Theme::row());
         g.text("open file location", b.getCentre(), 9, Theme::text());
+        if (rows(r) > 0) g.textLeft(juce::String::fromUTF8("recent \xe2\x80\x94 drag onto arrange, sampler, looper"), { r.getX(), r.getY() + listTop - 5 }, 7, Theme::faint());
     }
-    bool press(Pt pt, Rect r, const PointerInfo&) override { return button(r).contains(pt); }
+    bool press(Pt pt, Rect r, const PointerInfo&) override {
+        dragFile = juce::File();
+        auto items = recentRecordings(rows(r));
+        for (size_t k = 0; k < items.size(); ++k) if (rowRect(int(k), r).contains(pt)) { dragFile = items[k].file; return true; }
+        return button(r).contains(pt);
+    }
+    /// a recent recording dragged out of the box: the box under the pointer lights up, and takes it on release
+    Pt screen(Pt p) const { return model.toScreen({ float(node.x) + p.x, float(node.y) + p.y }); }
+    void drag(Pt pt, Rect, const PointerInfo&) override {
+        if (dragFile == juce::File()) return;
+        if (model.fileDropHover) model.fileDropHover(screen(pt), juce::StringArray(dragFile.getFullPathName()));
+        model.dragLabel = dragFile.getFileNameWithoutExtension(); model.dragLabelAt = screen(pt);
+    }
+    std::optional<std::pair<juce::String, juce::String>> help(Pt pt, Rect r) override {
+        if (button(r).contains(pt)) return std::make_pair(juce::String("open file location"), juce::String("Shows the newest recording in Explorer."));
+        if (pt.y >= r.getY() + listTop) return std::make_pair(juce::String("recent recordings"), juce::String("The 12 newest recordings, newest first. Drag one onto an arrange box (it lands where you let go), a sampler or a looper."));
+        return std::nullopt;
+    }
     void release(Pt pt, Rect r, const PointerInfo& info) override {
+        if (dragFile != juce::File()) {
+            auto f = dragFile; dragFile = juce::File();
+            model.dragLabel = {};
+            if (info.moved && model.fileDrop) model.fileDrop(juce::StringArray(f.getFullPathName()), screen(pt));
+            else if (model.fileDropHover) model.fileDropHover(std::nullopt, {});
+            return;
+        }
         if (info.moved || !button(r).contains(pt)) return;
         // Explorer (Finder), with the newest recording selected — or just the folder
         auto dir = recordingsDirectory();
@@ -1836,6 +1913,7 @@ std::unique_ptr<NativeDisplay> NativeDisplay::make(AppModel& m, const PatchNode&
     if (k == "fm") return std::make_unique<FMDisplay>(m, n, s);
     if (k == "plugin") return makePluginDisplay(m, n, s);
     if (k == "midi") return makeMIDIDisplay(m, n, s);
+    if (k == "arrange") return makeArrangeDisplay(m, n, s);
     if (k == "scope") return std::make_unique<ScopeDisplay>(m, n, s);
     if (k == "drumsynth") return std::make_unique<DrumSynthDisplay>(m, n, s);
     if (k == "rack") return std::make_unique<RackDisplay>(m, n, s);

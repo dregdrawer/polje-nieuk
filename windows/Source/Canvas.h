@@ -15,6 +15,7 @@ public:
     explicit Canvas(AppModel& m);
     ~Canvas() override;
     void paint(juce::Graphics&) override;
+    void paintOverChildren(juce::Graphics&) override;
     void resized() override;
     void mouseDown(const juce::MouseEvent&) override;
     void mouseDrag(const juce::MouseEvent&) override;
@@ -98,7 +99,7 @@ private:
     std::optional<juce::String> hitCable(Pt screen);
     std::optional<std::pair<Pt, Pt>> cableEnds(const PatchCable& c);
     void hovered(std::optional<Pt> screen);
-    bool dropHover(std::optional<Pt> screen);
+    bool dropHover(std::optional<Pt> screen, const juce::StringArray& files = {});
     void startEditing(const juce::String& id, bool isGroup);
     void finishEditing();
     void placeEditor();

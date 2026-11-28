@@ -25,6 +25,8 @@ jobs:
           python windows/tests/compare.py windows/tests/stress-95.mac.txt stress.txt
           & $r.FullName windows/tests/fm.json 6 > fm.txt
           python windows/tests/compare.py windows/tests/fm.mac.txt fm.txt
+          & $r.FullName windows/tests/arrange.json 6 > arrange.txt
+          python windows/tests/compare.py windows/tests/arrange.mac.txt arrange.txt
       - name: Package
         shell: pwsh
         run: |

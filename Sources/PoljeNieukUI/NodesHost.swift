@@ -244,6 +244,7 @@ private typealias PColor = UIColor
             keep.insert(lp.key)
             if let p = parts[lp.key] { p.apply(lp) } else {
                 let p = PartLayer(lp)
+                p.slot.group = id
                 p.slot.active = visible
                 parts[lp.key] = p
                 CATransaction.begin(); CATransaction.setDisableActions(true)

@@ -10,6 +10,9 @@ Canvas::Canvas(AppModel& m) : model(m) {
     setWantsKeyboardFocus(true);
     setOpaque(true);
     model.listeners.push_back([this] { sync(); });
+    // a display can drop files on other boxes too (rec's recent recordings)
+    model.fileDropHover = [this](std::optional<Pt> p, const juce::StringArray& files) { bool r = dropHover(p, files); repaint(); return r; };
+    model.fileDrop = [this](const juce::StringArray& files, Pt p) { filesDropped(files, int(p.x), int(p.y)); repaint(); };
     model.onViewport = [this] { viewportChanged(); };
     model.onDragMoved = [this] { dragged(); };
     drawnScale = model.viewScale;
@@ -173,10 +176,11 @@ std::vector<LivePart> Canvas::partsFor(Item& it) {
             } });
         }
         auto p = BoxLayout::ports(n, *spec, geo.hw);
-        if (n.kind == "in" || n.kind == "out" || n.kind == "mix") {
-            int rows = n.kind == "mix" ? int(p.ins.size()) : BoxLayout::portRows(n, *spec, geo.hw);
+        if (n.kind == "in" || n.kind == "out" || n.kind == "mix" || n.kind == "smix") {
+            int rows = n.kind == "mix" || n.kind == "smix" ? int(p.ins.size()) : BoxLayout::portRows(n, *spec, geo.hw);
             for (int r = 0; r < rows; ++r) {
-                int ch = n.kind == "mix" ? MixerLayout::channelMeterBase + r : r;
+                if (n.kind == "smix" && r % 2 == 1) continue;          // stereo mix: one meter a channel, on its L row
+                int ch = n.kind == "mix" ? MixerLayout::channelMeterBase + r : (n.kind == "smix" ? MixerLayout::channelMeterBase + r / 2 : r);
                 auto mr = BoxPainter::meterRect(geo, r);
                 if (mr.getWidth() <= 4) continue;
                 int c = std::min(ch, kReadoutCount - 1);
@@ -188,7 +192,7 @@ std::vector<LivePart> Canvas::partsFor(Item& it) {
     }
     std::vector<int> outs;
     if (n.collapsed) outs = BoxLayout::collapsedRight(n, *spec);
-    else { auto p = BoxLayout::ports(n, *spec, geo.hw); for (int k = 0; k < int(p.outs.size()); ++k) if (!BoxLayout::hasLaneOutlets(n.kind) || k < 2) outs.push_back(k); }   // rack pads light up themselves
+    else { auto p = BoxLayout::ports(n, *spec, geo.hw); for (int k = 0; k < int(p.outs.size()); ++k) if (!(BoxLayout::hasLaneOutlets(n.kind) || n.kind == "arrange") || k < 2) outs.push_back(k); }   // rack pads light up themselves
     if (model.isRunning && !outs.empty() && n.kind != "in") {
         std::vector<float> ys; std::vector<juce::String> names; std::vector<bool> gate;
         for (int k : outs) {
@@ -328,6 +332,17 @@ std::optional<std::pair<Pt, Pt>> Canvas::cableEnds(const PatchCable& c) {
     if (!dest) return std::nullopt;
     Pt da = dragShift(a->id), db = dragShift(b->id);
     return std::make_pair(model.toScreen(BoxLayout::outlet(*a, *sa, model.hw, c.fromPort) + da), model.toScreen(*dest + db));
+}
+
+/// the name of a file being dragged inside the app (from rec's list), beside the pointer
+void Canvas::paintOverChildren(juce::Graphics& g) {
+    if (model.dragLabel.isEmpty()) return;
+    GC gc(g);
+    auto font = Theme::mono(10);
+    float w = textWidth(model.dragLabel, 10) + 12;
+    Rect r(model.dragLabelAt.x + 12, model.dragLabelAt.y + 10, w, 18);
+    gc.fillRounded(r, 3, Theme::text().withAlpha(0.9f));
+    gc.textLeft(model.dragLabel, { r.getX() + 6, r.getCentreY() }, 10, Theme::inverse());
 }
 
 void Canvas::paint(juce::Graphics& g) {
@@ -545,6 +560,8 @@ void Canvas::timerCallback() {
     }
     // live parts: gliding ones at 30 fps, the rest at 20 fps (slower still with audio off)
     bool running = model.isRunning;
+    bool force = liveRefreshNow;
+    liveRefreshNow = false;
     auto view = getLocalBounds().toFloat();
     for (auto& id : order) {
         auto f = items.find(id);
@@ -557,7 +574,7 @@ void Canvas::timerCallback() {
         for (auto& p : it.parts) {
             int period = p.lp.smooth ? 2 : 3 * p.lp.every;
             if (!running) period *= 5;
-            if ((frame + p.phase) % period != 0) continue;
+            if (!force && (frame + p.phase) % period != 0) continue;
             bool redraw = true;
             if (p.lp.signature) { auto sig = p.lp.signature(); redraw = sig != p.last; p.last = sig; }
             if (!redraw) continue;
@@ -1055,7 +1072,8 @@ void Canvas::mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDet
     float dy = w.isReversed ? -raw : raw;
     // over a piano roll's grid: scroll through its octaves
     if (auto* it = itemAt(e.position); it && it->display && it->geo)
-        if (auto d = it->geo->display()) if (it->display->wheel(local(*it, e.position), *d, dy)) return;
+        if (auto d = it->geo->display())
+            if (it->display->wheelXY(local(*it, e.position), *d, w.isReversed ? -w.deltaX : w.deltaX, w.isReversed ? -w.deltaY : w.deltaY, w.isInertial)) return;
     float factor = w.isSmooth ? std::exp(std::clamp(dy * 256, -40.0f, 40.0f) * 0.005f) : (dy > 0 ? 1.1f : (dy < 0 ? 1 / 1.1f : 1.0f));
     if (factor != 1) model.zoomBy(factor, e.position);
 }
@@ -1064,7 +1082,7 @@ void Canvas::mouseMagnify(const juce::MouseEvent& e, float scale) { model.zoomBy
 
 bool Canvas::keyPressed(const juce::KeyPress& k) {
     if (editor) return false;
-    if (k == juce::KeyPress::deleteKey || k == juce::KeyPress::backspaceKey) { if (!model.finderAt) model.removeSelection(); return true; }
+    if (k == juce::KeyPress::deleteKey || k == juce::KeyPress::backspaceKey) { if (!model.finderAt && !model.deleteArrangeClip()) model.removeSelection(); return true; }
     if (k == juce::KeyPress::escapeKey) { if (model.finderAt) { model.finderAt.reset(); model.changed(); } return true; }
     return false;
 }
@@ -1131,6 +1149,11 @@ void Canvas::hovered(std::optional<Pt> screen) {
                 topics.push_back({ "autorec-" + it->id, "Record automation", "Hold and move this box's controls: the movements are recorded into a 4-bar loop and play back. A quick tap latches recording on; tap again to stop." });
             else if (hit.region == Region::button && hit.button == BoxGeo::resetAuto)
                 topics.push_back({ "autoreset-" + it->id, "Reset automation", "Removes every recorded movement in this box. Parameters stay where they are." });
+            else if (hit.region == Region::display && it->display && it->geo) {
+                // a part of the display (arrange's buttons, clips, rec's list …)
+                if (auto d = it->geo->display()) if (auto h = it->display->help(local(*it, *screen), *d))
+                    topics.push_back({ "display-" + it->id + "-" + h->first, h->first, h->second });
+            }
         }
     }
     bool same = topics.size() == helpShown.size();
@@ -1143,14 +1166,22 @@ void Canvas::hovered(std::optional<Pt> screen) {
 
 // ---------------------------------------------------------------- files dropped on boxes
 
-bool Canvas::dropHover(std::optional<Pt> screen) {
+bool Canvas::dropHover(std::optional<Pt> screen, const juce::StringArray& files) {
     Item* target = nullptr; std::optional<int> pad;
     if (screen) if (auto* it = itemAt(*screen); it && it->kind == Item::module) {
         if (it->node.kind == "rack") {
             target = it;
             if (it->geo && it->display) if (auto d = it->geo->display()) pad = it->display->pad(local(*it, *screen), *d);
-        } else if (dynamic_cast<SampleBufferNode*>(model.node(it->id))) target = it;
+        } else if (dynamic_cast<SampleBufferNode*>(model.node(it->id)) || it->node.kind == "arrange") target = it;
     }
+    // arrange: a ghost clip (name, waveform) where the file would land
+    if (dropItem && dropItem != target && dropItem->node.kind == "arrange" && dropItem->geo)
+        if (auto d = dropItem->geo->display()) model.arrangePreview(dropItem->id, nullptr, std::nullopt, *d);
+    if (target && target->node.kind == "arrange" && target->geo && screen)
+        if (auto d = target->geo->display()) {
+            juce::File f = files.isEmpty() ? juce::File() : juce::File(files[0]);
+            model.arrangePreview(target->id, files.isEmpty() ? nullptr : &f, local(*target, *screen), *d);
+        }
     if (dropItem != target || (dropItem && dropItem->display && dropItem->display->dropPad != pad)) {
         if (dropItem && dropItem != target) { dropItem->dropTarget = false; if (dropItem->display) dropItem->display->dropPad.reset(); dropItem->dirty = true; }
         dropItem = target;
@@ -1160,17 +1191,19 @@ bool Canvas::dropHover(std::optional<Pt> screen) {
     return target != nullptr;
 }
 
-void Canvas::fileDragMove(const juce::StringArray&, int x, int y) { dropHover(Pt { float(x), float(y) }); }
+void Canvas::fileDragMove(const juce::StringArray& files, int x, int y) { dropHover(Pt { float(x), float(y) }, files); }
 void Canvas::fileDragExit(const juce::StringArray&) { dropHover(std::nullopt); }
 
 void Canvas::filesDropped(const juce::StringArray& files, int x, int y) {
     Pt p { float(x), float(y) };
-    dropHover(p);
+    dropHover(p, files);
     auto* it = dropItem;
     juce::Array<juce::File> fs;
     for (auto& f : files) fs.add(juce::File(f));
     if (it && !fs.isEmpty()) {
-        if (it->node.kind == "rack") {
+        if (it->node.kind == "arrange" && it->geo) {
+            if (auto d = it->geo->display()) model.arrangeDrop(it->id, fs, local(*it, p), *d);
+        } else if (it->node.kind == "rack") {
             int from = it->display && it->display->dropPad ? *it->display->dropPad : int(std::round(BoxLayout::param(it->node, "sel", 0)));
             model.loadPads(it->id, from, fs);
         } else model.loadAudio(fs[0], it->id);

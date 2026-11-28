@@ -47,7 +47,7 @@ Most modules are stereo: with only **L** patched, **R** follows L. Effects with 
 - `in`: every hardware input as an outlet, with meters
 - `out`: every hardware output as an inlet, with meters
 - `midi`: a MIDI device in and out. Pick the device for each direction on the box (**all devices** = every one ticked in the top bar's **MIDI** menu; out can also be **none**), the **in channel** (all or 1–16) and the **out channel**. In: notes come out as pitch / gate / vel, **mono** (last note wins) or **2–4 voices** on one cable, pitch bend (**bend range** in semitones), one CC (**cc number**) on the cc outlet (0 … 1), MIDI clock as 24 PPQN pulses on **clock** (patch it into `clock` set to 24 PPQN to follow another device's tempo) and start / continue on **reset**. Out: whatever is patched into its pitch / gate / vel inlets (chords too) is played as notes, the cc inlet as that CC, and **send clock** sends MIDI clock, start and stop with the transport.
-- `rec`: records a stereo WAV to Recordings **open file location** shows the newest recording in Finder / Explorer (on iPad, **show in Files**).
+- `rec`: records a stereo WAV to Recordings **open file location** shows the newest recording in Finder / Explorer (on iPad, **show in Files**). The box lists the 12 newest recordings: drag one onto an `arrange` box.
 
 **Clock**
 - `clock`: starts on its own tempo; patch a clock into its inlet and it switches to following it (unpatch → back to its own tempo). Follows a clock from any input (1/2/4/8/24 PPQN) or runs internally. If the external clock stops or hasn't started, it keeps time at the last tempo so quantised and synced modules keep working, then snaps back when pulses return.
@@ -116,7 +116,7 @@ Every voice takes **pitch first**, then its gate / trigger — the same order th
 - `gate`: noise gate with a sidechain inlet.
 
 **Modulation**
-- `slider` / `knob`: 1, 2, 4 or 8 big faders or knobs, each with its own CV outlet (0…10 V, ±10 V, 0…5 V, ±5 V or 0…1 V, with smoothing). Several fingers can move several controls at once; double-tap returns a control to the middle. Made for live playing: patch them into any parameter. Patched into a parameter, a control *sets* it across its whole range (other modulation still adds on top), and shows the target's name and live value. Dropped on a `mix` channel inlet, a fader / knob controls that channel's level.
+- `slider` / `knob`: 1, 2, 4 or 8 big faders or knobs, each with its own CV outlet (0…10 V, ±10 V, 0…5 V, ±5 V or 0…1 V, with smoothing). Several fingers can move several controls at once; double-tap returns a control to the middle. Made for live playing: patch them into any parameter. Patched into a parameter, a control *sets* it across its whole range (other modulation still adds on top), and shows the target's name and live value. Dropped on a `mix` channel inlet, a fader / knob controls that channel's level. The **multi** outlet dropped on a `mix` / `smix` level links every control to a level (control 1 → channel 1 …).
 - `chance`: random gates T1–T3 and quantised voltages X1–X3 + Y (Gillet DSP), seven T models, déjà-vu looping, six scales; follows the app clock or external clock inlets.
 - `lfo`: sine, triangle, saw, square, random (a smooth random wander) or square random (a new random value each cycle, held); free or clock-synced (1/32 up to every 16 bars); the display shows the waveform with a moving playhead and the current value.
 - `env`
@@ -126,6 +126,8 @@ Every voice takes **pitch first**, then its gate / trigger — the same order th
 - `gain`: gain, balance, width, mono, phase invert, mute.
 - `scope`: two-channel oscilloscope for anything — audio, LFOs, envelopes, gates, pitch CV. Shows the waveforms (A bright, B dim) and measures each: average, range and frequency in volts (0.1 = 1 V); a steady voltage also reads as the note it plays at 1 V/oct (0 V = C4), with cents. Time window 1 ms – 10 s, trigger free / on A rising / on the bar, auto or fixed scale, hold.
 - `mix`: four-input mixer.
+- `smix`: stereo mixer — each channel takes L and R with one level, pan as balance, mute and solo.
+- `arrange`: 1–32 tracks of audio clips on a timeline (**tracks** slider). Drop audio files or `rec`'s recordings on a track; drag a clip to move it, its edges to trim (a trim over a neighbour overwrites it), its top corners for fades — overlapping clips crossfade. The **select** tool picks several clips; **dup** copies them (short clips next to themselves, 8 s or longer onto a new track), double-click the time bar to duplicate the loop range and push everything after it later. **split** cuts at the playhead, Delete removes the selected clip. Below the lanes: the selected clip's **gain** and **transpose**, or the selected track's level. Each track has mute / solo / pan / arm: armed tracks record their inlets to separate files from the next bar (**rec**). **loop** plays the range between the loop lines, ▶ / ■ play from the loop start. Zoom with + / − (zooms to the loop), up / down scroll or a pinch; swipe sideways to move along the timeline; scrollbars on the bottom and right. **export** writes the loop as a WAV, optionally with a stem per track. Outlets: the mix L / R, one per track, and **multi** — drop it on a `mix` / `smix` to connect every track to its own channel. Hover with help on to see what each part does.
 
 ## Files
 

@@ -107,9 +107,9 @@ int ModuleSpec::paramIndex(const std::string& key) const {
 }
 
 BypassMode ModuleSpec::bypass() const {
-    static const std::set<std::string> none { "in", "out", "clock", "rec", "mix", "text", "scope", "midi" };
+    static const std::set<std::string> none { "in", "out", "clock", "rec", "mix", "smix", "text", "scope", "midi" };
     static const std::set<std::string> silent { "macro", "modal", "shapes", "rack", "drumsynth", "wave",
-                                                "keys", "seq", "turing", "roll", "drums", "slider", "knob", "chord" };
+                                                "keys", "seq", "turing", "roll", "drums", "slider", "knob", "chord", "arrange" };
     if (none.count(kind)) return BypassMode::none;
     if (kind == "atten") return BypassMode::through;
     if (silent.count(kind)) return BypassMode::silent;

@@ -21,6 +21,10 @@ struct MenuItem {
 };
 
 /// A part of a box that moves on its own (a display, a live row, a meter): redrawn when `signature` changes.
+/// Something moved by hand (arrange's zoom, scroll, a clip being dragged): every live part is checked on
+/// the next frame instead of at its own (slower) rate.
+inline bool liveRefreshNow = false;
+
 struct LivePart {
     std::string key;
     Rect rect;                                 // box points
@@ -41,8 +45,15 @@ public:
     virtual void release(Pt, Rect, const PointerInfo&) {}
     virtual std::optional<std::vector<MenuItem>> menu(Pt, Rect) { return std::nullopt; }
     virtual std::optional<int> pad(Pt, Rect) { return std::nullopt; }
+    /// help mode: what the part of the display under the pointer does (title, explanation)
+    virtual std::optional<std::pair<juce::String, juce::String>> help(Pt, Rect) { return std::nullopt; }
     /// the scroll wheel over the display (true: taken; roll scrolls its octaves)
     virtual bool wheel(Pt, Rect, float) { return false; }
+    /// both directions (arrange: up / down zooms, sideways scrolls); by default the larger one goes to wheel()
+    virtual bool wheelXY(Pt p, Rect r, float dx, float dy, bool inertial) {
+        juce::ignoreUnused(inertial);
+        return wheel(p, r, std::abs(dy) >= std::abs(dx) ? dy : dx);
+    }
     static std::unique_ptr<NativeDisplay> make(AppModel& m, const PatchNode& n, const ModuleSpec& s);
 
     AppModel& model;
@@ -63,6 +74,8 @@ public:
 void addPluginList(juce::PopupMenu& menu, AppModel& m, const juce::String& current, std::function<void(const PluginInfo&)> pick);
 std::unique_ptr<NativeDisplay> makePluginDisplay(AppModel& m, const PatchNode& n, const ModuleSpec& s);
 std::unique_ptr<NativeDisplay> makeMIDIDisplay(AppModel& m, const PatchNode& n, const ModuleSpec& s);
+std::unique_ptr<NativeDisplay> makeArrangeDisplay(AppModel& m, const PatchNode& n, const ModuleSpec& s);
+void startArrange(AppModel& m);
 void startMIDI();
 void addMIDIBarMenu(juce::PopupMenu& m);
 

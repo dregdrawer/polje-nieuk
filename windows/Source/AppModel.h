@@ -5,6 +5,9 @@
 #include "UIBase.h"
 
 namespace pn {
+class ArrangeNode;
+struct ArrangeTake;
+
 
 struct PendingCable { juce::String node; int port = 0; bool fromOutput = true; Pt point; };
 struct DeviceChoice { juce::String id, name; };
@@ -191,6 +194,19 @@ public:
     void addPluginBox(const PluginInfo& info, Pt at);     // module list ▸ plugins: a box with that plugin in it
     std::optional<juce::String> outletName(const PatchNode& n, int port);   // samplerack / drumsynth pad outlet: the sample (voice)           // the box drawn on top there (index), or -1
     void connect(const juce::String& a, int ap, const juce::String& b, int bp);
+    // arrange (ArrangeUI.cpp)
+    void setViewParam(const juce::String& id, const std::string& key, float v);      // saved, not an undo step
+    void editNodeAndCables(const juce::String& id, std::function<void(PatchNode&, std::vector<PatchCable>&)> body);
+    void arrangePreview(const juce::String& id, const juce::File* f, std::optional<Pt> boxPoint, Rect display);
+    bool arrangeDrop(const juce::String& id, const juce::Array<juce::File>& files, Pt boxPoint, Rect display);
+    bool deleteArrangeClip();
+    void arrangeInsertTrack(const juce::String& id, int t, bool copy, const std::vector<int>* only = nullptr);
+    void arrangeDeleteTrack(const juce::String& id, int t);
+    void addTakes(ArrangeNode* n, const std::vector<ArrangeTake>& takes);
+    // a display dropping files on other boxes (rec's list): set by the canvas
+    std::function<bool(std::optional<Pt>, const juce::StringArray&)> fileDropHover;
+    std::function<void(const juce::StringArray&, Pt)> fileDrop;
+    juce::String dragLabel; Pt dragLabelAt;
     bool pickUpCable(const juce::String& node, int port, Pt point);
 
     // transport / tempo

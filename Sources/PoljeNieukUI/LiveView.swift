@@ -44,6 +44,31 @@ final class Ticker {
         frame &+= 1
         for slot in slots.allObjects { slot.poll(frame) }
     }
+
+    /// Something you're moving by hand changed (arrange's zoom, scroll, a clip being dragged): check every
+    /// display now — once per run-loop turn — instead of at the next tick (20 Hz, or 4 Hz with audio off).
+    private var refreshPending = false
+    private var lastRefresh: CFTimeInterval = 0
+    private var refreshGroups: Set<UUID> = []
+    /// `group`: only that box's displays (nil: all of them).
+    func refreshSoon(_ group: UUID? = nil) {
+        if let group { refreshGroups.insert(group) } else { refreshGroups.insert(UUID(uuid: (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0))) }
+        guard !refreshPending else { return }
+        refreshPending = true
+        // at most once a screen frame (a trackpad sends ~120 events a second)
+        let wait = max(0, 1.0 / 60 - (CACurrentMediaTime() - lastRefresh))
+        DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.refreshPending = false
+                self.lastRefresh = CACurrentMediaTime()
+                let groups = self.refreshGroups
+                self.refreshGroups = []
+                let all = groups.contains(UUID(uuid: (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)))
+                for slot in self.slots.allObjects where all || slot.group.map({ groups.contains($0) }) == true { slot.pollNow() }
+            }
+        }
+    }
 }
 
 /// One live display's link to the tick: holds its fingerprint and tells only its own view to update.
@@ -58,6 +83,8 @@ final class LiveSlot: ObservableObject {
     private var last = Int.min
     /// Native displays: redraw their layer (instead of telling SwiftUI).
     var onChange: (() -> Void)?
+    /// The box it belongs to (a refresh can be asked for one box).
+    var group: UUID?
     /// A native display whose box went away: skip it.
     var active = true
     private var attached = false
@@ -75,6 +102,12 @@ final class LiveSlot: ObservableObject {
     func current() -> Int {
         if let sig = signature?(), sig != last { last = sig; version &+= 1 }
         return version
+    }
+    /// Check the fingerprint now, whatever this display's rate.
+    func pollNow() {
+        guard active, let s = signature?(), s != last else { return }
+        last = s; version &+= 1
+        if let onChange { onChange() } else { objectWillChange.send() }
     }
     @discardableResult func poll(_ frame: Int) -> Bool {
         // gliding displays: 30 fps (smooth to the eye at a fraction of 60's cost); the rest: 20 fps

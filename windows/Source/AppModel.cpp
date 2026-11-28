@@ -1292,6 +1292,49 @@ void AppModel::finishCable(Pt screen) {
 
 void AppModel::connect(const juce::String& a, int ap, const juce::String& b, int bp) {
     auto* bn = nodeFor(b);
+    auto* an = nodeFor(a);
+    // knob / slider "multi": dropped on a mixer, control k moves channel k's level (all of them at once)
+    if (an && ap == 8 && (an->kind == "knob" || an->kind == "slider")) {
+        if (!bn || (bn->kind != "mix" && bn->kind != "smix")) return;
+        auto* ms = Registry::spec(bn->kind);
+        int count = ControlsLayout::count(an->params.count("count") ? an->params.at("count") : 2.0f);
+        int n = std::min(count, MixerLayout::maxChannels);
+        if (MixerLayout::channels(bn->params.count("chans") ? bn->params.at("chans") : 1.0f) < n) {
+            const int choices[] = { 2, 4, 8, 16 };
+            int c = 3; for (int k = 0; k < 4; ++k) if (choices[k] >= n) { c = k; break; }
+            setParam(b, ms->paramIndex("chans"), float(c));
+        }
+        for (int k = 0; k < n; ++k) { int li = ms->paramIndex("g" + std::to_string(k + 1)); if (li >= 0) connect(a, k, b, kParamPortBase + li); }
+        return;
+    }
+    // arrange "multi": dropped on a mixer, every track goes into its own channel (stereo mix: L and R to the
+    // channel's L and R; mix: both into its one inlet, at half level); anywhere else it makes no cable
+    if (an && ap == 2 && an->kind == "arrange") {
+        if (!bn || (bn->kind != "mix" && bn->kind != "smix")) return;
+        bool stereo = bn->kind == "smix";
+        int ai = index(a), mi = index(b);
+        int n = std::min(std::clamp(int(std::lround(an->params.count("tracks") ? an->params.at("tracks") : 8.0f)), 1, 32), MixerLayout::maxChannels);
+        const int choices[] = { 2, 4, 8, 16 };
+        int c = 3; for (int k = 0; k < 4; ++k) if (choices[k] >= n) { c = k; break; }
+        auto& mp = patch.nodes[size_t(mi)].params;
+        mp["chans"] = float(std::max(c, int(std::lround(mp.count("chans") ? mp["chans"] : 1.0f))));
+        auto* ms = Registry::spec(bn->kind);
+        for (int k = 0; k < n; ++k) {
+            for (int side = 0; side < 2; ++side) {
+                int from = 3 + 2 * k + side, to = stereo ? 2 * k + side : k;
+                bool have = false;
+                for (auto& cc : patch.cables) if (cc.fromNode == a && cc.fromPort == from && cc.toNode == b && cc.toPort == to) have = true;
+                if (!have) { PatchCable pc; pc.id = Patch::newID(); pc.fromNode = a; pc.fromPort = from; pc.toNode = b; pc.toPort = to; patch.cables.push_back(pc); }
+            }
+            if (!stereo) {
+                mp["g" + std::to_string(k + 1)] = 0.5f;
+                if (auto* d = node(b)) d->base[size_t(ms->paramIndex("g" + std::to_string(k + 1)))] = 0.5f;
+            }
+        }
+        juce::ignoreUnused(ai);
+        topologyChanged();
+        return;
+    }
     if (ControlLink::isControl(patch, a) && bp < kParamPortBase && bp < MixerLayout::maxChannels && bn && bn->kind == "mix")
         if (auto* ms = Registry::spec("mix")) { int level = ms->paramIndex("g" + std::to_string(bp + 1)); if (level >= 0) bp = kParamPortBase + level; }
     for (auto& c : patch.cables) if (c.fromNode == a && c.fromPort == ap && c.toNode == b && c.toPort == bp) return;
@@ -1670,6 +1713,7 @@ void AppModel::selectOutput(const juce::String& uid) { outputUID = uid; settings
 
 void AppModel::startAudio() {
     startMIDI();
+    startArrange(*this);
     refreshDevices();
     restartAudio();
 }

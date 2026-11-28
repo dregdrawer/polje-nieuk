@@ -246,8 +246,10 @@ struct PatchCanvasView: View {
                 if frame.contains(p) {
                     let sdx = event.isDirectionInvertedFromDevice ? -event.scrollingDeltaX : event.scrollingDeltaX
                     let k: CGFloat = precise ? 1 : 12
+                    let starting = event.phase == .began || (event.phase == [] && event.momentumPhase == [])
                     if model.scrollArrange(at: model.toCanvas(anchor), dx: sdx * k, dy: dy * k,
-                                           zoom: !event.modifierFlags.intersection([.command, .option]).isEmpty) { return true }
+                                           zoom: !event.modifierFlags.intersection([.command, .option]).isEmpty,
+                                           precise: precise, starting: starting, momentum: event.momentumPhase != []) { return true }
                 }
                 if factor != 1 { model.zoom(by: factor, around: anchor) }
                 return true

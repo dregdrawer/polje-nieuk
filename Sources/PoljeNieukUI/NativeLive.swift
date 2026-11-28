@@ -35,6 +35,35 @@ struct LiveGC {
         cg.fillPath(using: style.isEOFilled ? .evenOdd : .winding)
     }
 
+    /// A bitmap into `r` (the context runs y-down, so it's flipped back first). Natively only.
+    func drawImage(_ img: CGImage, in r: CGRect) {
+        guard let cg else { return }
+        cg.saveGState()
+        cg.translateBy(x: r.minX, y: r.maxY)
+        cg.scaleBy(x: 1, y: -1)
+        cg.interpolationQuality = .low
+        cg.draw(img, in: CGRect(origin: .zero, size: r.size))
+        cg.restoreGState()
+    }
+
+    /// Many small axis-aligned rectangles (waveform bars, grid lines): filled in one go without anti-aliasing —
+    /// as a path of thousands of shapes they cost the drawing most of its time.
+    func fillRects(_ rects: [CGRect], with s: Shading) {
+        guard case .color(let col) = s, !rects.isEmpty else { return }
+        if let gc {
+            var p = Path()
+            for r in rects { p.addRect(r) }
+            gc.fill(p, with: .color(col))
+            return
+        }
+        guard let cg else { return }
+        cg.saveGState()
+        cg.setShouldAntialias(false)
+        cg.setFillColor(LiveColor.cg(col))
+        cg.fill(rects)
+        cg.restoreGState()
+    }
+
     func stroke(_ p: Path, with s: Shading, lineWidth: CGFloat = 1) {
         stroke(p, with: s, style: StrokeStyle(lineWidth: lineWidth))
     }

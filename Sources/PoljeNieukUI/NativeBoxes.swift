@@ -54,19 +54,30 @@ struct LivePart {
     var sticky = false
 }
 
-/// Text width for the native drawing (monospaced system font, as LiveText draws it).
-@MainActor func textWidth(_ s: String, size: CGFloat, bold: Bool = false) -> CGFloat {
-    guard !s.isEmpty else { return 0 }
-    let line = LiveColor.line(LiveText(s, size: size, color: Theme.text, bold: bold))
-    return CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
+/// One character's width in the app's monospaced font (measured once per size).
+@MainActor private var advances: [CGFloat: CGFloat] = [:]
+@MainActor private func advance(_ size: CGFloat, _ bold: Bool) -> CGFloat {
+    let key = bold ? -size : size
+    if let a = advances[key] { return a }
+    let line = LiveColor.line(LiveText("0000000000", size: size, color: Theme.text, bold: bold))
+    let a = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil)) / 10
+    advances[key] = a
+    return a
 }
 
-/// Cut `s` to fit `width` (with an ellipsis).
+/// Text width for the native drawing (monospaced system font, as LiveText draws it): characters × one width.
+@MainActor func textWidth(_ s: String, size: CGFloat, bold: Bool = false) -> CGFloat {
+    s.isEmpty ? 0 : CGFloat(s.count) * advance(size, bold)
+}
+
+/// Cut `s` to fit `width` (with an ellipsis). Worked out from the character width — measuring it again for
+/// every character taken off was slow with many labels (arrange's clips while zooming).
 @MainActor func fitText(_ s: String, size: CGFloat, width: CGFloat, bold: Bool = false) -> String {
-    if textWidth(s, size: size, bold: bold) <= width { return s }
-    var t = s
-    while t.count > 1 && textWidth(t + "…", size: size, bold: bold) > width { t.removeLast() }
-    return t + "…"
+    let a = advance(size, bold)
+    let n = s.count
+    if CGFloat(n) * a <= width { return s }
+    let keep = max(Int(width / max(a, 0.1)) - 1, 1)
+    return String(s.prefix(keep)) + "…"
 }
 
 // MARK: - Where things are

@@ -1,6 +1,7 @@
 // I/O, clock, mixer, LFO, controls and utilities — ports of IOClock.swift, Controls.swift, Utilities.swift.
 #include "ModulesPlugin.h"
 #include "ModulesMIDI.h"
+#include "ModulesArrange.h"
 #include "Modules.h"
 
 namespace pn {
@@ -140,6 +141,35 @@ public:
             float th = (pan + 1) * juce::MathConstants<float>::pi / 4;
             float gl = std::cos(th) * 1.41421356f * g, gr = std::sin(th) * 1.41421356f * g, pk = 0;
             for (int i = 0; i < frames; ++i) { float x = in[k][i]; oL[i] += x * gl; oR[i] += x * gr; pk = std::max(pk, std::abs(x)); }
+            readouts[size_t(8 + k)] = ch[size_t(k)].update(pk * std::abs(g), frames, sampleRate);
+        }
+        readouts[0] = mL.update(oL, frames, sampleRate);
+        readouts[1] = mR.update(oR, frames, sampleRate);
+    }
+private:
+    PeakMeter mL, mR; std::array<PeakMeter, 16> ch {};
+};
+
+/// smix: a channel = an L and an R inlet, one level, pan as balance (StereoMixerNode in IOClock.swift)
+class StereoMixerNode : public DSPNode {
+public:
+    using DSPNode::DSPNode;
+    void process(int frames, const float* const* in, uint64_t con, ProcessContext&) override {
+        static const int choices[] = { 2, 4, 8, 16 };
+        float* oL = out(0); float* oR = out(1);
+        std::fill(oL, oL + frames, 0.0f); std::fill(oR, oR + frames, 0.0f);
+        int n = choices[clampIndex(params[0], 4)];
+        float master = params[33];
+        for (int k = n; k < 16; ++k) readouts[size_t(8 + k)] = 0;
+        for (int k = 0; k < n; ++k) {
+            bool hasL = isConnected(con, 2 * k), hasR = isConnected(con, 2 * k + 1);
+            if (!hasL && !hasR) { readouts[size_t(8 + k)] = 0; continue; }
+            float g = params[size_t(1 + 2 * k)] * master;
+            float bal = std::clamp(params[size_t(2 + 2 * k)], -1.0f, 1.0f);
+            float gl = g * std::min(1.0f, 1 - bal), gr = g * std::min(1.0f, 1 + bal), pk = 0;
+            const float* sL = hasL ? in[2 * k] : in[2 * k + 1];
+            const float* sR = hasR ? in[2 * k + 1] : in[2 * k];
+            for (int i = 0; i < frames; ++i) { oL[i] += sL[i] * gl; oR[i] += sR[i] * gr; pk = std::max({ pk, std::abs(sL[i]), std::abs(sR[i]) }); }
             readouts[size_t(8 + k)] = ch[size_t(k)].update(pk * std::abs(g), frames, sampleRate);
         }
         readouts[0] = mL.update(oL, frames, sampleRate);
@@ -302,6 +332,7 @@ Factory factoryCore(const std::string& k) {
     if (k == "out") return make<HardwareOutNode>();
     if (k == "clock") return make<ClockNode>();
     if (k == "mix") return make<MixerNode>();
+    if (k == "smix") return make<StereoMixerNode>();
     if (k == "lfo") return make<LFONode>();
     if (k == "slider" || k == "knob") return make<ControlsNode>();
     if (k == "gain") return make<UtilityNode>();
@@ -322,6 +353,7 @@ Factory factoryFor(const std::string& kind) {
     if (auto f = factoryFM(kind)) return f;
     if (auto f = factoryPlugin(kind)) return f;
     if (auto f = factoryMIDI(kind)) return f;
+    if (auto f = factoryArrange(kind)) return f;
     return nullptr;
 }
 

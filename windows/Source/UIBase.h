@@ -124,6 +124,15 @@ namespace BoxLayout {
     float width(const PatchNode& n);
     float readoutHeight(const PatchNode& n);
     float padLaneHeight(const PatchNode& n);
+    /// arrange: toolbar + ruler at the top of its display, then a lane per track; each track's ports sit by its lane
+    constexpr float arrangeTop = 38, arrangeBottom = 36, arrangeLane = 26;
+    constexpr int arrangeShown = 8;
+    int arrangeTracks(const PatchNode& n);
+    struct ArrangeView { int first, shown; float laneH; };
+    ArrangeView arrangeView(const PatchNode& n);            // the tracks in view
+    bool arrangeLaneVisible(const PatchNode& n, int lane);
+    float arrangeLaneHeight(const PatchNode& n);
+    float arrangePortY(const PatchNode& n, const ModuleSpec& s, const HardwareCounts& hw, int lane, bool second);
     bool hasLaneOutlets(const std::string& kind);   // samplerack / drumsynth: L, R, then one outlet per drum-roll row   // rack / drumsynth: one drum-roll row (grows with the box)
     float readoutHeight(const std::string& kind);
     std::pair<bool, bool> resizable(const std::string& kind);

@@ -34,9 +34,27 @@ struct ArrangeDropPreview {
     static var preview: [UUID: ArrangeDropPreview] = [:]
     /// the box whose clip was clicked last (the delete key deletes that clip)
     static var focused: UUID?
+    /// Being zoomed / scrolled right now (until this time): the waveforms come from a picture taken when it
+    /// started, stretched into place — drawing them afresh every frame was what a fast zoom cost.
+    static var movingUntil: [UUID: CFTimeInterval] = [:]
+    static func isMoving(_ id: UUID) -> Bool { (movingUntil[id] ?? 0) > CACurrentMediaTime() }
+    static func moving(_ id: UUID) {
+        let until = CACurrentMediaTime() + 0.15
+        movingUntil[id] = until
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.17) {
+            MainActor.assumeIsolated {
+                // it has stopped: draw them sharp at the new zoom
+                if let u = movingUntil[id], u <= CACurrentMediaTime() { movingUntil[id] = nil; set(id) { _ in } }
+            }
+        }
+    }
+    /// what the trackpad gesture going on now does (decided when it starts)
+    enum Gesture { case zoom, scroll }
+    static var gesture: Gesture?
     static func get(_ id: UUID) -> ArrangeViewState { state[id] ?? ArrangeViewState() }
     static func set(_ id: UUID, _ f: (inout ArrangeViewState) -> Void) {
         var s = get(id); f(&s); s.version &+= 1; state[id] = s
+        Ticker.shared.refreshSoon(id)               // redraw now, not at the next (slow) tick
     }
 
     /// Grid lines: the finest of 1/32 notes … bars that stays at least 14 points apart.
@@ -153,7 +171,12 @@ final class ArrangeDisplay: NativeDisplay {
         // the toolbar, track headers, scrollbars and the strip: cheap, redrawn on any change (levels, buttons …)
         let chrome = part("arrangeChrome", r, signature: { [weak self] in
             guard let self, let n = self.an else { return 0 }
-            var h = self.view.version &* 31 &+ self.chromeTick
+            // not the view's version: zooming and scrolling only move the scrollbar's thumb
+            let v = self.view
+            var h = self.chromeTick &* 31 &+ v.selected.hashValue &+ (v.track ?? -1) &* 7 &+ (v.cut ? 1 : 0) &+ (v.selecting ? 2 : 0)
+            let total = self.contentBeats(n, geo, v)
+            LiveSig.mix(&h, LiveSig.q(Float(v.scroll / total), 400))
+            LiveSig.mix(&h, LiveSig.q(Float(Double(geo.area.width / v.ppb) / total), 400))
             LiveSig.mix(&h, LiveSig.patch(self.node))
             for c in self.work ?? n.clips { LiveSig.mix(&h, Int(c.gain * 1000) &+ Int(c.transpose)) }
             for v in self.trackWork ?? n.trackData { LiveSig.mix(&h, Int(v * 1000)) }
@@ -214,7 +237,7 @@ final class ArrangeDisplay: NativeDisplay {
         let barPx = 4 * v.ppb
         let labelEvery = barPx >= 40 ? 1 : (barPx >= 20 ? 2 : (barPx >= 10 ? 4 : (barPx >= 5 ? 8 : 16)))
         let b0 = geo.beat(geo.area.minX, v), b1 = geo.beat(geo.area.maxX, v)
-        var minor = Path(), beats = Path(), bars = Path()
+        var minor: [CGRect] = [], beats: [CGRect] = [], bars: [CGRect] = []
         var k = Int(floor(max(b0, 0) / step))
         while Double(k) * step <= b1 {
             let b = Double(k) * step
@@ -223,7 +246,7 @@ final class ArrangeDisplay: NativeDisplay {
             guard x >= ru.minX - 1 else { continue }
             let isBar = b.truncatingRemainder(dividingBy: 4) == 0, isBeat = b.truncatingRemainder(dividingBy: 1) == 0
             let line = CGRect(x: x, y: at(geo.area).minY, width: isBar ? 0.75 : 0.5, height: geo.area.height)
-            if isBar { bars.addRect(line) } else if isBeat { beats.addRect(line) } else { minor.addRect(line) }
+            if isBar { bars.append(line) } else if isBeat { beats.append(line) } else { minor.append(line) }
             if chrome { continue }
             if isBar {
                 let bar = Int(b / 4)
@@ -329,12 +352,27 @@ final class ArrangeDisplay: NativeDisplay {
         }
         return
         }
-        g.fill(minor, with: .color(Theme.border.opacity(0.22)))
-        g.fill(beats, with: .color(Theme.border.opacity(0.45)))
-        g.fill(bars, with: .color(Theme.border.opacity(0.9)))
+        g.fillRects(minor, with: .color(Theme.border.opacity(0.22)))
+        g.fillRects(beats, with: .color(Theme.border.opacity(0.45)))
+        g.fillRects(bars, with: .color(Theme.border.opacity(0.9)))
         // clips
         let clips = work ?? n.clips
         let area = at(geo.area)
+        // zooming / scrolling: the waveforms from the picture (made now if it doesn't cover the view)
+        var picture: WaveCache?
+        if ArrangeViews.isMoving(id), g.cgContext != nil {
+            let key = waveKey(clips, geo)
+            let visibleBeats = Double(geo.area.width / v.ppb)
+            if let c = waveCache, c.key == key, v.scroll >= c.start, v.scroll + visibleBeats <= c.start + c.beats,
+               v.ppb >= c.ppb / 4, v.ppb <= c.ppb * 4 {
+                picture = c
+            } else {
+                picture = makeWaveCache(clips, geo, v, n, spbSec, scale: g.cgContext?.ctm.a ?? 2, key: key)
+                waveCache = picture
+            }
+        } else {
+            waveCache = nil
+        }
         g.clipped(to: Path(area)) { g in
             for (i, c) in clips.enumerated() where geo.visible.contains(c.track) {
                 let q = at(geo.clipRect(c, v))
@@ -342,7 +380,10 @@ final class ArrangeDisplay: NativeDisplay {
                 let name = c.file < n.files.count ? (n.files[c.file] as NSString).lastPathComponent : "?"
                 let missing = c.file < n.files.count && ArrangeAudio.shared.isMissing(n.files[c.file])
                 drawClip(g, q, c, n.audio(for: c), spbSec: spbSec * c.speed, v: v, area: area, selected: v.selected.contains(i),
-                         label: missing ? "missing: " + name : name, missing: missing)
+                         label: missing ? "missing: " + name : name, missing: missing, wave: picture == nil)
+            }
+            if let p = picture {
+                g.drawImage(p.image, in: CGRect(x: geo.x(p.start, v) + o.x, y: area.minY, width: CGFloat(p.beats) * v.ppb, height: area.height))
             }
             // the loop: a line at each end, down through the tracks
             for b in [la, lb] {
@@ -367,11 +408,69 @@ final class ArrangeDisplay: NativeDisplay {
         }
     }
 
+    /// The waveforms of the tracks in view, as one picture three views wide (the view in the middle).
+    struct WaveCache { var image: CGImage; var start: Double; var beats: Double; var ppb: CGFloat; var key: Int }
+    private var waveCache: WaveCache?
+    private func waveKey(_ clips: [ArrangeClip], _ geo: ArrangeGeo) -> Int {
+        var h = geo.first &* 31 &+ geo.shown &* 7 &+ Int(geo.laneH * 10) &+ ArrangeAudio.shared.generation &* 13
+        for c in clips { LiveSig.mix(&h, Int(c.start * 1000) &+ c.track &* 7 &+ Int(c.length * 1000) &* 13 &+ Int(c.offset * 1000) &+ Int(c.gain * 100) &+ Int(c.transpose)) }
+        return h
+    }
+    private func makeWaveCache(_ clips: [ArrangeClip], _ geo: ArrangeGeo, _ v: ArrangeViewState, _ n: ArrangeNode,
+                               _ spbSec: Double, scale: CGFloat, key: Int) -> WaveCache? {
+        // only shown while moving: one pixel a point, two views wide, and written straight into the bitmap —
+        // a column of pixels for each point, from the lowest sample to the highest (asking Core Graphics to
+        // fill an outline of tens of thousands of points took ~300 ms)
+        _ = scale
+        let widthPts = min(geo.area.width * 2, 6000), height = geo.area.height
+        let start = max(v.scroll - Double(geo.area.width / v.ppb) / 2, 0)
+        let beats = Double(widthPts / v.ppb)
+        let w = Int(widthPts), h = Int(height)
+        guard w > 0, h > 0 else { return nil }
+        var px = [UInt8](repeating: 0, count: w * h * 4)
+        // the waveform colour, premultiplied
+        let col = LiveColor.cg(Theme.text).converted(to: CGColorSpace(name: CGColorSpace.sRGB)!, intent: .defaultIntent, options: nil)
+        let comps = col?.components ?? [1, 1, 1, 1]
+        let alpha: CGFloat = 0.75
+        let r = UInt8(min(max(comps[0] * alpha * 255, 0), 255)), g = UInt8(min(max(comps[min(1, comps.count - 1)] * alpha * 255, 0), 255))
+        let b = UInt8(min(max(comps[min(2, comps.count - 1)] * alpha * 255, 0), 255)), al = UInt8(alpha * 255)
+        for c in clips where geo.visible.contains(c.track) {
+            let x0 = max(Int((CGFloat(c.start - start) * v.ppb).rounded(.down)), 0)
+            let x1 = min(Int((CGFloat(c.end - start) * v.ppb).rounded(.up)), w)
+            guard x1 > x0, let a = n.audio(for: c) else { continue }
+            let laneTop = CGFloat(c.track - geo.first) * geo.laneH + 1, laneH = geo.laneH - 2
+            let mid = laneTop + laneH / 2, half = laneH / 2 - 2
+            let secPerBeat = spbSec * c.speed
+            for x in x0..<x1 {
+                let bx = Double(CGFloat(x) / v.ppb) + start - c.start          // beats into the clip
+                let f0 = Int((c.offset + bx * secPerBeat) * a.rate)
+                let f1 = max(Int((c.offset + (bx + Double(1 / v.ppb)) * secPerBeat) * a.rate), f0 + 1)
+                guard f0 >= 0, f0 < a.frames else { continue }
+                var (lo, hi) = a.minMax(f0, f1)
+                lo = max(lo * c.gain, -1); hi = min(hi * c.gain, 1)
+                let y0 = max(Int((mid - CGFloat(hi) * half).rounded(.down)), 0)
+                let y1 = min(Int((mid - CGFloat(lo) * half).rounded(.up)), h - 1)
+                guard y1 >= y0 else { continue }
+                for y in y0...y1 {
+                    let i = (y * w + x) * 4
+                    px[i] = r; px[i + 1] = g; px[i + 2] = b; px[i + 3] = al
+                }
+            }
+        }
+        guard let provider = CGDataProvider(data: Data(px) as CFData),
+              let img = CGImage(width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: w * 4,
+                                space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                                provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent) else { return nil }
+        return WaveCache(image: img, start: start, beats: beats, ppb: v.ppb, key: key)
+    }
+
     /// One clip: its box, the waveform (from the overview zoomed out, the samples zoomed in), fades, name.
     private func drawClip(_ g: LiveGC, _ q: CGRect, _ c: ArrangeClip, _ a: ClipAudio?, spbSec: Double, v: ArrangeViewState,
-                          area: CGRect, selected: Bool, label: String, missing: Bool, ghost: Bool = false) {
-        g.fill(Path(roundedRect: q, cornerRadius: 2), with: .color(Theme.fill.opacity(ghost ? 0.35 : 0.55)))
-        if let a {
+                          area: CGRect, selected: Bool, label: String, missing: Bool, ghost: Bool = false,
+                          boxes: Bool = true, wave: Bool = true) {
+        if boxes { g.fill(Path(roundedRect: q, cornerRadius: 2), with: .color(Theme.fill.opacity(ghost ? 0.35 : 0.55))) }
+        if let a, wave {
             var path = Path()
             let mid = q.midY, half = q.height / 2 - 2
             let x0 = max(q.minX, area.minX), x1 = min(q.maxX, area.maxX)
@@ -392,22 +491,33 @@ final class ArrangeDisplay: NativeDisplay {
                 }
                 g.stroke(path, with: .color(Theme.text.opacity(ghost ? 0.5 : 0.85)), lineWidth: 1)
             } else {
+                // the waveform as one outline: along the tops, then back along the bottoms (one shape fills far
+                // quicker than a bar per point)
+                var tops: [CGPoint] = [], bottoms: [CGPoint] = []
+                tops.reserveCapacity(Int(max(x1 - x0, 0)) + 2); bottoms.reserveCapacity(Int(max(x1 - x0, 0)) + 2)
                 var x = x0
                 while x < x1 {
                     let f0 = Int((c.offset + Double(x - q.minX) / Double(v.ppb) * spbSec) * a.rate)
                     let f1 = max(Int((c.offset + Double(x + 1 - q.minX) / Double(v.ppb) * spbSec) * a.rate), f0 + 1)
                     if f0 >= 0 && f0 < a.frames {
-                        // the real shape: lowest and highest sample under this point (from the summaries)
                         var (lo, hi) = a.minMax(f0, f1)
                         lo = max(lo * gain, -1); hi = min(hi * gain, 1)
-                        let top = mid - CGFloat(hi) * half, bottom = mid - CGFloat(lo) * half
-                        path.addRect(CGRect(x: x, y: top, width: 1, height: max(bottom - top, 0.75)))
+                        let top = mid - CGFloat(hi) * half, bottom = max(mid - CGFloat(lo) * half, top + 0.75)
+                        tops.append(CGPoint(x: x, y: top)); bottoms.append(CGPoint(x: x, y: bottom))
+                        tops.append(CGPoint(x: x + 1, y: top)); bottoms.append(CGPoint(x: x + 1, y: bottom))
                     }
                     x += 1
                 }
-                g.fill(path, with: .color(Theme.text.opacity(ghost ? 0.45 : 0.75)))
+                if !tops.isEmpty {
+                    path.move(to: tops[0])
+                    for p in tops.dropFirst() { path.addLine(to: p) }
+                    for p in bottoms.reversed() { path.addLine(to: p) }
+                    path.closeSubpath()
+                    g.fill(path, with: .color(Theme.text.opacity(ghost ? 0.45 : 0.75)))
+                }
             }
         }
+        guard boxes else { return }
         if c.fadeIn > 0 || c.fadeOut > 0 {
             var fp = Path()
             if c.fadeIn > 0 { fp.move(to: CGPoint(x: q.minX, y: q.maxY)); fp.addLine(to: CGPoint(x: q.minX + CGFloat(c.fadeIn) * v.ppb, y: q.minY)) }
@@ -680,6 +790,7 @@ final class ArrangeDisplay: NativeDisplay {
             let b = snapped(geo.beat(p.x, v), info)
             loopDrag = (max(min(a, b), 0), max(max(a, b), 0))
         case .pan(let s):
+            ArrangeViews.moving(id)
             ArrangeViews.set(id) { $0.scroll = max(s - d, 0) }
             return
         case .gain(let start):
@@ -708,6 +819,7 @@ final class ArrangeDisplay: NativeDisplay {
             }
             work = clips
         case .hscroll(let s0):
+            ArrangeViews.moving(id)
             let total = contentBeats(n, geo, v)
             ArrangeViews.set(id) { $0.scroll = max(s0 + Double((p.x - info.start.x) / geo.hbar.width) * total, 0) }
             return
@@ -723,6 +835,7 @@ final class ArrangeDisplay: NativeDisplay {
             trackWork = t
             n.setData(ArrangeLayout.tracksKey, t)
             chromeTick &+= 1
+            Ticker.shared.refreshSoon(id)
             return                                          // only the strip / header change: the waveforms stay
         case .trackPan(let k):
             var t = n.trackData
@@ -733,6 +846,7 @@ final class ArrangeDisplay: NativeDisplay {
             trackWork = t
             n.setData(ArrangeLayout.tracksKey, t)
             chromeTick &+= 1
+            Ticker.shared.refreshSoon(id)
             return
         case .volume(let k, _):
             var t = n.trackData
@@ -741,6 +855,7 @@ final class ArrangeDisplay: NativeDisplay {
             trackWork = t
             n.setData(ArrangeLayout.tracksKey, t)          // heard while dragging; saved on release
             chromeTick &+= 1
+            Ticker.shared.refreshSoon(id)
             return
         }
         redraw()
@@ -884,6 +999,7 @@ final class ArrangeDisplay: NativeDisplay {
     }
 
     func zoom(_ f: CGFloat, _ geo: ArrangeGeo, around x: CGFloat? = nil) {
+        ArrangeViews.moving(id)
         let cx = x ?? geo.area.midX
         let b = geo.beat(cx, view)
         ArrangeViews.set(id) { s in
@@ -1061,14 +1177,26 @@ final class ArrangeDisplay: NativeDisplay {
     }
 
     /// Mouse wheel / trackpad over the lanes: up / down zooms around the pointer, sideways scrolls
-    /// (⌘ or ⌥ + wheel: scrolls too).
-    func scroll(dx: CGFloat, dy: CGFloat, zoom z: Bool, at p: CGPoint, _ r: CGRect) {
+    /// (⌘ or ⌥ + wheel: scrolls too). A trackpad gesture decides zoom or scroll once, when it starts — a
+    /// little sideways drift no longer flips it to scrolling halfway — and its momentum after you let go is
+    /// ignored, so the view stops where your fingers did.
+    func scroll(dx: CGFloat, dy: CGFloat, zoom z: Bool, at p: CGPoint, _ r: CGRect, precise: Bool, starting: Bool, momentum: Bool) {
         let geo = ArrangeGeo(r, node)
-        if !z && abs(dy) >= abs(dx) {
-            zoom(exp(min(max(dy, -60), 60) * 0.01), geo, around: p.x)
+        if momentum { return }
+        // a swipe often starts with an event that hasn't moved yet: decide on the first one that has
+        if !precise || starting { ArrangeViews.gesture = nil }
+        if dx == 0 && dy == 0 { return }
+        if ArrangeViews.gesture == nil {
+            ArrangeViews.gesture = !z && abs(dy) > abs(dx) ? .zoom : .scroll
+        }
+        if ArrangeViews.gesture == .zoom {
+            let f = precise ? exp(min(max(dy, -40), 40) * 0.004) : exp(min(max(dy, -60), 60) * 0.01)
+            zoom(f, geo, around: p.x)
             return
         }
-        let d = abs(dx) > abs(dy) ? -dx : -dy
+        // sideways: the timeline goes the way your fingers do (as the system's scroll direction says)
+        let d = abs(dx) > abs(dy) ? dx : -dy
+        ArrangeViews.moving(id)
         ArrangeViews.set(id) { $0.scroll = max($0.scroll + Double(d / $0.ppb), 0) }
     }
 }
@@ -1243,9 +1371,9 @@ extension AppModel {
     }
 
     /// The wheel over an arrange box's lanes zooms / scrolls its timeline. True when one took it.
-    func scrollArrange(at c: CGPoint, dx: CGFloat, dy: CGFloat, zoom: Bool) -> Bool {
+    func scrollArrange(at c: CGPoint, dx: CGFloat, dy: CGFloat, zoom: Bool, precise: Bool, starting: Bool, momentum: Bool) -> Bool {
         guard let (disp, p, d) = arrangeUnder(c) else { return false }
-        disp.scroll(dx: dx, dy: dy, zoom: zoom, at: p, d)
+        disp.scroll(dx: dx, dy: dy, zoom: zoom, at: p, d, precise: precise, starting: starting, momentum: momentum)
         return true
     }
 
@@ -1256,3 +1384,5 @@ extension AppModel {
         return true
     }
 }
+
+

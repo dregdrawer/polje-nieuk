@@ -249,6 +249,7 @@ float width(const std::string& k) {
     if (k == "chord") return 220;
     if (k == "fm") return 300;
     if (k == "plugin") return 240;
+    if (k == "arrange") return 680;
     return 186;
 }
 float defaultWidth(const PatchNode& n) {
@@ -258,6 +259,7 @@ float defaultWidth(const PatchNode& n) {
 }
 float defaultReadoutHeight(const PatchNode& n) {
     if (n.kind == "knob" && ControlsLayout::count(param(n, "count", 2)) > 4) return readoutHeight(n.kind) * 2 - 10;
+    if (n.kind == "arrange") return arrangeTop + float(std::min(arrangeTracks(n), arrangeShown)) * arrangeLane + arrangeBottom;
     return readoutHeight(n.kind);
 }
 Pt textSize(const PatchNode& n) {
@@ -273,6 +275,25 @@ float width(const PatchNode& n) {
     return std::clamp(float(*n.w), d, 1600.0f);
 }
 bool hasLaneOutlets(const std::string& k) { return k == "rack" || k == "drumsynth"; }
+int arrangeTracks(const PatchNode& n) { return std::clamp(int(std::lround(param(n, "tracks", 8))), 1, 32); }
+ArrangeView arrangeView(const PatchNode& n) {
+    int t = arrangeTracks(n);
+    float avail = std::max(readoutHeight(n) - arrangeTop - arrangeBottom, 8.0f);
+    int shown = std::min(t, std::max(1, int((avail + 0.5f) / arrangeLane)));
+    int first = std::clamp(int(std::lround(param(n, "vscroll", 0))), 0, t - shown);
+    return { first, shown, avail / float(shown) };
+}
+bool arrangeLaneVisible(const PatchNode& n, int lane) { auto v = arrangeView(n); return lane >= v.first && lane < v.first + v.shown; }
+float arrangeLaneHeight(const PatchNode& n) { return arrangeView(n).laneH; }
+float arrangePortY(const PatchNode& n, const ModuleSpec& s, const HardwareCounts& hw, int lane, bool second) {
+    // by its lane, or (scrolled out of view) on the top / bottom edge of the tracks
+    auto v = arrangeView(n);
+    float top = header + portsHeight(n, s, hw) + arrangeTop;
+    int k = lane - v.first;
+    if (k < 0) return top;
+    if (k >= v.shown) return top + float(v.shown) * v.laneH;
+    return top + float(k) * v.laneH + v.laneH * (second ? 0.7f : 0.3f);
+}
 float padLaneHeight(const PatchNode& n) {
     bool rack = n.kind == "rack";
     float base = rack ? 9.0f : 14.0f, lanes = rack ? 16.0f : 4.0f;
@@ -286,11 +307,12 @@ float readoutHeight(const PatchNode& n) {
 std::pair<bool, bool> resizable(const std::string& k) { return { k != "in" && k != "out", readoutHeight(k) > 0 }; }
 bool hasReadout(const std::string& k) {
     static const std::set<std::string> s { "clock", "looper", "grain", "rec", "comp", "limit", "repeat", "gain", "mix", "sampler", "stretch", "peq",
-        "keys", "seq", "turing", "roll", "drums", "slider", "knob", "lfo", "rack", "drumsynth", "scope", "wave", "chord", "fm", "plugin", "midi" };
+        "keys", "seq", "turing", "roll", "drums", "slider", "knob", "lfo", "rack", "drumsynth", "scope", "wave", "chord", "fm", "plugin", "midi", "arrange", "smix" };
     return s.count(k) > 0;
 }
 float readoutHeight(const std::string& k) {
-    if (k == "rec") return 44;                // REC / time, and "open file location"
+    if (k == "rec") return 48 + 12 * 15 + 2;  // REC / time, "open file location", the 12 newest recordings
+    if (k == "arrange") return 38 + 8 * 26 + 36;   // toolbar, ruler, 8 lanes, scrollbar + clip strip
     if (k == "fm") return 104;
     if (k == "midi") return 48;              // in device, out device
     if (k == "plugin") return 104;            // name + edit, what it is, what each knob moves                // voice name, operators, the selected one's envelope
@@ -333,6 +355,8 @@ Ports ports(const PatchNode& n, const ModuleSpec& s, const HardwareCounts& hw) {
         return { strs(s.inputs, size_t(std::max({ hw.outputs, used, 1 }))), {} };
     }
     if (n.kind == "mix") return { strs(s.inputs, size_t(MixerLayout::channels(param(n, "chans", 1)))), strs(s.outputs, 99) };
+    if (n.kind == "smix") return { strs(s.inputs, size_t(2 * MixerLayout::channels(param(n, "chans", 1)))), strs(s.outputs, 99) };
+    if (n.kind == "arrange") { int t = arrangeTracks(n); return { strs(s.inputs, size_t(2 * t)), strs(s.outputs, size_t(3 + 2 * t)) }; }
     if (n.kind == "div") {
         std::vector<juce::String> outs;
         for (int k = 0; k < int(s.outputs.size()); ++k) {
@@ -365,7 +389,7 @@ std::vector<int> rowParams(const ModuleSpec& s, const PatchNode& n) {
         if (d >= 0) all.insert(all.begin() + d, v); else all.push_back(v);
     }
     auto& patched = use(n.id).ins;
-    if (s.kind == "mix") {
+    if (s.kind == "mix" || s.kind == "smix") {
         int ch = MixerLayout::channels(param(n, "chans", 1));
         bool showPans = param(n, "pans", 0) > 0.5f;
         std::vector<int> r { 0 };
@@ -411,6 +435,8 @@ std::vector<int> rowParams(const ModuleSpec& s, const PatchNode& n) {
 int portRows(const PatchNode& n, const ModuleSpec& s, const HardwareCounts& hw) {
     auto p = ports(n, s, hw);
     if (hasLaneOutlets(n.kind)) return std::max(int(p.ins.size()), 2);     // the pad / voice outlets sit beside the drum roll's rows
+    if (n.kind == "arrange") return 3;                                       // mix L / R, multi; the tracks' ports sit by their lanes
+    if (n.kind == "slider" || n.kind == "knob") return int(p.outs.size()) + 1; // the controls' outlets, then multi
     return rowOutlets(n.kind) ? int(p.ins.size()) : int(std::max(p.ins.size(), p.outs.size()));
 }
 bool sideDisplay(const std::string& k) { return k == "slider" || k == "knob" || k == "drums" || k == "roll"; }
@@ -437,8 +463,9 @@ float height(const PatchNode& n, const ModuleSpec& s, const HardwareCounts& hw) 
     rows += hasTriggerRow(s) ? 1 : 0;
     return header + bodyHeight(n, s, hw) + (rows > 0 ? float(rows) * row + 4 : 0) + 4;
 }
-Pt inlet(const PatchNode& n, const ModuleSpec& s, const HardwareCounts&, int i) {
+Pt inlet(const PatchNode& n, const ModuleSpec& s, const HardwareCounts& hw, int i) {
     float y = header + 3 + float(i) * portRow + portRow / 2;
+    if (n.kind == "arrange" && !n.collapsed) y = arrangePortY(n, s, hw, i / 2, i % 2 == 1);
     if (n.collapsed) {
         auto l = collapsedLeft(n, s);
         auto it = std::find(l.begin(), l.end(), i);
@@ -451,6 +478,8 @@ Pt outlet(const PatchNode& n, const ModuleSpec& s, const HardwareCounts& hw, int
     if (!n.collapsed) { int pi = outletParam(n.kind, i); if (pi >= 0) if (auto ry = paramRowY(n, s, hw, pi)) y = *ry; }
     if (!n.collapsed && hasLaneOutlets(n.kind) && i >= 2)    // rack: pad k's outlet is level with its row in the drum roll
         y = header + portsHeight(n, s, hw) + 4 + (float(i - 2) + 0.5f) * padLaneHeight(n);
+    if (!n.collapsed && n.kind == "arrange" && i >= 3) y = arrangePortY(n, s, hw, (i - 3) / 2, (i - 3) % 2 == 1);
+    if (!n.collapsed && (n.kind == "slider" || n.kind == "knob") && i == 8) y = header + 3 + float(ports(n, s, hw).outs.size()) * portRow + portRow / 2;
     if (n.collapsed) {
         auto r = collapsedRight(n, s);
         auto it = std::find(r.begin(), r.end(), i);

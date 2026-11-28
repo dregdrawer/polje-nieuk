@@ -83,12 +83,19 @@ std::vector<BoxGeo::Port> BoxGeo::ports() const {
         return r;
     }
     auto p = BoxLayout::ports(n, s, hw);
-    for (int i = 0; i < int(p.ins.size()); ++i) r.push_back({ i, false, { 0, BoxLayout::inlet(n, s, hw, i).y - ny }, BoxLayout::port });
+    float laneSize = n.kind == "arrange" ? std::min(BoxLayout::port, BoxLayout::arrangeLaneHeight(n) * 0.4f - 1) : BoxLayout::port;
+    for (int i = 0; i < int(p.ins.size()); ++i) {
+        if (n.kind == "arrange" && !BoxLayout::arrangeLaneVisible(n, i / 2)) continue;      // scrolled out of view
+        r.push_back({ i, false, { 0, BoxLayout::inlet(n, s, hw, i).y - ny }, laneSize });
+    }
     for (int i = 0; i < int(p.outs.size()); ++i) {
+        if (n.kind == "arrange" && i >= 3 && !BoxLayout::arrangeLaneVisible(n, (i - 3) / 2)) continue;
         // rack pad outlets sit one per drum-roll row: a little smaller, so they don't touch
-        float size = BoxLayout::hasLaneOutlets(n.kind) && i >= 2 ? std::min(BoxLayout::port, BoxLayout::padLaneHeight(n) - 3) : BoxLayout::port;
+        float size = BoxLayout::hasLaneOutlets(n.kind) && i >= 2 ? std::min(BoxLayout::port, BoxLayout::padLaneHeight(n) - 3)
+                   : (n.kind == "arrange" && i >= 3 ? laneSize : BoxLayout::port);
         r.push_back({ i, true, { w, BoxLayout::outlet(n, s, hw, i).y - ny }, size });
     }
+    if (n.kind == "slider" || n.kind == "knob") r.push_back({ 8, true, { w, BoxLayout::outlet(n, s, hw, 8).y - ny }, BoxLayout::port });   // multi
     for (int i : BoxLayout::rowParams(s, n)) if (auto y = BoxLayout::paramRowY(n, s, hw, i)) r.push_back({ kParamPortBase + i, false, { 0, *y }, BoxLayout::paramPort });
     return r;
 }
@@ -146,9 +153,11 @@ static void portRowsDraw(GC& g, const BoxGeo& geo) {
     bool outLabels = !BoxLayout::rowOutlets(geo.node->kind);
     for (int r = 0; r < rows; ++r) {
         float y = BoxLayout::header + 3 + float(r) * BoxLayout::portRow + BoxLayout::portRow / 2;
-        if (r < int(p.ins.size())) g.textLeft(p.ins[size_t(r)], { 10, y }, 9, Theme::dim());
+        if (geo.node->kind != "arrange" && r < int(p.ins.size())) g.textLeft(p.ins[size_t(r)], { 10, y }, 9, Theme::dim());
         if (outLabels && r < int(p.outs.size())) g.textRight(p.outs[size_t(r)], { geo.w - 10, y }, 9, Theme::dim());
     }
+    if (geo.node->kind == "slider" || geo.node->kind == "knob")
+        g.textRight("multi", { geo.w - 10, BoxLayout::outlet(*geo.node, *geo.spec, geo.hw, 8).y - float(geo.node->y) }, 9, Theme::dim());
 }
 
 Rect meterRect(const BoxGeo& geo, int r) {
