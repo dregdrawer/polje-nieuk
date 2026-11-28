@@ -85,6 +85,7 @@ private typealias PColor = UIColor
     let slot = LiveSlot()
     var part: LivePart
     var scale: CGFloat = 1
+    var drawnOnce = false
     /// where the part's corner falls past the whole pixel its layer sits on (drawn into the bitmap)
     var frac: CGPoint = .zero
     init(_ part: LivePart) {
@@ -178,19 +179,23 @@ private typealias PColor = UIColor
         let cf = CGRect(x: -marginPx, y: -marginPx, width: size.width + 2 * marginPx, height: size.height + 2 * marginPx)
         if content.frame != cf { content.frame = cf }
         if content.contentsScale != px { content.contentsScale = px }
+        var redraw: [ObjectIdentifier] = []
         for p in parts.values {
             let r = p.part.rect
             let ex = r.minX * s + frac.x, ey = r.minY * s + frac.y
             let fx = floorPx(ex), fy = floorPx(ey)
             p.frac = CGPoint(x: ex - fx, y: ey - fy)
             let pf = CGRect(x: fx, y: fy, width: ceilPx(r.width * s + p.frac.x), height: ceilPx(r.height * s + p.frac.y))
+            if !p.part.sticky || p.layer.frame != pf || p.layer.contentsScale != px || p.scale != s || !p.drawnOnce {
+                redraw.append(ObjectIdentifier(p))
+            }
             if p.layer.frame != pf { p.layer.frame = pf }
             if p.layer.contentsScale != px { p.layer.contentsScale = px }
             p.scale = s
         }
         CATransaction.commit()
         content.setNeedsDisplay()
-        for p in parts.values { p.layer.setNeedsDisplay() }
+        for p in parts.values where redraw.contains(ObjectIdentifier(p)) { p.layer.setNeedsDisplay(); p.drawnOnce = true }
         dirty = false
         // the box changed size at the same zoom (collapsed, unfolded, resized): draw it now — left to the next
         // frame, the old drawing would show squashed into the new size for a frame
@@ -342,6 +347,9 @@ private enum Region: Equatable {
 
     init(model: AppModel, hover: HoverState) {
         self.model = model; self.hover = hover
+        // a display can drop files on other boxes too (rec's recent recordings)
+        model.fileDropHover = { [weak self] p, urls in self?.dropHover(p, urls: urls) ?? false }
+        model.fileDrop = { [weak self] urls, p in self?.drop(urls, at: p) ?? false }
         world.anchorPoint = .zero
         for l in [groupLayer, cableLayer, boxLayer] { l.anchorPoint = .zero; world.addSublayer(l) }
         for l in [plain, dashed, selectedCables, movPlain, movDashed, movSelected] {
@@ -491,10 +499,12 @@ private enum Region: Equatable {
             }
             // meters: in / out channels, mixer inputs
             let p = BoxLayout.ports(n, spec, geo.hw)
-            if n.kind == "in" || n.kind == "out" || n.kind == "mix" {
-                let rows = n.kind == "mix" ? p.ins.count : BoxLayout.portRows(n, spec, geo.hw)
+            if n.kind == "in" || n.kind == "out" || n.kind == "mix" || n.kind == "smix" {
+                let rows = n.kind == "mix" || n.kind == "smix" ? p.ins.count : BoxLayout.portRows(n, spec, geo.hw)
                 for r in 0..<rows {
-                    let ch = n.kind == "mix" ? MixerLayout.channelMeterBase + r : r
+                    // stereo mix: one meter per channel, on its L row
+                    if n.kind == "smix" && r % 2 == 1 { continue }
+                    let ch = n.kind == "mix" ? MixerLayout.channelMeterBase + r : (n.kind == "smix" ? MixerLayout.channelMeterBase + r / 2 : r)
                     let mr = BoxPainter.meterRect(geo, r)
                     guard mr.width > 4 else { continue }
                     list.append(LivePart(key: "meter\(r)", rect: mr, every: 2, dimmed: n.bypassed, signature: {
@@ -507,7 +517,7 @@ private enum Region: Equatable {
         }
         // outlet activity dots (audio on)
         var outs = n.collapsed ? BoxLayout.collapsedRight(n, spec) : Array(BoxLayout.ports(n, spec, geo.hw).outs.indices)
-        if BoxLayout.hasLaneOutlets(n.kind) && !n.collapsed { outs = outs.filter { $0 < 2 } }     // the pads light up themselves
+        if (BoxLayout.hasLaneOutlets(n.kind) || n.kind == "arrange") && !n.collapsed { outs = outs.filter { $0 < 2 } }     // the pads / tracks light up themselves
         if m.isRunning, !outs.isEmpty, n.kind != "in" {
             let ys = outs.map { BoxLayout.outlet(n, spec, geo.hw, $0).y - n.y }
             let names = outs.map { $0 < spec.outputs.count ? spec.outputs[$0] : "" }
@@ -858,20 +868,21 @@ private enum Region: Equatable {
             if case .toggle = ps.kind { return }
             let width = max((it.geo?.w ?? 186) - 16, 1)
             let n = start + Float(dx / m.viewScale / width)
-            if !m.isZooming { m.setParam(node.id, i, ps.value(fromNormalized: n)) }
+            if !m.isZooming { m.quietly { m.setParam(node.id, i, ps.value(fromNormalized: n)) } }
         case .grip:
             guard press.info.moved, let n = it.node, let s = press.resizeStart else { return }
             let can = BoxLayout.resizable(n.kind)
             m.resizeNode(id, width: can.width ? s.width + dx / m.viewScale : nil, display: can.height ? s.height + dy / m.viewScale : nil)
         case .display:
             guard let d = it.geo?.display else { return }
-            it.display?.drag(lp, d, press.info)
+            m.quietly { it.display?.drag(lp, d, press.info) }
         default: break
         }
     }
 
     func ended(_ key: Int, at screen: CGPoint, cancelled: Bool = false) {
         guard let press = presses.removeValue(forKey: key) else { return }
+        defer { model.flushQuiet() }
         press.longTimer?.invalidate()
         let it = press.item, m = model, id = it.id
         let lp = local(it, screen)
@@ -985,6 +996,11 @@ private enum Region: Equatable {
                     case .button(.resetAuto):
                         topics.append(HelpTopic(id: "autoreset-\(it.id)", title: "Reset automation",
                                                 body: "Removes every recorded movement in this box. Parameters stay where they are."))
+                    case .display:
+                        // a part of the display (arrange's buttons, clips, rec's list …)
+                        if let d = geo.display, let h = it.display?.help(lp, d) {
+                            topics.append(HelpTopic(id: "display-\(it.id)-\(h.0)", title: h.0, body: h.1))
+                        }
                     default: _ = geo
                     }
                 }
@@ -1000,15 +1016,22 @@ private enum Region: Equatable {
 
     private var dropItem: Item?
     /// A file is dragged over `screen`: light up the box (or rack pad) that would take it. True if one would.
-    func dropHover(_ screen: CGPoint?) -> Bool {
+    func dropHover(_ screen: CGPoint?, urls: [URL] = []) -> Bool {
         var target: Item?, pad: Int?
         if let s = screen, let it = item(at: s), it.kind == .module, let n = it.node {
             if n.kind == "rack" {
                 target = it
                 if let d = it.geo?.display { pad = it.display?.pad(at: local(it, s), d) }
-            } else if model.node(n.id) is SampleBufferNode {
+            } else if model.node(n.id) is SampleBufferNode || n.kind == "arrange" {
                 target = it
             }
+        }
+        // arrange: a ghost clip (name, waveform) where the file would land
+        if let old = dropItem, old !== target, old.node?.kind == "arrange", let d = old.geo?.display {
+            model.arrangePreview(old.id, nil, at: nil, display: d)
+        }
+        if let t = target, t.node?.kind == "arrange", let s = screen, let d = t.geo?.display {
+            model.arrangePreview(t.id, urls.first, at: local(t, s), display: d)
         }
         if dropItem !== target || dropItem?.display?.dropPad != pad {
             if let old = dropItem, old !== target { old.dropTarget = false; old.display?.dropPad = nil; old.redraw() }
@@ -1023,13 +1046,14 @@ private enum Region: Equatable {
     }
     /// Files dropped: load them into the box under the point.
     func drop(_ urls: [URL], at screen: CGPoint) -> Bool {
-        _ = dropHover(screen)
+        _ = dropHover(screen, urls: urls)
         defer { _ = dropHover(nil) }
         guard let it = dropItem, let n = it.node, !urls.isEmpty else { return false }
         if n.kind == "rack" {
             let from = it.display?.dropPad ?? Int((n.params["sel"] ?? 0).rounded())
             return model.loadPads(n.id, from: from, urls)
         }
+        if n.kind == "arrange", let d = it.geo?.display { return model.arrangeDrop(n.id, urls, at: local(it, screen), display: d) }
         return model.loadAudio(urls[0], into: n.id)
     }
 
@@ -1094,6 +1118,11 @@ final class NodesContainer: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         // the patch, selection … changed: catch up (once per run-loop turn)
         model.objectWillChange
             .receive(on: DispatchQueue.main)   // not RunLoop.main: that pauses while the mouse is held
+            .sink { [weak self] _ in MainActor.assumeIsolated { self?.canvas.sync() } }
+            .store(in: &subs)
+        // … and the changes made during a drag, which only the canvas hears about straight away
+        model.quietChanged
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in MainActor.assumeIsolated { self?.canvas.sync() } }
             .store(in: &subs)
         // pan / zoom: laid out in the next layout pass (once per frame, however many events came in)
@@ -1293,7 +1322,8 @@ final class NodesContainer: NSView, NSTextViewDelegate, NSTextFieldDelegate {
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { draggingUpdated(sender) }
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
-        canvas.dropHover(convert(sender.draggingLocation, from: nil)) ? .copy : []
+        let urls = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+        return canvas.dropHover(convert(sender.draggingLocation, from: nil), urls: urls) ? .copy : []
     }
     override func draggingExited(_ sender: NSDraggingInfo?) { _ = canvas.dropHover(nil) }
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
@@ -1338,6 +1368,11 @@ final class NodesContainer: UIView, UIGestureRecognizerDelegate, UITextViewDeleg
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in MainActor.assumeIsolated { self?.canvas.sync() } }
             .store(in: &subs)
+        // … and the changes made during a drag, which only the canvas hears about straight away
+        model.quietChanged
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in MainActor.assumeIsolated { self?.canvas.sync() } }
+            .store(in: &subs)
         model.viewport.$offset.combineLatest(model.viewport.$scale)
             .sink { [weak self] _ in MainActor.assumeIsolated { self?.setNeedsLayout() } }
             .store(in: &subs)
@@ -1366,17 +1401,21 @@ final class NodesContainer: UIView, UIGestureRecognizerDelegate, UITextViewDeleg
     }
 
     private let pinch = UIPinchGestureRecognizer()
+    private var pinchOnArrange = false
     @objc private func pinched(_ g: UIPinchGestureRecognizer) {
         switch g.state {
         case .began, .changed:
             if g.state == .began {
-                model.isZooming = true
                 canvas.cancelAll()            // a box being dragged with the first finger lets go: the two fingers zoom
+                // fingers on an arrange box's tracks zoom its timeline instead of the patch
+                pinchOnArrange = model.pinchArrange(at: model.toCanvas(g.location(in: self)), by: 1)
+                model.isZooming = !pinchOnArrange
             }
             guard g.numberOfTouches >= 2 else { return }
-            model.zoom(by: g.scale, around: g.location(in: self))     // keeps the point between the fingers still
+            if pinchOnArrange { _ = model.pinchArrange(at: model.toCanvas(g.location(in: self)), by: g.scale) }
+            else { model.zoom(by: g.scale, around: g.location(in: self)) }     // keeps the point between the fingers still
             g.scale = 1
-        default: model.isZooming = false
+        default: model.isZooming = false; pinchOnArrange = false
         }
     }
     @objc private func hovered(_ g: UIHoverGestureRecognizer) {

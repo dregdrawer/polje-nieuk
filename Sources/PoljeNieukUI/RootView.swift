@@ -11,6 +11,14 @@ public struct PoljeNieukRootView: View {
     public init() {}
 
     public var body: some View {
+        // In a GeometryReader: it takes the window's size without measuring what's inside, so a change to the
+        // patch no longer has the window work out its smallest size again (the top bar's four layouts each
+        // time, ~15 % of the main thread while dragging a row). The window's smallest size is fixed instead.
+        GeometryReader { _ in content }
+            .frame(minWidth: 520, minHeight: 360)
+    }
+
+    private var content: some View {
         VStack(spacing: 0) {
             // its own view, redrawn only when something it shows changes: as part of this one it was rebuilt
             // (all four layouts, every module in the add menu) and the whole window re-measured on every

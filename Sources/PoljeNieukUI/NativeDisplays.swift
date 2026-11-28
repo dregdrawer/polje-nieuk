@@ -27,6 +27,8 @@ import PoljeNieukCore
     func release(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) {}
     /// Right-click / long-press menu.
     func menu(_ p: CGPoint, _ r: CGRect) -> [MenuItem]? { nil }
+    /// Help mode: what the part of the display under the pointer does (title, explanation).
+    func help(_ p: CGPoint, _ r: CGRect) -> (String, String)? { nil }
     /// rack: the pad under a dropped file (nil: the box takes it)
     func pad(at p: CGPoint, _ r: CGRect) -> Int? { nil }
 
@@ -47,6 +49,7 @@ import PoljeNieukCore
         case "fm": return FMDisplay(model: model, node: node, spec: spec)
         case "plugin": return PluginDisplay(model: model, node: node, spec: spec)
         case "midi": return MIDIBoxDisplay(model: model, node: node, spec: spec)
+        case "arrange": return ArrangeDisplay(model: model, node: node, spec: spec)
         case "comp": return CompDisplay(model: model, node: node, spec: spec)
         case "lfo": return LFODisplay(model: model, node: node, spec: spec)
         case "chord": return ChordDisplay(model: model, node: node, spec: spec)
@@ -63,9 +66,9 @@ import PoljeNieukCore
     }
 
     /// A part covering `rect`, drawing with `draw` at its own size.
-    func part(_ key: String, _ rect: CGRect, every: Int = 1, smooth: Bool = false,
+    func part(_ key: String, _ rect: CGRect, every: Int = 1, smooth: Bool = false, sticky: Bool = false,
               signature: (() -> Int)?, _ draw: @escaping (LiveGC, CGSize) -> Void) -> LivePart {
-        LivePart(key: key, rect: rect, every: every, smooth: smooth, dimmed: node.bypassed, signature: signature, draw: draw)
+        LivePart(key: key, rect: rect, every: every, smooth: smooth, dimmed: node.bypassed, signature: signature, draw: draw, sticky: sticky)
     }
 }
 
@@ -89,15 +92,42 @@ final class TextReadout: NativeDisplay {
 final class RecDisplay: NativeDisplay {
     private func line(_ r: CGRect) -> CGRect { CGRect(x: r.minX, y: r.minY, width: r.width, height: 20) }
     private func button(_ r: CGRect) -> CGRect { CGRect(x: r.minX, y: r.minY + 24, width: r.width, height: 18) }
+    /// the recent recordings: one row each under the button, as many as fit (up to 12)
+    static let listTop: CGFloat = 48, rowH: CGFloat = 15
+    private func rowRect(_ k: Int, _ r: CGRect) -> CGRect { CGRect(x: r.minX, y: r.minY + Self.listTop + CGFloat(k) * Self.rowH, width: r.width, height: Self.rowH) }
+    private func rows(_ r: CGRect) -> Int { min(12, max(Int((r.height - Self.listTop) / Self.rowH), 0)) }
+    private var dragURL: URL?
     override func parts(_ r: CGRect) -> [LivePart] {
         let m = model, nid = id
-        return [part("readout", line(r), signature: { [weak self] in
+        let n = rows(r)
+        let listRect = CGRect(x: r.minX, y: r.minY + Self.listTop, width: r.width, height: max(r.height - Self.listTop, 1))
+        var list = [part("readout", line(r), signature: { [weak self] in
             guard let self else { return 0 }
             return LiveSig.readouts(m.node(nid), 24, steps: 200) &+ LiveSig.patch(self.node) &* 3 &+ (m.isRunning ? 1 : 0)
         }) { [weak self] g, size in
             guard let self else { return }
             ReadoutView(kind: self.spec.kind, node: m.node(nid), model: m, patchNode: self.node, spec: self.spec).drawLive(g, size)
         }]
+        if n > 0 {
+            list.append(part("recent", listRect, every: 15, signature: {
+                var h = 0
+                for it in Recordings.recent(n) { LiveSig.mix(&h, it.url.path.hashValue &+ Int(it.seconds * 10)) }
+                return LiveSig.styled(h)
+            }) { g, size in
+                g.draw(LiveText("recent — drag onto arrange, sampler, looper", size: 7, color: Theme.faint), at: CGPoint(x: 0, y: -5), anchor: .leading)
+                for (k, it) in Recordings.recent(n).enumerated() {
+                    let q = CGRect(x: 0, y: CGFloat(k) * Self.rowH, width: size.width, height: Self.rowH - 1)
+                    g.fill(Path(roundedRect: q, cornerRadius: 2), with: .color(Theme.row))
+                    var name = it.url.deletingPathExtension().lastPathComponent
+                    if name.hasPrefix("polje nieuk ") { name = String(name.dropFirst(12)) }
+                    let len = it.seconds >= 60 ? String(format: "%d:%02d", Int(it.seconds) / 60, Int(it.seconds) % 60) : String(format: "%.1fs", it.seconds)
+                    g.draw(LiveText("≡", size: 9, color: Theme.dim), at: CGPoint(x: 4, y: q.midY), anchor: .leading)
+                    g.draw(LiveText(fitText(name, size: 8, width: q.width - 60), size: 8, color: Theme.text), at: CGPoint(x: 14, y: q.midY), anchor: .leading)
+                    g.draw(LiveText(len, size: 8, color: Theme.dim), at: CGPoint(x: q.maxX - 4, y: q.midY), anchor: .trailing)
+                }
+            })
+        }
+        return list
     }
     override func paintStatic(_ g: LiveGC, _ r: CGRect) {
         let b = button(r)
@@ -109,8 +139,33 @@ final class RecDisplay: NativeDisplay {
         #endif
         g.draw(LiveText(title, size: 9, color: Theme.text), at: CGPoint(x: b.midX, y: b.midY))
     }
-    override func press(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) -> Bool { button(r).contains(p) }
+    override func press(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) -> Bool {
+        dragURL = nil
+        let items = Recordings.recent(rows(r))
+        for k in items.indices where rowRect(k, r).contains(p) { dragURL = items[k].url; return true }
+        return button(r).contains(p)
+    }
+    override func help(_ p: CGPoint, _ r: CGRect) -> (String, String)? {
+        if button(r).contains(p) { return ("open file location", "Shows the newest recording in Finder (Files on iPad).") }
+        if p.y >= r.minY + Self.listTop {
+            return ("recent recordings", "The 12 newest recordings, newest first. Drag one onto an arrange box (it lands where you let go), a sampler or a looper.")
+        }
+        return nil
+    }
+    /// A recent recording dragged out of the box: the box under the pointer lights up, and takes it on release.
+    private func screen(_ p: CGPoint) -> CGPoint { model.toScreen(CGPoint(x: node.x + p.x, y: node.y + p.y)) }
+    override func drag(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) {
+        guard let url = dragURL else { return }
+        _ = model.fileDropHover?(screen(p), [url])
+        model.dragLabel = .init(text: url.deletingPathExtension().lastPathComponent, at: screen(p))
+    }
     override func release(_ p: CGPoint, _ r: CGRect, _ info: PointerInfo) {
+        if let url = dragURL {
+            dragURL = nil
+            model.dragLabel = nil
+            if info.moved { _ = model.fileDrop?([url], screen(p)) } else { _ = model.fileDropHover?(nil, []) }
+            return
+        }
         guard !info.moved, button(r).contains(p) else { return }
         #if os(macOS)
         // Finder, with the newest recording selected (or just the folder)
@@ -1205,3 +1260,4 @@ final class DrumSynthDisplay: PadsDisplay {
         model.setData(id, "hits", (0..<DrumSynthLayout.voices * DrumSynthLayout.steps).map { n.hits[$0] })
     }
 }
+

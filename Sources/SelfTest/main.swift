@@ -170,6 +170,98 @@ if CommandLine.arguments.contains("--midi") {
     exit(ok ? 0 : 1)
 }
 
+// `selftest --arrange`: clips play where they sit (with fades and crossfades), and a multitrack take
+// records each armed track to its own file and comes back as clips.
+if CommandLine.arguments.contains("--arrange") {
+    debugStatus = true
+    var ok = true
+    func expect(_ c: Bool, _ m: String) { print(c ? "  PASS  \(m)" : "  FAIL  \(m)"); if !c { ok = false } }
+    let sr = 48000.0
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pn-arrange-test", isDirectory: true)
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let tone = dir.appendingPathComponent("tone.wav")
+    try! AudioFiles.write(StereoAudio(left: (0..<Int(sr * 4)).map { _ in Float(0.5) }), sampleRate: sr, to: tone)   // 4 s of DC 0.5
+    var p = Patch()
+    var a = PatchNode(kind: "arrange", x: 0, y: 0, params: [:])
+    // track 1: beats 0–2; track 2: two clips overlapping 1 beat (crossfade), 4–8 and 7–10
+    a.data["files"] = ArrangeClip.encodeFiles([tone.path])
+    a.data["clips"] = ArrangeClip.encode([ArrangeClip(track: 0, start: 0, length: 2, file: 0),
+                                          ArrangeClip(track: 1, start: 4, length: 4, file: 0),
+                                          ArrangeClip(track: 1, start: 7, length: 3, offset: 1, file: 0)])
+    p.nodes = [a]
+    let h = GraphHost(sampleRate: sr)
+    h.load(p)
+    let outs = (0..<2).map { _ in UnsafeMutablePointer<Float>.allocate(capacity: 64) }
+    let ins = (0..<1).map { _ in UnsafeMutablePointer<Float>.allocate(capacity: 64) }
+    let until = Date().addingTimeInterval(5)
+    while ArrangeAudio.shared.generation == 0 && Date() < until { RunLoop.main.run(until: Date().addingTimeInterval(0.01)) }
+    let n = h.node(a.id)!
+    // 120 bpm: one beat = 24000 samples = 375 blocks of 64
+    var t1: [Float] = [], t2: [Float] = []
+    outs.withUnsafeBufferPointer { op in ins.withUnsafeBufferPointer { ip in
+        for _ in 0..<(375 * 11) {
+            h.process(frames: 64, inputs: UnsafePointer(ip.baseAddress!), inputCount: 0, outputs: UnsafePointer(op.baseAddress!), outputCount: 2)
+            t1.append(n.outputs[ArrangeLayout.firstTrackOutlet][32]); t2.append(n.outputs[ArrangeLayout.firstTrackOutlet + 2][32])
+        }
+    } }
+    func at(_ v: [Float], _ beat: Double) -> Float { v[min(Int(beat * 375), v.count - 1)] }
+    expect(abs(at(t1, 1) - 0.5) < 0.01, "track 1 plays its clip (beat 1: \(at(t1, 1)))")
+    expect(abs(at(t1, 3)) < 0.001, "track 1 is quiet after the clip ends")
+    expect(abs(at(t2, 5) - 0.5) < 0.01, "track 2 plays the first clip")
+    let mid = at(t2, 7.5)
+    expect(abs(mid - 0.5 * 2 * sinf(.pi / 4)) < 0.02, "crossfade: equal-power in the overlap (\(mid))")
+    expect(abs(at(t2, 9) - 0.5) < 0.01 && abs(at(t2, 10.5)) < 0.001, "the second clip plays to its end")
+    expect(abs(n.outputs[0][0]) < 1, "mix out is sane")
+    // clip data: transpose survives a save; clips saved before transpose (8 numbers each) still load
+    let tc = [ArrangeClip(track: 3, start: 2, length: 1.5, offset: 0.25, gain: 0.5, fadeIn: 0.125, fadeOut: 0.25, file: 1, transpose: -7)]
+    expect(ArrangeClip.decode(ArrangeClip.encode(tc)) == tc, "clips save and load with their transpose")
+    let old: [Float] = [1, 4, 2, 0, 1, 0, 0, 0, 2, 8, 1, 0.5, 1, 0, 0, 0]
+    let od = ArrangeClip.decode(old)
+    expect(od.count == 2 && od[1].track == 2 && od[1].start == 8 && od[0].transpose == 0, "older clips (no transpose) still load")
+    // export: the loop range rendered offline — beats 1 … 3 hold track 1's clip for its first beat
+    if let an = n as? ArrangeNode {
+        let r = an.render(from: 1, to: 3, rate: sr, secondsPerBeat: 0.5)
+        expect(r.mix.count == 48000, "export renders the range (2 beats = 48000 frames at 120 bpm)")
+        expect(abs(r.mix.left[1000] - 0.5) < 0.01 && abs(r.mix.left[30000]) < 0.001, "the mix holds the clip where it plays")
+        expect(r.tracks.keys.sorted() == [0], "stems: one per track with clips in the range")
+    }
+
+    // recording: track 3 armed, a constant 0.25 into its L / R, record two beats
+    var r = PatchNode(kind: "arrange", x: 0, y: 0, params: ["rec": 1])
+    var tr = ArrangeLayout.defaultTracks; tr[2 * ArrangeLayout.trackFields + 4] = 1
+    r.data["tracks"] = tr
+    var src = PatchNode(kind: "in", x: 0, y: 0, params: [:])
+    src.id = UUID()
+    var p2 = Patch(); p2.nodes = [src, r]
+    p2.cables = [PatchCable(fromNode: src.id, fromPort: 0, toNode: r.id, toPort: 4), PatchCable(fromNode: src.id, fromPort: 0, toNode: r.id, toPort: 5)]
+    let h2 = GraphHost(sampleRate: sr)
+    h2.load(p2)
+    var takes: [ArrangeTake] = []
+    MainActor.assumeIsolated { ArrangeNode.onTakes = { _, t in takes = t } }
+    let rn = h2.node(r.id)!
+    ins[0].update(repeating: 0.25, count: 64)
+    outs.withUnsafeBufferPointer { op in ins.withUnsafeBufferPointer { ip in
+        for b in 0..<(375 * 2) {
+            if b == 375 * 2 - 1 { rn.base[ArrangeLayout.rec] = 0 }
+            h2.process(frames: 64, inputs: UnsafePointer(ip.baseAddress!), inputCount: 1, outputs: UnsafePointer(op.baseAddress!), outputCount: 2)
+            if b % 50 == 0 { RunLoop.main.run(until: Date().addingTimeInterval(0.001)) }
+        }
+        for _ in 0..<4 { h2.process(frames: 64, inputs: UnsafePointer(ip.baseAddress!), inputCount: 1, outputs: UnsafePointer(op.baseAddress!), outputCount: 2) }
+    } }
+    let wait = Date().addingTimeInterval(3)
+    while takes.isEmpty && Date() < wait { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
+    expect(takes.count == 1 && takes.first?.track == 2, "one take, on track 3")
+    if let t = takes.first {
+        expect(abs(t.length - 2) < 0.05 && t.start < 0.01, "it starts at beat 0 and is 2 beats long (\(t.start), \(t.length))")
+        let audio = try? AudioFiles.read(t.url, sampleRate: sr, maxSeconds: 10)
+        expect(abs((audio?.left.count ?? 0) - 48000) < 200 && abs((audio?.left[1000] ?? 0) - 0.25) < 0.001,
+               "its file holds what came in (\(audio?.left.count ?? 0) frames)")
+        try? FileManager.default.removeItem(at: t.url)
+    }
+    print(ok ? "ARRANGE OK" : "ARRANGE FAILED")
+    exit(ok ? 0 : 1)
+}
+
 if let i = CommandLine.arguments.firstIndex(of: "--render"), i + 2 < CommandLine.arguments.count {
     let data = try! Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[i + 1]))
     let p = try! JSONDecoder().decode(Patch.self, from: data).migrated()

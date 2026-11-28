@@ -6,6 +6,8 @@ import Foundation
 public enum ControlsLayout {
     public static let countChoices = [1, 2, 4, 8]
     public static let maxControls = 8
+    /// the outlet after the controls': a cable from it to a mixer links every control to a channel's level
+    public static let multiOutlet = 8
     public static let ranges = ["0…10 V", "±10 V", "0…5 V", "±5 V", "0…1 V"]
     /// parameter index of control k (0-based)
     public static func valueIndex(_ k: Int) -> Int { 3 + k }

@@ -49,6 +49,9 @@ struct LivePart {
     var dimmed = false
     var signature: (() -> Int)?
     var draw: (LiveGC, CGSize) -> Void
+    /// Costly to draw, and its signature covers everything it shows: a change to the box's settings doesn't
+    /// redraw it (only its own signature, a new size or zoom do) — arrange's waveforms.
+    var sticky = false
 }
 
 /// Text width for the native drawing (monospaced system font, as LiveText draws it).
@@ -177,13 +180,21 @@ struct LivePart {
             }
             return r
         }
+        let laneSize = node.kind == "arrange" ? min(BoxLayout.port, BoxLayout.arrangeLaneHeight(node) * 0.4 - 1) : BoxLayout.port
         for i in p.ins.indices {
-            r.append(Port(port: i, output: false, center: CGPoint(x: 0, y: BoxLayout.inlet(node, spec, hw, i).y - node.y), size: BoxLayout.port))
+            if node.kind == "arrange" && !BoxLayout.arrangeLaneVisible(node, i / 2) { continue }      // scrolled out of view
+            r.append(Port(port: i, output: false, center: CGPoint(x: 0, y: BoxLayout.inlet(node, spec, hw, i).y - node.y), size: laneSize))
         }
         for i in p.outs.indices {
+            if node.kind == "arrange" && i >= 3 && !BoxLayout.arrangeLaneVisible(node, (i - 3) / 2) { continue }
             // rack pad outlets sit one per drum-roll row: a little smaller, so they don't touch
-            let size = BoxLayout.hasLaneOutlets(node.kind) && i >= 2 ? min(BoxLayout.port, BoxLayout.padLaneHeight(node) - 3) : BoxLayout.port
+            let size = BoxLayout.hasLaneOutlets(node.kind) && i >= 2 ? min(BoxLayout.port, BoxLayout.padLaneHeight(node) - 3)
+                     : (node.kind == "arrange" && i >= 3 ? laneSize : BoxLayout.port)
             r.append(Port(port: i, output: true, center: CGPoint(x: w, y: BoxLayout.outlet(node, spec, hw, i).y - node.y), size: size))
+        }
+        if node.kind == "slider" || node.kind == "knob" {
+            let m = ControlsLayout.multiOutlet
+            r.append(Port(port: m, output: true, center: CGPoint(x: w, y: BoxLayout.outlet(node, spec, hw, m).y - node.y), size: BoxLayout.port))
         }
         for i in BoxLayout.rowParams(spec, node) {
             if let y = BoxLayout.paramRowY(node, spec, hw, i) {
@@ -286,9 +297,14 @@ struct LivePart {
         let p = BoxLayout.ports(node, geo.spec, geo.hw)
         let rows = BoxLayout.portRows(node, geo.spec, geo.hw)
         let outLabels = !BoxLayout.rowOutlets(node.kind)
+        let inLabels = node.kind != "arrange"            // its track inlets are labelled by their lanes
+        if node.kind == "slider" || node.kind == "knob" {
+            let y = BoxLayout.outlet(node, geo.spec, geo.hw, ControlsLayout.multiOutlet).y - node.y
+            g.draw(LiveText("multi", size: 9, color: Theme.dim), at: CGPoint(x: geo.w - 10, y: y), anchor: .trailing)
+        }
         for r in 0..<rows {
             let y = BoxLayout.header + 3 + CGFloat(r) * BoxLayout.portRow + BoxLayout.portRow / 2
-            if r < p.ins.count { g.draw(LiveText(p.ins[r], size: 9, color: Theme.dim), at: CGPoint(x: 10, y: y), anchor: .leading) }
+            if inLabels && r < p.ins.count { g.draw(LiveText(p.ins[r], size: 9, color: Theme.dim), at: CGPoint(x: 10, y: y), anchor: .leading) }
             if outLabels && r < p.outs.count { g.draw(LiveText(p.outs[r], size: 9, color: Theme.dim), at: CGPoint(x: geo.w - 10, y: y), anchor: .trailing) }
         }
     }

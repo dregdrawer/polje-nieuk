@@ -169,7 +169,7 @@ struct ReadoutView: View {
         case "repeat":
             ctx.fill(Path(ellipseIn: CGRect(x: 0, y: mid - 3.5, width: 7, height: 7)), with: .color(r[0] > 0.5 ? Theme.text : Theme.faint))
             text(ctx, r[0] > 0.5 ? "repeating" : "waiting", 13, mid, r[0] > 0.5 ? Theme.text : Theme.dim)
-        case "gain", "mix":
+        case "gain", "mix", "smix":
             drawMeter(ctx, CGRect(x: 0, y: mid - 5, width: w, height: 4), r[0])
             drawMeter(ctx, CGRect(x: 0, y: mid + 1, width: w, height: 4), r[1])
         default:

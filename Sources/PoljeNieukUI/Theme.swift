@@ -129,6 +129,7 @@ enum BoxLayout {
         case "scope": return 320
         case "wave": return 300
         case "chord": return 220
+        case "arrange": return 680
         default: return 186
         }
     }
@@ -146,6 +147,7 @@ enum BoxLayout {
     /// Default display height — knob gets a second row of full-size knobs past four.
     static func defaultReadoutHeight(_ node: PatchNode) -> CGFloat {
         if node.kind == "knob" && ControlsLayout.count(node.params["count"] ?? 2) > 4 { return readoutHeight(node.kind) * 2 - 10 }
+        if node.kind == "arrange" { return arrangeTop + CGFloat(min(arrangeTracks(node), arrangeShown)) * arrangeLane + arrangeBottom }
         return readoutHeight(node.kind)
     }
 
@@ -167,6 +169,38 @@ enum BoxLayout {
     /// samplerack / drumsynth: L, R, then one outlet per drum-roll row (a pad / voice on its own chain).
     static func hasLaneOutlets(_ kind: String) -> Bool { kind == "rack" || kind == "drumsynth" }
 
+    /// arrange: toolbar + ruler at the top of its display, then one lane per track; each track's inlets and
+    /// outlets sit level with its lane.
+    static let arrangeTop: CGFloat = 38
+    static let arrangeLane: CGFloat = 26
+    /// under the lanes: the timeline's scrollbar, then the clip gain / transpose strip
+    static let arrangeBottom: CGFloat = 36
+    /// tracks a new box shows (taller boxes show more; the right-hand scrollbar reaches the rest)
+    static let arrangeShown = 8
+    /// The tracks in view: the first one, how many, how tall each lane is.
+    static func arrangeView(_ node: PatchNode) -> (first: Int, shown: Int, laneH: CGFloat) {
+        let n = arrangeTracks(node)
+        let avail = max(readoutHeight(node) - arrangeTop - arrangeBottom, 8)
+        let shown = min(n, max(1, Int((avail + 0.5) / arrangeLane)))
+        let first = min(max(Int((node.params["vscroll"] ?? 0).rounded()), 0), n - shown)
+        return (first, shown, avail / CGFloat(shown))
+    }
+    static func arrangeLaneVisible(_ node: PatchNode, _ lane: Int) -> Bool {
+        let v = arrangeView(node)
+        return lane >= v.first && lane < v.first + v.shown
+    }
+    static func arrangeTracks(_ node: PatchNode) -> Int { ArrangeLayout.count(node.params["tracks"]) }
+    static func arrangeLaneHeight(_ node: PatchNode) -> CGFloat { arrangeView(node).laneH }
+    /// A track's port: by its lane, or (scrolled out of view) on the top / bottom edge of the tracks.
+    static func arrangePortY(_ node: PatchNode, _ spec: ModuleSpec, _ hw: HardwareCounts, lane: Int, second: Bool) -> CGFloat {
+        let v = arrangeView(node)
+        let top = header + portsHeight(node, spec, hw) + arrangeTop
+        let k = lane - v.first
+        if k < 0 { return top }
+        if k >= v.shown { return top + CGFloat(v.shown) * v.laneH }
+        return top + CGFloat(k) * v.laneH + v.laneH * (second ? 0.7 : 0.3)
+    }
+
     /// rack / drumsynth: one drum-roll row. Making the box taller makes the rows taller (the pads keep their size).
     static func padLaneHeight(_ node: PatchNode) -> CGFloat {
         let (base, lanes): (CGFloat, Int) = node.kind == "rack" ? (RackView.rollHeight / CGFloat(RackLayout.pads), RackLayout.pads)
@@ -186,14 +220,14 @@ enum BoxLayout {
     }
 
     static func hasReadout(_ kind: String) -> Bool {
-        ["clock", "looper", "grain", "rec", "comp", "limit", "repeat", "gain", "mix",
-         "sampler", "stretch", "peq", "keys", "seq", "turing", "roll", "drums", "slider", "knob", "lfo", "rack", "drumsynth", "scope", "wave", "chord", "fm", "plugin", "midi"].contains(kind)
+        ["clock", "looper", "grain", "rec", "comp", "limit", "repeat", "gain", "mix", "smix",
+         "sampler", "stretch", "peq", "keys", "seq", "turing", "roll", "drums", "slider", "knob", "lfo", "rack", "drumsynth", "scope", "wave", "chord", "fm", "plugin", "midi", "arrange"].contains(kind)
     }
 
     /// Height of the live area under the ports (waveforms and curves are taller).
     static func readoutHeight(_ kind: String) -> CGFloat {
         switch kind {
-        case "rec": return 44                   // REC / time, and "open file location"
+        case "rec": return 48 + 12 * 15 + 2     // REC / time, "open file location", the 12 newest recordings
         case "looper", "stretch": return 104
         case "sampler": return 122
         case "peq": return 150
@@ -211,6 +245,7 @@ enum BoxLayout {
         case "fm": return 104                 // voice name, operators, the selected one's envelope
         case "plugin": return 104             // name + edit, what it is, what each knob moves
         case "midi": return 48                // in device, out device
+        case "arrange": return 38 + 8 * 26 + 36   // toolbar, ruler, 8 lanes, scrollbar + clip strip
         case "clock": return 40               // tempo line + ▶ ❚❚ ■
         case "scope": return 160
         case "wave": return 170
@@ -231,6 +266,11 @@ enum BoxLayout {
             let used = (usage[node.id]?.ins.filter { $0 < kParamPortBase }.max() ?? -1) + 1
             return (Array(spec.inputs.prefix(max(hw.outputs, used, 1))), [])
         case "mix": return (Array(spec.inputs.prefix(MixerLayout.channels(node.params["chans"] ?? 1))), spec.outputs)
+        case "smix": return (Array(spec.inputs.prefix(2 * MixerLayout.channels(node.params["chans"] ?? 1))), spec.outputs)
+        case "arrange":
+            // a pair of inlets / outlets per track shown
+            let n = arrangeTracks(node)
+            return (Array(spec.inputs.prefix(2 * n)), Array(spec.outputs.prefix(3 + 2 * n)))
         case "div":
             // outlet labels follow each output's division
             return (spec.inputs, (0..<spec.outputs.count).map { k in
@@ -272,7 +312,7 @@ enum BoxLayout {
             let idx = all.remove(at: a)
             if let d = all.firstIndex(where: { spec.params[$0].key == "decay" }) { all.insert(idx, at: d) } else { all.append(idx) }
         }
-        if spec.kind == "mix" {
+        if spec.kind == "mix" || spec.kind == "smix" {
             let n = MixerLayout.channels(node.params["chans"] ?? 1)
             let showPans = (node.params["pans"] ?? 0) > 0.5
             let patched = usage[node.id]?.ins ?? []
@@ -323,6 +363,8 @@ enum BoxLayout {
     static func portRows(_ node: PatchNode, _ spec: ModuleSpec, _ hw: HardwareCounts) -> Int {
         let p = ports(node, spec, hw)
         if hasLaneOutlets(node.kind) { return max(p.ins.count, 2) }      // the pad / voice outlets sit beside the drum roll's rows
+        if node.kind == "arrange" { return 3 }
+        if node.kind == "slider" || node.kind == "knob" { return p.outs.count + 1 }   // the controls' outlets, then multi                            // mix L / R, multi; the tracks' ports sit by their lanes
         return rowOutlets(node.kind) ? p.ins.count : max(p.ins.count, p.outs.count)
     }
 
@@ -356,6 +398,7 @@ enum BoxLayout {
 
     static func inlet(_ node: PatchNode, _ spec: ModuleSpec, _ hw: HardwareCounts, _ i: Int) -> CGPoint {
         var y = header + 3 + CGFloat(i) * portRow + portRow / 2
+        if node.kind == "arrange" && !node.collapsed { y = arrangePortY(node, spec, hw, lane: i / 2, second: i % 2 == 1) }
         if node.collapsed {
             y = collapsedLeft(node, spec).firstIndex(of: i).map(collapsedY) ?? header / 2
         }
@@ -370,6 +413,10 @@ enum BoxLayout {
             let lane = padLaneHeight(node)
             y = header + portsHeight(node, spec, hw) + 4 + CGFloat(i - 2) * lane + lane / 2
         }
+        if (node.kind == "slider" || node.kind == "knob") && !node.collapsed && i == ControlsLayout.multiOutlet {
+            y = header + 3 + CGFloat(ports(node, spec, hw).outs.count) * portRow + portRow / 2
+        }
+        if node.kind == "arrange" && !node.collapsed && i >= 3 { y = arrangePortY(node, spec, hw, lane: (i - 3) / 2, second: (i - 3) % 2 == 1) }
         if node.collapsed {
             y = collapsedRight(node, spec).firstIndex(of: i).map(collapsedY) ?? header / 2
         }

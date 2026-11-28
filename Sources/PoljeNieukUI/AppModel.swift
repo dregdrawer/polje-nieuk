@@ -17,12 +17,27 @@ struct PendingCable: Equatable {
 
 @MainActor
 public final class AppModel: ObservableObject {
-    @Published public var patch: Patch {
+    /// The patch. A change tells every SwiftUI view — except during a drag on the canvas (a setting row, a
+    /// display), when only the canvas hears about it, and the rest once the drag ends: SwiftUI re-checking the
+    /// whole window on every step of a drag was most of what dragging cost.
+    public var patch: Patch {
+        willSet {
+            if quietEdits > 0 { quietChanged.send(); quietPending = true } else { objectWillChange.send() }
+        }
         didSet {
             if patch.cables != oldValue.cables { BoxLayout.rebuildUsage(patch) }
             if !restoringHistory { scheduleCheckpoint() }
         }
     }
+    /// Patch changes made during a drag (see `patch`): the canvas follows these.
+    let quietChanged = PassthroughSubject<Void, Never>()
+    private var quietEdits = 0
+    private var quietPending = false
+    /// Run edits that only the canvas needs to see right away.
+    func quietly(_ body: () -> Void) { quietEdits += 1; body(); quietEdits -= 1 }
+    /// The drag ended: everything else catches up.
+    func flushQuiet() { if quietPending { quietPending = false; objectWillChange.send() } }
+
     /// Undo / redo (whole-patch snapshots, one step per settled edit).
     @Published private(set) var history = UndoHistory(committed: Patch())
     private var restoringHistory = false
@@ -487,6 +502,7 @@ public final class AppModel: ObservableObject {
     func startAudio() {
         refreshDevices()
         MIDIHub.shared.start()
+        ArrangeNode.onTakes = { [weak self] node, takes in self?.addTakes(node, takes) }
         AVAudioApplication.requestRecordPermission { granted in
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
@@ -1246,6 +1262,12 @@ public final class AppModel: ObservableObject {
     /// canvas like the module list, at `at` (canvas-view point).
     struct PanelMenu: Identifiable { let id = UUID(); var items: [MenuItem]; var at: CGPoint }
     @Published var panelMenu: PanelMenu?
+    /// The canvas's file drop, for displays that drag files (rec's list): hover / drop at a canvas-view point.
+    var fileDropHover: ((CGPoint?, [URL]) -> Bool)?
+    var fileDrop: (([URL], CGPoint) -> Bool)?
+    /// A file being dragged inside the app (rec's list): its name follows the pointer.
+    struct DragLabel: Equatable { var text: String; var at: CGPoint }
+    @Published var dragLabel: DragLabel?
     /// Mac: a selection box being drawn with the right mouse button (canvas-view coordinates).
     @Published var rightMarquee: CGRect?
     /// The top bar menu that's open ("in", "out", "view", "file").
@@ -1483,6 +1505,44 @@ public final class AppModel: ObservableObject {
 
     func connect(from a: UUID, _ ap: Int, to b: UUID, _ bp: Int) {
         var bp = bp
+        // knob / slider "multi": dropped on a mixer, control k moves channel k's level (all of them at once)
+        if ap == ControlsLayout.multiOutlet, let ai = patch.index(of: a), ["knob", "slider"].contains(patch.nodes[ai].kind) {
+            guard let mi = patch.index(of: b), ["mix", "smix"].contains(patch.nodes[mi].kind),
+                  let mspec = ModuleRegistry.spec(patch.nodes[mi].kind) else { return }
+            let n = min(ControlsLayout.count(patch.nodes[ai].params["count"] ?? 2), MixerLayout.maxChannels)
+            let have = MixerLayout.channels(patch.nodes[mi].params["chans"] ?? 1)
+            if have < n, let c = MixerLayout.channelChoices.firstIndex(where: { $0 >= n }), let ci = mspec.paramIndex("chans") {
+                setParam(b, ci, Float(c))
+            }
+            for k in 0..<n {
+                if let li = mspec.paramIndex("g\(k + 1)") { connect(from: a, k, to: b, kParamPortBase + li) }
+            }
+            return
+        }
+        // arrange's "multi" outlet: dropped on a mixer, every track goes into its own channel (L and R both
+        // into it, at half level so a centred track keeps its loudness); anywhere else it makes no cable
+        if ap == ArrangeLayout.multiOutlet, patch.nodes.first(where: { $0.id == a })?.kind == "arrange" {
+            guard let ai = patch.index(of: a), let mi = patch.index(of: b), ["mix", "smix"].contains(patch.nodes[mi].kind) else { return }
+            let stereo = patch.nodes[mi].kind == "smix"
+            let n = min(ArrangeLayout.count(patch.nodes[ai].params["tracks"]), MixerLayout.maxChannels)
+            let choice = MixerLayout.channelChoices.firstIndex { $0 >= n } ?? MixerLayout.channelChoices.count - 1
+            patch.nodes[mi].params["chans"] = Float(max(choice, Int((patch.nodes[mi].params["chans"] ?? 1).rounded())))
+            for k in 0..<n {
+                for side in 0..<2 {
+                    // stereo mix: L to the channel's L, R to its R; mix: both into its one inlet
+                    let from = ArrangeLayout.firstTrackOutlet + 2 * k + side, to = stereo ? 2 * k + side : k
+                    if !patch.cables.contains(where: { $0.fromNode == a && $0.fromPort == from && $0.toNode == b && $0.toPort == to }) {
+                        patch.cables.append(PatchCable(fromNode: a, fromPort: from, toNode: b, toPort: to))
+                    }
+                }
+                if !stereo {
+                    patch.nodes[mi].params["g\(k + 1)"] = 0.5
+                    host.node(b)?.base[ModuleRegistry.spec("mix")?.paramIndex("g\(k + 1)") ?? 0] = 0.5
+                }
+            }
+            topologyChanged()
+            return
+        }
         // a fader / knob dropped on a mixer's channel inlet means "this controls that channel":
         // it links to the channel's level (a steady voltage into an audio inlet would do nothing audible)
         if isControlNode(a), bp < kParamPortBase, bp < MixerLayout.maxChannels,
@@ -1621,6 +1681,28 @@ public final class AppModel: ObservableObject {
             seen[id] = patched
         }
         clockInletPatched = seen
+    }
+
+    /// A box's view setting (arrange's track scroll): saved with the patch, but not an undo step.
+    func setViewParam(_ id: UUID, _ key: String, _ v: Float) {
+        guard let i = patch.index(of: id), patch.nodes[i].params[key] != v else { return }
+        let was = restoringHistory
+        restoringHistory = true
+        patch.nodes[i].params[key] = v
+        restoringHistory = was
+        scheduleAutosave()
+    }
+
+    /// One undo step that changes a box and the cables (arrange inserting / removing a track).
+    func editNodeAndCables(_ id: UUID, _ body: (inout PatchNode, inout [PatchCable]) -> Void) {
+        guard let i = patch.index(of: id) else { return }
+        if !restoringHistory { checkpoint() }
+        var n = patch.nodes[i], c = patch.cables
+        body(&n, &c)
+        patch.nodes[i] = n
+        patch.cables = c
+        topologyChanged()
+        if !restoringHistory { checkpoint() }
     }
 
     private func topologyChanged() {
@@ -1856,11 +1938,18 @@ public final class AppModel: ObservableObject {
     }
 
     func scheduleAutosave() {
+        // the snapshot (plugin states and all) is taken when it saves, a second after the last change —
+        // not on every step of a drag
         autosaveWork?.cancel()
-        let snapshot = withPluginStates(patch)
-        let work = DispatchWorkItem { PatchStore.saveAutosave(snapshot) }
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let snapshot = self.withPluginStates(self.patch)
+                DispatchQueue.global(qos: .utility).async { PatchStore.saveAutosave(snapshot) }
+            }
+        }
         autosaveWork = work
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: work)
     }
 }
 

@@ -212,6 +212,38 @@ final class MixerNode: DSPNode {
     }
 }
 
+/// smix: the mixer for stereo sources — each channel an L and an R inlet, one level for both, pan as balance
+/// (centre = both sides at unity). arrange's "multi" outlet patches every track into it.
+final class StereoMixerNode: DSPNode {
+    private var meterL = PeakMeter(), meterR = PeakMeter()
+    private var chMeters = [PeakMeter](repeating: PeakMeter(), count: MixerLayout.maxChannels)
+    override func process(frames: Int, inputs: UnsafePointer<UnsafePointer<Float>>, connected: UInt64, ctx: ProcessContext) {
+        let oL = outputs[0], oR = outputs[1]
+        oL.update(repeating: 0, count: frames)
+        oR.update(repeating: 0, count: frames)
+        let n = MixerLayout.channels(params[0])
+        let master = params[MixerLayout.masterIndex]
+        for k in n..<MixerLayout.maxChannels { readouts[MixerLayout.channelMeterBase + k] = 0 }
+        for k in 0..<n {
+            let hasL = isConnected(connected, 2 * k), hasR = isConnected(connected, 2 * k + 1)
+            guard hasL || hasR else { readouts[MixerLayout.channelMeterBase + k] = 0; continue }
+            let g = params[1 + 2 * k] * master
+            let bal = min(max(params[2 + 2 * k], -1), 1)
+            let gl = g * min(1, 1 - bal), gr = g * min(1, 1 + bal)
+            let sL = hasL ? inputs[2 * k] : inputs[2 * k + 1], sR = hasR ? inputs[2 * k + 1] : inputs[2 * k]
+            var pk: Float = 0
+            for i in 0..<frames {
+                oL[i] += sL[i] * gl
+                oR[i] += sR[i] * gr
+                pk = max(pk, abs(sL[i]), abs(sR[i]))
+            }
+            readouts[MixerLayout.channelMeterBase + k] = chMeters[k].update(peak: pk * abs(g), frames, sampleRate: sampleRate)
+        }
+        readouts[0] = meterL.update(oL, frames, sampleRate: sampleRate)
+        readouts[1] = meterR.update(oR, frames, sampleRate: sampleRate)
+    }
+}
+
 /// lfo : free or clock-synced modulation source (also useful as CV back into the modular).
 /// A patched clock drives it instead (its pulses count as 1/16 notes, so the division still applies);
 /// reset starts the wave from the top.

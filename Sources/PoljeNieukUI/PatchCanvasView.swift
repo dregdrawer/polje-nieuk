@@ -178,6 +178,7 @@ struct PatchCanvasView: View {
             #endif
             .onAppear { model.viewSize = geo.size }
             .onChange(of: geo.size) { _, s in model.viewSize = s }
+            .overlay(alignment: .topLeading) { DragLabelView(model: model) }
             // the browser opening / closing moves the canvas's left edge: move the view the other way,
             // so the patch stays put on screen
             .onGeometryChange(for: CGPoint.self) { $0.frame(in: .global).origin } action: { model.canvasGlobalOrigin = $0 }
@@ -192,7 +193,7 @@ struct PatchCanvasView: View {
         .focusable()
         .focused($canvasFocused)
         .focusEffectDisabled()
-        .onDeleteCommand { if model.finderAt == nil { model.removeSelection() } }
+        .onDeleteCommand { if model.finderAt == nil && !model.deleteArrangeClip() { model.removeSelection() } }
         #endif
     }
 
@@ -213,6 +214,8 @@ struct PatchCanvasView: View {
                 let frame = frameBox.frame
                 guard frame.width > 0, frame.contains(p) else { return false }
                 let anchor = CGPoint(x: p.x - frame.minX, y: p.y - frame.minY)
+                // over an arrange box's tracks: zoom its timeline
+                if model.pinchArrange(at: model.toCanvas(anchor), by: 1 + event.magnification) { return true }
                 guard model.hasContent(at: model.toCanvas(anchor)) else { return false }
                 model.isZooming = event.phase != .ended && event.phase != .cancelled
                 model.zoom(by: 1 + event.magnification, around: anchor)
@@ -239,6 +242,13 @@ struct PatchCanvasView: View {
                     : CGPoint(x: model.viewSize.width / 2, y: model.viewSize.height / 2)
                 // over a piano roll's grid: scroll through its octaves (up = higher)
                 if frame.contains(p), model.scrollRoll(at: model.toCanvas(anchor), by: dy, precise: precise) { return true }
+                // over an arrange box's lanes: scroll its timeline (⌘ / ⌥: zoom it)
+                if frame.contains(p) {
+                    let sdx = event.isDirectionInvertedFromDevice ? -event.scrollingDeltaX : event.scrollingDeltaX
+                    let k: CGFloat = precise ? 1 : 12
+                    if model.scrollArrange(at: model.toCanvas(anchor), dx: sdx * k, dy: dy * k,
+                                           zoom: !event.modifierFlags.intersection([.command, .option]).isEmpty) { return true }
+                }
                 if factor != 1 { model.zoom(by: factor, around: anchor) }
                 return true
             }
@@ -883,5 +893,22 @@ struct DragShift<Content: View>: View {
     var body: some View {
         let moving = !ids.isEmpty && ids.isSubset(of: drag.ids)
         content().offset(moving ? drag.delta : .zero)
+    }
+}
+
+/// The name of a file being dragged inside the app (from rec's list), beside the pointer.
+private struct DragLabelView: View {
+    @ObservedObject var model: AppModel
+    var body: some View {
+        if let d = model.dragLabel {
+            Text(d.text)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(Theme.inverse)
+                .padding(.horizontal, 6).padding(.vertical, 3)
+                .background(RoundedRectangle(cornerRadius: 3).fill(Theme.text.opacity(0.9)))
+                .fixedSize()
+                .offset(x: d.at.x + 12, y: d.at.y + 10)
+                .allowsHitTesting(false)
+        }
     }
 }

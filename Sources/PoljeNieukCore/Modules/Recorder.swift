@@ -5,6 +5,25 @@ import Synchronization
 /// Where rec puts its files, and the newest one (for "open file location").
 public enum Recordings {
     public static var directory: URL { RecorderNode.directory }
+    public struct Item: Equatable, Sendable { public let url: URL; public let date: Date; public let seconds: Double }
+    nonisolated(unsafe) private static var cache: (time: Date, items: [Item])?
+    nonisolated(unsafe) private static var lengths: [String: Double] = [:]
+    /// Main thread: the newest recordings, newest first (read from disk at most once a second).
+    public static func recent(_ n: Int = 12) -> [Item] {
+        if let c = cache, Date().timeIntervalSince(c.time) < 1 { return Array(c.items.prefix(n)) }
+        let fm = FileManager.default
+        let files = (try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        let dated: [(URL, Date)] = files.filter { AudioFiles.extensions.contains($0.pathExtension.lowercased()) }.map {
+            ($0, (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast)
+        }
+        let items = dated.sorted { $0.1 > $1.1 }.prefix(24).map { u, d -> Item in
+            let key = u.path + "\(d.timeIntervalSince1970)"
+            if lengths[key] == nil, let f = try? AVAudioFile(forReading: u) { lengths[key] = Double(f.length) / max(f.fileFormat.sampleRate, 1) }
+            return Item(url: u, date: d, seconds: lengths[key] ?? 0)
+        }
+        cache = (Date(), Array(items))
+        return Array(items.prefix(n))
+    }
     public static var latest: URL? {
         let fm = FileManager.default
         guard let items = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey]) else { return nil }
