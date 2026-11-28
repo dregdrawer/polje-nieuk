@@ -298,6 +298,17 @@ struct TopBar: View, Equatable {
                 .frame(width: 22, height: 22)
                 .help("AirPlay / Bluetooth output")
             #endif
+            barMenu("midi", items: { model.midiBarMenu() }) {
+                HStack(spacing: 4) {
+                    Text("MIDI").foregroundStyle(Theme.dim)
+                    Image(systemName: "chevron.down").font(.system(size: 7, weight: .bold)).foregroundStyle(Theme.dim)
+                }
+                .font(Theme.barFont)
+                .frame(minHeight: 26).contentShape(Rectangle())
+            }
+            .fixedSize()
+            .helpTopic(model, "tb-midi", "MIDI devices",
+                       "Tick the MIDI devices to listen to and send to. Keyboards, the midi out of sequencers and midi boxes set to all devices use these. Other apps reach polje nieuk through its own \"polje nieuk\" MIDI ports.")
 
             if !compact && stats {
                 Text(model.audioStatus).font(Theme.barFont).foregroundStyle(Theme.dim).lineLimit(1)

@@ -1,4 +1,5 @@
 import Foundation
+import CoreMIDI
 import PoljeNieukCore
 import PoljeNieukUI
 
@@ -77,6 +78,96 @@ if let i = CommandLine.arguments.firstIndex(of: "--plugins") {
         }
     }
     exit(0)
+}
+
+// `selftest --midi`: real CoreMIDI round trip through two virtual ports (a keyboard plays into us; we
+// listen to what keys / seq / the midi box send).
+if CommandLine.arguments.contains("--midi") {
+    var ok = true
+    func expect(_ c: Bool, _ m: String) { print(c ? "  PASS  \(m)" : "  FAIL  \(m)"); if !c { ok = false } }
+    var client = MIDIClientRef(), src = MIDIEndpointRef(), dst = MIDIEndpointRef()
+    MIDIClientCreateWithBlock("pn test" as CFString, &client, nil)
+    MIDISourceCreateWithProtocol(client, "pn test keyboard" as CFString, ._1_0, &src)
+    var got: [(UInt8, UInt8, UInt8)] = []
+    let gotLock = NSLock()
+    MIDIDestinationCreateWithProtocol(client, "pn test synth" as CFString, ._1_0, &dst) { list, _ in
+        for p in list.unsafeSequence() {
+            let w = (UnsafeRawPointer(p) + MemoryLayout<MIDIEventPacket>.offset(of: \MIDIEventPacket.words)!).assumingMemoryBound(to: UInt32.self)
+            for k in 0..<Int(p.pointee.wordCount) {
+                gotLock.lock(); got.append((UInt8((w[k] >> 16) & 0xFF), UInt8((w[k] >> 8) & 0x7F), UInt8(w[k] & 0x7F))); gotLock.unlock()
+            }
+        }
+    }
+    func wait(_ s: Double) { RunLoop.main.run(until: Date().addingTimeInterval(s)) }
+    func play(_ status: UInt8, _ d1: UInt8, _ d2: UInt8) {
+        var buf = [UInt8](repeating: 0, count: 1024)
+        buf.withUnsafeMutableBytes { raw in
+            let list = raw.baseAddress!.assumingMemoryBound(to: MIDIEventList.self)
+            var w: UInt32 = (2 << 28) | UInt32(status) << 16 | UInt32(d1) << 8 | UInt32(d2)
+            let pk = MIDIEventListInit(list, ._1_0)
+            _ = MIDIEventListAdd(list, 1024, pk, 0, 1, &w)
+            MIDIReceivedEventList(src, list)
+        }
+    }
+    MIDIHub.shared.start()
+    wait(0.3); MIDIHub.shared.rescan()
+    expect(MIDIHub.shared.sources.contains { $0.name.contains("pn test keyboard") }, "the hub sees the test keyboard")
+    expect(MIDIHub.shared.destinations.contains { $0.name.contains("pn test synth") }, "the hub sees the test synth")
+    // only send to the test synth while testing (others keep their on / off)
+    let others = MIDIHub.shared.destinations.map(\.name).filter { !$0.contains("pn test synth") && MIDIHub.shared.isOn(output: $0) }
+    for o in others { MIDIHub.shared.setOutput(o, on: false) }
+    defer { for o in others { MIDIHub.shared.setOutput(o, on: true) } }
+
+    var p = Patch()
+    let keys = PatchNode(kind: "keys", x: 0, y: 0, params: ["midiout": 1])          // in: all channels, out: channel 1
+    let box = PatchNode(kind: "midi", x: 0, y: 0, params: ["voices": 3, "outch": 2])  // poly 4, sends on channel 3
+    let seq = PatchNode(kind: "seq", x: 0, y: 0, params: ["midiout": 2])            // channel 2
+    p.nodes = [keys, box, seq]
+    // keys → midi box inlets: what the keyboard plays goes out of the box too
+    p.cables = [PatchCable(fromNode: keys.id, fromPort: 0, toNode: box.id, toPort: 0),
+                PatchCable(fromNode: keys.id, fromPort: 1, toNode: box.id, toPort: 1)]
+    let h = GraphHost(sampleRate: 48000)
+    h.load(p)
+    let outs = (0..<2).map { _ in UnsafeMutablePointer<Float>.allocate(capacity: 256) }
+    func run(_ blocks: Int) {
+        outs.withUnsafeBufferPointer { op in
+            for _ in 0..<blocks {
+                for b in outs { b.update(repeating: 0, count: 256) }
+                h.process(frames: 256, inputs: UnsafePointer(op.baseAddress!), inputCount: 0, outputs: UnsafePointer(op.baseAddress!), outputCount: 2)
+            }
+        }
+    }
+    run(4); wait(0.1)
+    gotLock.lock(); got.removeAll(); gotLock.unlock()
+    play(0x90, 64, 100); play(0x90, 67, 90)
+    wait(0.1); run(2); wait(0.15)
+    let k = h.node(keys.id)!, b = h.node(box.id)!
+    expect(k.outputs[1][63] > 0.4, "keys: a MIDI note opens the gate")
+    expect(abs(k.outputs[0][63] - Float(67 - 60) / 120) < 1e-4, "keys: the newest note (G) plays")
+    expect(abs(k.outputs[2][63] - 90.0 / 127) < 0.01, "keys: its velocity comes through")
+    expect(b.outVoices[1] == 4 && b.outputs[1][63] > 0.4 && b.outVoice(1, 1)[63] > 0.4, "midi box: both notes on two voices")
+    expect(abs(b.outputs[0][63] - Float(4) / 120) < 1e-4 && abs(b.outVoice(0, 1)[63] - Float(7) / 120) < 1e-4, "midi box: E and G")
+    gotLock.lock(); let sent = got; gotLock.unlock()
+    expect(sent.contains { $0.0 == 0x90 && $0.1 == 67 && $0.2 == 90 }, "keys midi out: note on G, channel 1")
+    expect(sent.contains { $0.0 == 0x92 && $0.1 == 67 }, "midi box out: the patched note on channel 3")
+    play(0x80, 67, 0); play(0x80, 64, 0)
+    wait(0.1); run(20); wait(0.15)
+    expect(k.outputs[1][63] < 0.1, "keys: gate closes when the notes are let go")
+    gotLock.lock(); let after = got; gotLock.unlock()
+    expect(after.contains { ($0.0 == 0x80 && $0.1 == 67) }, "keys midi out: note off")
+    // arpeggiator: two held notes, up
+    h.node(keys.id)!.base[2] = 1
+    play(0x90, 60, 100); play(0x90, 64, 100)
+    wait(0.1)
+    var heard = Set<Float>()
+    for _ in 0..<200 { run(1); heard.insert((k.outputs[0][0] * 120).rounded()) }
+    expect(heard.contains(0) && heard.contains(4), "keys arp: plays both held MIDI notes")
+    play(0x80, 60, 0); play(0x80, 64, 0)
+    wait(0.15)
+    gotLock.lock(); let all = got; gotLock.unlock()
+    expect(all.contains { $0.0 == 0x91 } && all.contains { $0.0 == 0x81 }, "seq midi out: notes on and off, channel 2")
+    print(ok ? "MIDI OK" : "MIDI FAILED")
+    exit(ok ? 0 : 1)
 }
 
 if let i = CommandLine.arguments.firstIndex(of: "--render"), i + 2 < CommandLine.arguments.count {

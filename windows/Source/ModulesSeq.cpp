@@ -52,13 +52,47 @@ void KeysNode::process(int frames, const float* const*, uint64_t, ProcessContext
     float gateLen = std::clamp(params[4], 0.05f, 1.0f);
     int octs = clampIndex(params[5] - 1, 3) + 1;
     bool latch = params[6] > 0.5f;
+    const int NO = none;
     float* pOut = out(0); float* gOut = out(1); float* vOut = out(2);
-    int touch = touchNote.load(), pc = pressCount.load(), pn = pressNote.load();
+    int tn = touchNote.load(), pc = pressCount.load(), pn = pressNote.load();
+    int touch = tn >= 0 && tn < keyCount ? tn : NO;
     bool newPress = pc != seenPress && pn >= 0 && pn < keyCount;
     seenPress = pc;
+
+    // MIDI in (devices that are on in the midi menu): held notes count as held keys
+    int midiIn = int(std::round(params[7]));          // 0 off, 1 all channels, 2… channel 1…
+    int baseKey = int(baseNote);
+    int midiNew = NO;
+    if (midiIn == 0) {
+        if (midiLast >= 0) { midiDown.fill(0); midiLast = -1; }
+    } else if (ctx.midiInCount > 0) {
+        bool changed = false;
+        for (int k = 0; k < ctx.midiInCount; ++k) {
+            auto& m = ctx.midiIn[k];
+            if (!m.global || m.status < 0x80 || m.status >= 0xF0) continue;
+            if (midiIn != 1 && int(m.status & 0x0F) != midiIn - 2) continue;
+            int n = m.d1 & 0x7F;
+            int type = m.status & 0xF0;
+            if (type == 0x90 && m.d2 > 0) {
+                int key = n - 60 - baseKey;
+                if (latch) { if (key >= 0 && key < keyCount) toggleLatched(key); continue; }
+                midiDown[size_t(n)] = float(m.d2) / 127;
+                midiOrder[size_t(n)] = ++orderCounter;
+                midiNew = key; changed = true;
+            } else if (type == 0x80 || type == 0x90) { midiDown[size_t(n)] = 0; changed = true; }
+            else if (type == 0xB0 && (m.d1 == 123 || m.d1 == 120)) { midiDown.fill(0); changed = true; }
+        }
+        if (changed) {
+            midiLast = -1; int best = -1 << 30;
+            for (int n = 0; n < 128; ++n) if (midiDown[size_t(n)] > 0 && midiOrder[size_t(n)] > best) { best = midiOrder[size_t(n)]; midiLast = n; }
+        }
+    }
+    if (midiNew != NO && midiNew >= 0 && midiNew < keyCount && touch == NO && !newPress) { newPress = true; pn = midiNew; }
+    int midiKey = midiLast >= 0 ? midiLast - 60 - baseKey : NO;
+
     int slot = std::clamp(int(autoPosition), 0, autoSlots - 1);
     if (recordingKeys.load()) {
-        int k = touch >= 0 ? touch : (newPress ? pn : -1);
+        int k = touch != NO ? touch : (newPress ? pn : (midiKey >= 0 && midiKey < keyCount ? midiKey : -1));
         if (!recStarted && k >= 0) { recStarted = true; recLast = (slot + autoSlots - 1) % autoSlots; }
         if (recStarted) {
             int s = recLast, n = 0;
@@ -68,7 +102,7 @@ void KeysNode::process(int frames, const float* const*, uint64_t, ProcessContext
         }
     } else recStarted = false;
     int laneKeyNow = -1;
-    if (keyLaneOn && !recordingKeys.load() && ctx.running && touch < 0) {
+    if (keyLaneOn && !recordingKeys.load() && ctx.running && touch == NO && midiKey == NO) {
         int v = int(keyLane[size_t(slot)]);
         laneKeyNow = v >= 0 && v < keyCount ? v : -1;
     }
@@ -77,13 +111,31 @@ void KeysNode::process(int frames, const float* const*, uint64_t, ProcessContext
         if (laneKeyNow != laneKeyPrev && !newPress) { newPress = true; pn = laneKeyNow; }
     }
     laneKeyPrev = laneKeyNow;
+    if (touch == NO && midiKey != NO) {               // the newest MIDI note plays like a finger on a key
+        touch = midiKey;
+        if (midiNew != NO && !newPress) { newPress = true; pn = midiNew; }
+    }
+
     int count = 0;
-    if (latch) for (int k = 0; k < keyCount; ++k) if (latched[size_t(k)] > 0.5f) scratch[size_t(count++)] = k;
-    if (touch >= 0 && !(latch && latched[size_t(touch)] > 0.5f)) scratch[size_t(count++)] = touch;
+    if (latch) for (int k = 0; k < keyCount; ++k) if (latched[size_t(k)] > 0.5f) { scratch[size_t(count)] = k; sortKey[size_t(count)] = order[size_t(k)]; ++count; }
+    bool touchLatched = latch && touch >= 0 && touch < keyCount && latched[size_t(touch)] > 0.5f;
+    if (touch != NO && !touchLatched) { scratch[size_t(count)] = touch; sortKey[size_t(count)] = 1 << 30; ++count; }
+    if (midiLast >= 0 && mode != 0) {                // the arp plays every held MIDI note
+        for (int n = 0; n < 128 && count < keyCount; ++n) {
+            if (midiDown[size_t(n)] <= 0) continue;
+            int k = n - 60 - baseKey;
+            if (k == touch && !touchLatched) { sortKey[size_t(count - 1)] = midiOrder[size_t(n)]; continue; }
+            scratch[size_t(count)] = k; sortKey[size_t(count)] = midiOrder[size_t(n)]; ++count;
+        }
+        if (mode != 5)
+            for (int a = 0; a < count; ++a)
+                for (int b = a + 1; b < count; ++b)
+                    if (scratch[size_t(b)] < scratch[size_t(a)]) { std::swap(scratch[size_t(a)], scratch[size_t(b)]); std::swap(sortKey[size_t(a)], sortKey[size_t(b)]); }
+    }
     if (mode == 5)
         for (int a = 0; a < count; ++a)
             for (int b = a + 1; b < count; ++b)
-                if (order[size_t(scratch[size_t(b)])] < order[size_t(scratch[size_t(a)])]) std::swap(scratch[size_t(a)], scratch[size_t(b)]);
+                if (sortKey[size_t(b)] < sortKey[size_t(a)]) { std::swap(scratch[size_t(a)], scratch[size_t(b)]); std::swap(sortKey[size_t(a)], sortKey[size_t(b)]); }
     int total = 0;
     for (int o = 0; o < octs; ++o)
         for (int k = 0; k < count; ++k) { scratch[size_t(keyCount + total)] = scratch[size_t(k)] + o * 12; if (++total >= keyCount * 2) break; }
@@ -91,11 +143,11 @@ void KeysNode::process(int frames, const float* const*, uint64_t, ProcessContext
     for (int i = 0; i < frames; ++i) {
         if (mode == 0) {
             if (newPress && i == 0) { if (gateOn && pn != note) dip = 48; note = pn; holdLeft = minHold; }
-            int held = touch >= 0 ? touch : (holdLeft > 0 ? note : (latch && count > 0 ? scratch[size_t(count - 1)] : -1));
+            int held = touch != NO ? touch : (holdLeft > 0 ? note : (latch && count > 0 ? scratch[size_t(count - 1)] : NO));
             if (holdLeft > 0) --holdLeft;
-            if (held >= 0) note = held;
-            if (touch >= 0 && lastTouch >= 0 && touch != lastTouch) dip = 48;
-            gateOn = held >= 0 && dip == 0;
+            if (held != NO) note = held;
+            if (touch != NO && lastTouch != NO && touch != lastTouch) dip = 48;
+            gateOn = held != NO && dip == 0;
             if (dip > 0) --dip;
         } else {
             bool fire = clock.tick(ctx.beat[i], div, ctx.samplesPerBeat, nullptr);
@@ -121,15 +173,20 @@ void KeysNode::process(int frames, const float* const*, uint64_t, ProcessContext
             gateOn = false;
         }
         lastTouch = touch;
-        float target = baseNote + float(std::max(note, 0));
+        if (note != velFor) {                         // a MIDI note keeps its velocity
+            velFor = note;
+            int n = note + 60 + baseKey;
+            noteVel = note != NO && n >= 0 && n < 128 && midiDown[size_t(n)] > 0 ? midiDown[size_t(n)] : 0.8f;
+        }
+        float target = baseNote + float(note == NO ? 0 : note);
         pitchNow += (target - pitchNow) * glide;
         pOut[i] = pitchCV(pitchNow);
         gOut[i] = (mode == 0 ? gateOn : gateLeft > 0) ? kGateHigh : 0.0f;
         if (gateLeft > 0) --gateLeft;
-        vOut[i] = note >= 0 ? 0.8f : 0.0f;
+        vOut[i] = note != NO ? noteVel : 0.0f;
     }
     anyHeldBefore = total > 0;
-    readouts[0] = float(gOut[frames - 1] > 0 ? note : -1);
+    readouts[0] = float(gOut[frames - 1] > 0 && note != NO ? note : -1);
 }
 
 // ---------------------------------------------------------------- seq

@@ -89,6 +89,7 @@ final class CompiledGraph {
                 node.bypassMix = target
                 if target == 1 { for k in 0..<node.outputs.count { node.outVoices[k] = 1 } }   // bypassed: no stray notes
             }
+            if let ms = node.midiSender { ms.run(node, channel: Int(node.params[node.midiOutParam].rounded()) - 1, frames: frames, ctx: ctx) }
             // Safety net: a module that blows up can't poison the rest of the patch (or crash the UI).
             let fall = expf(-Float(frames) / (0.25 * Float(ctx.sampleRate)))   // ~250 ms fall
             for (k, out) in node.outputs.enumerated() {
@@ -351,6 +352,7 @@ public final class GraphHost {
         guard let graph = rtGraph?.takeUnretainedValue() else { return }
         let ic = min(inputCount, ctx.maxChannels)
         let oc = min(outputCount, ctx.maxChannels)
+        MIDIHub.shared.pull(ctx)
         var off = 0
         while off < frames {
             let n = min(kMaxBlock, frames - off)
@@ -359,6 +361,8 @@ public final class GraphHost {
             ctx.inputCount = ic
             ctx.outputCount = oc
             ctx.frames = n
+            ctx.blockOffset = off
+            if off > 0 { ctx.midiInCount = 0 }
             if !graph.hasClock {
                 // No clock module: free-running at the patch tempo (120 BPM unless changed in the top bar).
                 ctx.samplesPerBeat = sampleRate * 60 / min(max(defaultBPM, 20), 300)
@@ -372,5 +376,6 @@ public final class GraphHost {
             ctx.stopPending = false
             off += n
         }
+        MIDIHub.shared.push(ctx, sampleRate: sampleRate)
     }
 }

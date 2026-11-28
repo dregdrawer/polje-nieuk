@@ -1,5 +1,6 @@
 #include "AppModel.h"
 #include "ModulesFM.h"
+#include "Displays.h"
 #if JUCE_WINDOWS
  #include <windows.h>
 #else
@@ -1668,6 +1669,7 @@ void AppModel::selectInput(const juce::String& uid) { inputUID = uid; settings()
 void AppModel::selectOutput(const juce::String& uid) { outputUID = uid; settings().setValue("outputUID", uid); restartAudio(); }
 
 void AppModel::startAudio() {
+    startMIDI();
     refreshDevices();
     restartAudio();
 }

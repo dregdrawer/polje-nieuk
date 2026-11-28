@@ -286,12 +286,13 @@ float readoutHeight(const PatchNode& n) {
 std::pair<bool, bool> resizable(const std::string& k) { return { k != "in" && k != "out", readoutHeight(k) > 0 }; }
 bool hasReadout(const std::string& k) {
     static const std::set<std::string> s { "clock", "looper", "grain", "rec", "comp", "limit", "repeat", "gain", "mix", "sampler", "stretch", "peq",
-        "keys", "seq", "turing", "roll", "drums", "slider", "knob", "lfo", "rack", "drumsynth", "scope", "wave", "chord", "fm", "plugin" };
+        "keys", "seq", "turing", "roll", "drums", "slider", "knob", "lfo", "rack", "drumsynth", "scope", "wave", "chord", "fm", "plugin", "midi" };
     return s.count(k) > 0;
 }
 float readoutHeight(const std::string& k) {
     if (k == "rec") return 44;                // REC / time, and "open file location"
     if (k == "fm") return 104;
+    if (k == "midi") return 48;              // in device, out device
     if (k == "plugin") return 104;            // name + edit, what it is, what each knob moves                // voice name, operators, the selected one's envelope
     if (k == "looper" || k == "stretch") return 104;
     if (k == "sampler") return 122;

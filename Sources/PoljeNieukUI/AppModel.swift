@@ -486,6 +486,7 @@ public final class AppModel: ObservableObject {
 
     func startAudio() {
         refreshDevices()
+        MIDIHub.shared.start()
         AVAudioApplication.requestRecordPermission { granted in
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {

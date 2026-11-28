@@ -1,4 +1,5 @@
 #include "Window.h"
+#include "Displays.h"
 
 namespace pn {
 
@@ -115,6 +116,7 @@ void TopBar::layoutItems(juce::Graphics* g) {
         left += word("audio") + spacing;
         left += tw("IN") + 4 + (compact ? 0 : tw(inLabel) + 4) + 10 + spacing;
         left += tw("OUT") + 4 + (compact ? 0 : tw(outLabel) + 4) + 10 + spacing;
+        left += tw("MIDI") + 4 + 10 + spacing;
         if (stats) left += tw(model.audioStatus) + spacing;
         float right = tw(tempoText) + (stats ? 10 + 54 : 0) + spacing;
         right += 30 * 6 + spacing * 6;               // undo redo scheme help + select
@@ -133,6 +135,8 @@ void TopBar::layoutItems(juce::Graphics* g) {
             u8("Chooses the audio interface you record from \xe2\x80\x94 e.g. the disting NT. Its channels become in's outlets."));
         add("out", tw("OUT") + 4 + (compact ? 0 : tw(outLabel) + 4) + 10, [this](Pt p) { deviceMenu(false, p); },
             "Chooses where sound goes. Its channels become out's inlets.");
+        add("midi", tw("MIDI") + 4 + 10, [this](Pt p) { juce::PopupMenu m; addMIDIBarMenu(m); popup(m, p); },
+            "MIDI devices: tick the ones to listen to and send to (keyboards, the midi out of sequencers and midi boxes set to all devices use these).");
         if (stats) add("status", tw(model.audioStatus), nullptr);
         // right side, laid out from the right edge
         float rx = float(getWidth()) - 12;
@@ -173,6 +177,11 @@ void TopBar::layoutItems(juce::Graphics* g) {
                     float xx = it.r.getX();
                     gc.textLeft(in ? "IN" : "OUT", { xx, cy }, font, Theme::dim()); xx += tw(in ? "IN" : "OUT") + 4;
                     if (!compact) { gc.textLeft(in ? inLabel : outLabel, { xx, cy }, font, Theme::text()); xx += tw(in ? inLabel : outLabel) + 4; }
+                    juce::Path ch; ch.startNewSubPath(xx + 1, cy - 1.5f); ch.lineTo(xx + 3.5f, cy + 1.5f); ch.lineTo(xx + 6, cy - 1.5f);
+                    BarIcons::stroke(*g, ch, Theme::dim(), 1.4f);
+                } else if (it.id == "midi") {
+                    float xx = it.r.getX();
+                    gc.textLeft("MIDI", { xx, cy }, font, Theme::dim()); xx += tw("MIDI") + 4;
                     juce::Path ch; ch.startNewSubPath(xx + 1, cy - 1.5f); ch.lineTo(xx + 3.5f, cy + 1.5f); ch.lineTo(xx + 6, cy - 1.5f);
                     BarIcons::stroke(*g, ch, Theme::dim(), 1.4f);
                 } else if (it.id == "status") gc.textLeft(model.audioStatus, { it.r.getX(), cy }, font, Theme::dim());

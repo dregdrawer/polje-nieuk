@@ -170,6 +170,148 @@
     },
     {
       "aliases" : [
+        "midi in",
+        "midi out",
+        "keyboard",
+        "controller",
+        "notes",
+        "din",
+        "usb midi",
+        "channel"
+      ],
+      "bypass" : "none",
+      "category" : "I\/O",
+      "inputs" : [
+        "pitch",
+        "gate",
+        "vel",
+        "cc"
+      ],
+      "kind" : "midi",
+      "name" : "midi",
+      "outputs" : [
+        "pitch",
+        "gate",
+        "vel",
+        "cc",
+        "clock",
+        "reset"
+      ],
+      "outputsAreCV" : false,
+      "params" : [
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "inch",
+          "kind" : "choice",
+          "max" : 16,
+          "min" : 0,
+          "name" : "in channel",
+          "options" : [
+            "all",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "outch",
+          "kind" : "choice",
+          "max" : 15,
+          "min" : 0,
+          "name" : "out channel",
+          "options" : [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "voices",
+          "kind" : "choice",
+          "max" : 3,
+          "min" : 0,
+          "name" : "voices",
+          "options" : [
+            "mono",
+            "2",
+            "3",
+            "4"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 2,
+          "key" : "bend",
+          "kind" : "integer",
+          "max" : 24,
+          "min" : 0,
+          "name" : "bend range",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 1,
+          "key" : "cc",
+          "kind" : "integer",
+          "max" : 127,
+          "min" : 0,
+          "name" : "cc number",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "clock",
+          "kind" : "toggle",
+          "max" : 1,
+          "min" : 0,
+          "name" : "send clock",
+          "unit" : ""
+        }
+      ],
+      "polyOutputs" : [
+        0,
+        1,
+        2
+      ],
+      "summary" : "MIDI device in and out: notes (mono or up to 4 voices), bend, a CC and clock from a keyboard or another app; notes, the CC and clock to a synth — pick the device and channel"
+    },
+    {
+      "aliases" : [
         "sync",
         "tempo",
         "bpm"
@@ -2862,6 +3004,65 @@
           "min" : 0,
           "name" : "latch",
           "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 1,
+          "key" : "midiin",
+          "kind" : "choice",
+          "max" : 17,
+          "min" : 0,
+          "name" : "midi in",
+          "options" : [
+            "off",
+            "all",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16"
+          ],
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "midiout",
+          "kind" : "choice",
+          "max" : 16,
+          "min" : 0,
+          "name" : "midi out",
+          "options" : [
+            "off",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16"
+          ],
+          "unit" : ""
         }
       ],
       "polyOutputs" : [
@@ -3004,6 +3205,35 @@
           "max" : 24,
           "min" : -24,
           "name" : "transpose",
+          "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "midiout",
+          "kind" : "choice",
+          "max" : 16,
+          "min" : 0,
+          "name" : "midi out",
+          "options" : [
+            "off",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16"
+          ],
           "unit" : ""
         }
       ],
@@ -3250,6 +3480,35 @@
             "alternate"
           ],
           "unit" : ""
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "midiout",
+          "kind" : "choice",
+          "max" : 16,
+          "min" : 0,
+          "name" : "midi out",
+          "options" : [
+            "off",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16"
+          ],
+          "unit" : ""
         }
       ],
       "polyOutputs" : [
@@ -3409,6 +3668,35 @@
           "min" : 0,
           "name" : "notes",
           "unit" : "%"
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "midiout",
+          "kind" : "choice",
+          "max" : 16,
+          "min" : 0,
+          "name" : "midi out",
+          "options" : [
+            "off",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16"
+          ],
+          "unit" : ""
         }
       ],
       "polyOutputs" : [
@@ -5653,6 +5941,35 @@
           "min" : 0.05000000074505806,
           "name" : "gate length",
           "unit" : "%"
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "midiout",
+          "kind" : "choice",
+          "max" : 16,
+          "min" : 0,
+          "name" : "midi out",
+          "options" : [
+            "off",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16"
+          ],
+          "unit" : ""
         }
       ],
       "polyOutputs" : [
@@ -5773,6 +6090,35 @@
           "min" : 1,
           "name" : "trigger length",
           "unit" : "ms"
+        },
+        {
+          "curve" : "linear",
+          "def" : 0,
+          "key" : "midiout",
+          "kind" : "choice",
+          "max" : 16,
+          "min" : 0,
+          "name" : "midi out",
+          "options" : [
+            "off",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16"
+          ],
+          "unit" : ""
         }
       ],
       "polyOutputs" : [

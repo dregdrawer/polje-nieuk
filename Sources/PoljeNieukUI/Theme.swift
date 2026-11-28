@@ -187,7 +187,7 @@ enum BoxLayout {
 
     static func hasReadout(_ kind: String) -> Bool {
         ["clock", "looper", "grain", "rec", "comp", "limit", "repeat", "gain", "mix",
-         "sampler", "stretch", "peq", "keys", "seq", "turing", "roll", "drums", "slider", "knob", "lfo", "rack", "drumsynth", "scope", "wave", "chord", "fm", "plugin"].contains(kind)
+         "sampler", "stretch", "peq", "keys", "seq", "turing", "roll", "drums", "slider", "knob", "lfo", "rack", "drumsynth", "scope", "wave", "chord", "fm", "plugin", "midi"].contains(kind)
     }
 
     /// Height of the live area under the ports (waveforms and curves are taller).
@@ -210,6 +210,7 @@ enum BoxLayout {
         case "lfo": return 56
         case "fm": return 104                 // voice name, operators, the selected one's envelope
         case "plugin": return 104             // name + edit, what it is, what each knob moves
+        case "midi": return 48                // in device, out device
         case "clock": return 40               // tempo line + ▶ ❚❚ ■
         case "scope": return 160
         case "wave": return 170

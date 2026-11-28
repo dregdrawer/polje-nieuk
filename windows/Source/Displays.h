@@ -62,6 +62,9 @@ public:
 /// Every installed VST3, by company, into `menu`; `pick` gets the one chosen (the plugin box and the module list).
 void addPluginList(juce::PopupMenu& menu, AppModel& m, const juce::String& current, std::function<void(const PluginInfo&)> pick);
 std::unique_ptr<NativeDisplay> makePluginDisplay(AppModel& m, const PatchNode& n, const ModuleSpec& s);
+std::unique_ptr<NativeDisplay> makeMIDIDisplay(AppModel& m, const PatchNode& n, const ModuleSpec& s);
+void startMIDI();
+void addMIDIBarMenu(juce::PopupMenu& m);
 
 /// A step grid's beat / bar lines (RackView.swift drawStepGrid).
 void drawStepGrid(GC& g, Pt size, int steps, std::optional<float> division);

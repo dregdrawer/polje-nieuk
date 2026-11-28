@@ -1,4 +1,5 @@
 #include "Window.h"
+#include "ModulesMIDI.h"
 
 class PoljeNieukApp : public juce::JUCEApplication {
 public:
@@ -7,7 +8,7 @@ public:
     bool moreThanOneInstanceAllowed() override { return false; }
 
     void initialise(const juce::String&) override { window = std::make_unique<Window>(); }
-    void shutdown() override { window.reset(); }
+    void shutdown() override { window.reset(); pn::MidiHub::shared().shutdown(); }
     void systemRequestedQuit() override { quit(); }
 
 private:

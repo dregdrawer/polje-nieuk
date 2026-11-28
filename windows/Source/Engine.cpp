@@ -1,4 +1,5 @@
 #include "Engine.h"
+#include "ModulesMIDI.h"
 #include <algorithm>
 #include <deque>
 #include <set>
@@ -106,7 +107,7 @@ int ModuleSpec::paramIndex(const std::string& key) const {
 }
 
 BypassMode ModuleSpec::bypass() const {
-    static const std::set<std::string> none { "in", "out", "clock", "rec", "mix", "text", "scope" };
+    static const std::set<std::string> none { "in", "out", "clock", "rec", "mix", "text", "scope", "midi" };
     static const std::set<std::string> silent { "macro", "modal", "shapes", "rack", "drumsynth", "wave",
                                                 "keys", "seq", "turing", "roll", "drums", "slider", "knob", "chord" };
     if (none.count(kind)) return BypassMode::none;
@@ -153,6 +154,8 @@ DSPNode::DSPNode(const ModuleSpec& s, double sr)
     inVoices.assign(std::max<size_t>(s.inputs.size(), 1), 1);
     outLevel.assign(std::max<size_t>(s.outputs.size(), 1), 0.0f);
     routing = s.bypassRouting();
+    midiOutParam = s.paramIndex("midiout");
+    if (midiOutParam >= 0) midiSender = std::make_shared<MIDINoteSender>(s);
 }
 
 void DSPNode::syncTo(const PatchNode& n) {
@@ -704,6 +707,7 @@ public:
                 node.bypassMix = target;
                 if (target == 1) std::fill(node.outVoices.begin(), node.outVoices.end(), 1);
             }
+            if (node.midiSender) node.midiSender->run(node, int(std::round(node.params[size_t(node.midiOutParam)])) - 1, frames, ctx);
             float fall = std::exp(-float(frames) / (0.25f * float(ctx.sampleRate)));
             for (size_t k = 0; k < node.outputs.size(); ++k) {
                 float pk = 0;
@@ -936,12 +940,15 @@ void GraphHost::process(int frames, const float* const* inputs, int inputCount, 
     CompiledGraph* graph = slot.load(std::memory_order_acquire);
     if (!graph) return;
     int ic = std::min(inputCount, ProcessContext::maxChannels), oc = std::min(outputCount, ProcessContext::maxChannels);
+    MidiHub::shared().pull(ctx);
     int off = 0;
     while (off < frames) {
         int n = std::min(kMaxBlock, frames - off);
         for (int c = 0; c < ic; ++c) ctx.inputs[c] = const_cast<float*>(inputs[c]) + off;
         for (int c = 0; c < oc; ++c) ctx.outputs[c] = outputs[c] + off;
         ctx.inputCount = ic; ctx.outputCount = oc; ctx.frames = n;
+        ctx.blockOffset = off;
+        if (off > 0) ctx.midiInCount = 0;
         if (!graph->hasClock) {
             ctx.samplesPerBeat = sampleRate * 60 / std::clamp(defaultBPM, 20.0, 300.0);
             ctx.externalClock = false;
@@ -954,6 +961,7 @@ void GraphHost::process(int frames, const float* const* inputs, int inputCount, 
         ctx.stopPending = false;
         off += n;
     }
+    MidiHub::shared().push(ctx, sampleRate);
 }
 
 } // namespace pn

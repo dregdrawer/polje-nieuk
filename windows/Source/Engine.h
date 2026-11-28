@@ -179,7 +179,22 @@ struct ModuleSpec {
 
 // ---------------------------------------------------------------- per-block context and the node base
 
+/// One MIDI message inside an audio buffer (ModulesMIDI.cpp). In: port = the device it came from;
+/// out: the device to send to (0 = every MIDI out that's on).
+struct MidiMsg { int32_t port = 0; uint8_t status = 0, d1 = 0, d2 = 0; bool global = false; uint16_t offset = 0; };
+
 struct ProcessContext {
+    static constexpr int midiCapacity = 512;
+    MidiMsg midiIn[midiCapacity];
+    int midiInCount = 0;
+    MidiMsg midiOut[midiCapacity];
+    int midiOutCount = 0;
+    int blockOffset = 0;
+    void sendMIDI(uint8_t status, uint8_t d1, uint8_t d2, int offset, int32_t port = 0) {
+        if (midiOutCount >= midiCapacity || port < 0) return;
+        midiOut[midiOutCount++] = { port, status, uint8_t(d1 & 0x7F), uint8_t(d2 & 0x7F), true,
+                                    uint16_t(std::clamp(blockOffset + std::max(offset, 0), 0, 65535)) };
+    }
     double sampleRate;
     int frames = 0;
     static constexpr int maxChannels = 64;
@@ -204,6 +219,7 @@ struct ProcessContext {
 struct ParamRT { float min, max; bool exp, cubic, round, trigger, semis; };
 
 struct PatchNode;
+class MIDINoteSender;
 
 class DSPNode {
 public:
@@ -253,6 +269,9 @@ public:
     uint64_t cvChannels = 0;                   // out: channels fed only by control voltages
     uint64_t patchedOutputs = 0;               // bit k: outlet k has a cable (rack sends a pad to its own outlet)
     virtual void clearState() {}
+    /// note sources with a "midi out" channel: the graph plays their outlets as MIDI
+    int midiOutParam = -1;
+    std::shared_ptr<MIDINoteSender> midiSender;
 
 private:
     std::vector<ParamRT> rt;

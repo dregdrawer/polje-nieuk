@@ -45,6 +45,24 @@ public final class ProcessContext {
     var lastBeat: Double = 0
     private let dummy: UnsafeMutablePointer<Float>
 
+    // MARK: MIDI (MIDIIO.swift)
+    public static let midiCapacity = 512
+    /// What arrived from MIDI devices this block (only the first block of an audio buffer has any).
+    public let midiIn: UnsafeMutablePointer<MidiMsg>
+    public internal(set) var midiInCount = 0
+    /// What modules send; it goes out at the end of the audio buffer.
+    public let midiOut: UnsafeMutablePointer<MidiMsg>
+    public internal(set) var midiOutCount = 0
+    /// Where this block starts within the audio buffer.
+    var blockOffset = 0
+    /// Send a MIDI message at sample `offset` of this block (port 0 = every MIDI out that's on).
+    @inline(__always) public func sendMIDI(_ status: UInt8, _ d1: UInt8, _ d2: UInt8, offset: Int, port: Int32 = 0) {
+        guard midiOutCount < Self.midiCapacity, port >= 0 else { return }
+        midiOut[midiOutCount] = MidiMsg(port: port, status: status, d1: d1 & 0x7F, d2: d2 & 0x7F, global: true,
+                                        offset: UInt16(clamping: blockOffset + max(offset, 0)))
+        midiOutCount += 1
+    }
+
     init(sampleRate: Double, maxChannels: Int = 64) {
         self.sampleRate = sampleRate
         self.maxChannels = maxChannels
@@ -57,10 +75,14 @@ public final class ProcessContext {
         beat = .allocate(capacity: kMaxBlock)
         beat.initialize(repeating: 0, count: kMaxBlock)
         samplesPerBeat = sampleRate * 0.5
+        let empty = MidiMsg(port: 0, status: 0, d1: 0, d2: 0, global: false, offset: 0)
+        midiIn = .allocate(capacity: Self.midiCapacity); midiIn.initialize(repeating: empty, count: Self.midiCapacity)
+        midiOut = .allocate(capacity: Self.midiCapacity); midiOut.initialize(repeating: empty, count: Self.midiCapacity)
     }
 
     deinit {
         dummy.deallocate(); inputs.deallocate(); outputs.deallocate(); beat.deallocate()
+        midiIn.deallocate(); midiOut.deallocate()
     }
 
     public var bpm: Double { 60 * sampleRate / samplesPerBeat }
@@ -102,9 +124,15 @@ open class DSPNode {
     /// Where the lanes are (0 ..< autoSlots, fractional), for the UI.
     public internal(set) var autoPosition: Double = 0
 
+    /// Note sources with a "midi out" channel: the graph plays their pitch / gate (or trigger) outlets as MIDI.
+    let midiOutParam: Int
+    let midiSender: MIDINoteSender?
+
     public init(spec: ModuleSpec, sampleRate: Double) {
         self.spec = spec
         self.sampleRate = sampleRate
+        midiOutParam = spec.params.firstIndex { $0.key == "midiout" } ?? -1
+        midiSender = midiOutParam >= 0 ? MIDINoteSender(spec: spec) : nil
         bypassRouting = spec.bypassRouting
         let pc = max(1, spec.params.count)
         paramCount = spec.params.count

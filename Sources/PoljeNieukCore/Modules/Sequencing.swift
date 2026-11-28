@@ -105,16 +105,25 @@ public final class KeysNode: DSPNode {
     private var orderCounter = 0
 
     private var pitchNow: Float = 0
-    private var note = -1
+    private var note = KeysNode.none
     private var gateLeft = 0
     private var gateOn = false
     private var dip = 0
     private var arpIndex = -1
     private var arpDir = 1
     private var clock = StepClock()
-    private var lastTouch = -1
+    private var lastTouch = KeysNode.none
     private var rng = XorShift(seed: 0xA4B9_17E3)
     private let scratch: UnsafeMutablePointer<Int>
+    private let sortKey: UnsafeMutablePointer<Int>
+    /// "No key" (MIDI notes can land below the keyboard, so -1 is a real key there).
+    private static let none = -1000
+    // MIDI in: velocity of each held note (0 = up) and when it was pressed
+    private let midiDown: UnsafeMutablePointer<Float>
+    private let midiOrder: UnsafeMutablePointer<Int>
+    private var midiLast = -1
+    private var noteVel: Float = 0.8
+    private var velFor = Int.min
 
     // MARK: played-notes automation (the box's record button): a 4-bar loop of which key is down
     /// Key held in each automation slot (−1 = none), same loop as parameter automation.
@@ -148,9 +157,15 @@ public final class KeysNode: DSPNode {
         latched = .allocate(capacity: Self.keyCount); latched.initialize(repeating: 0, count: Self.keyCount)
         order = .allocate(capacity: Self.keyCount); order.initialize(repeating: 0, count: Self.keyCount)
         scratch = .allocate(capacity: Self.keyCount * 3); scratch.initialize(repeating: 0, count: Self.keyCount * 3)
+        sortKey = .allocate(capacity: Self.keyCount); sortKey.initialize(repeating: 0, count: Self.keyCount)
+        midiDown = .allocate(capacity: 128); midiDown.initialize(repeating: 0, count: 128)
+        midiOrder = .allocate(capacity: 128); midiOrder.initialize(repeating: 0, count: 128)
         super.init(spec: spec, sampleRate: sampleRate)
     }
-    deinit { latched.deallocate(); order.deallocate(); scratch.deallocate(); keyLane.deallocate() }
+    deinit {
+        latched.deallocate(); order.deallocate(); scratch.deallocate(); keyLane.deallocate()
+        sortKey.deallocate(); midiDown.deallocate(); midiOrder.deallocate()
+    }
 
     /// UI: tap a key while latch is on.
     public func toggleLatched(_ k: Int) {
@@ -167,17 +182,57 @@ public final class KeysNode: DSPNode {
         let gateLen = min(max(params[4], 0.05), 1)
         let octs = clampIndex(params[5] - 1, 3) + 1
         let latch = params[6] > 0.5
+        let NO = Self.none
         let pOut = outputs[0], gOut = outputs[1], vOut = outputs[2]
-        var touch = touchNote
+        var touch = touchNote >= 0 && touchNote < Self.keyCount ? touchNote : NO
         let pc = pressCount
         var pn = pressNote
         var newPress = pc != seenPress && pn >= 0 && pn < Self.keyCount
         seenPress = pc
 
+        // MIDI in (devices that are on in the midi menu): held notes count as held keys
+        let midiIn = Int(params[7].rounded())                 // 0 off, 1 all channels, 2… channel 1…
+        let baseKey = Int(base)
+        var midiNew = NO
+        if midiIn == 0 {
+            if midiLast >= 0 { for n in 0..<128 { midiDown[n] = 0 }; midiLast = -1 }
+        } else if ctx.midiInCount > 0 {
+            var changed = false
+            for k in 0..<ctx.midiInCount {
+                let m = ctx.midiIn[k]
+                guard m.global, m.status >= 0x80, m.status < 0xF0 else { continue }
+                guard midiIn == 1 || Int(m.status & 0x0F) == midiIn - 2 else { continue }
+                let n = Int(m.d1 & 0x7F)
+                switch m.status & 0xF0 {
+                case 0x90 where m.d2 > 0:
+                    let key = n - 60 - baseKey
+                    if latch {                      // latch: a played note toggles its key, like a tap
+                        if key >= 0 && key < Self.keyCount { toggleLatched(key) }
+                        continue
+                    }
+                    midiDown[n] = Float(m.d2) / 127
+                    orderCounter += 1; midiOrder[n] = orderCounter
+                    midiNew = key
+                    changed = true
+                case 0x80, 0x90: midiDown[n] = 0; changed = true
+                case 0xB0 where m.d1 == 123 || m.d1 == 120:
+                    for j in 0..<128 { midiDown[j] = 0 }; changed = true
+                default: break
+                }
+            }
+            if changed {
+                midiLast = -1
+                var best = Int.min
+                for n in 0..<128 where midiDown[n] > 0 && midiOrder[n] > best { best = midiOrder[n]; midiLast = n }
+            }
+        }
+
         // played-notes automation: record what's played into the loop, or play the loop back
         let slot = min(max(Int(autoPosition), 0), DSPNode.autoSlots - 1)
+        if midiNew != NO && midiNew >= 0 && midiNew < Self.keyCount && touch == NO && !newPress { newPress = true; pn = midiNew }
+        let midiKey = midiLast >= 0 ? midiLast - 60 - baseKey : NO
         if recordingKeys {
-            let k = touch >= 0 ? touch : (newPress ? pn : -1)
+            let k = touch != NO ? touch : (newPress ? pn : (midiKey >= 0 && midiKey < Self.keyCount ? midiKey : -1))
             if !recStarted && k >= 0 { recStarted = true; recLast = (slot + DSPNode.autoSlots - 1) % DSPNode.autoSlots }
             if recStarted {
                 // fill every slot since the last block (whatever is down now, or a rest)
@@ -192,7 +247,7 @@ public final class KeysNode: DSPNode {
             recStarted = false
         }
         var laneKey = -1
-        if keyLaneOn && !recordingKeys && ctx.running && touch < 0 {
+        if keyLaneOn && !recordingKeys && ctx.running && touch == NO && midiKey == NO {
             let v = Int(keyLane[slot])
             laneKey = v >= 0 && v < Self.keyCount ? v : -1
         }
@@ -201,16 +256,35 @@ public final class KeysNode: DSPNode {
             if laneKey != laneKeyPrev && !newPress { newPress = true; pn = laneKey }     // a new played note
         }
         laneKeyPrev = laneKey
+        // the newest MIDI note plays like a finger on a key (it may sit outside the two octaves)
+        if touch == NO && midiKey != NO {
+            touch = midiKey
+            if midiNew != NO && !newPress { newPress = true; pn = midiNew }
+        }
 
         // the set of notes the arp (or the plain keyboard) can play
         var count = 0
         if latch {
-            for k in 0..<Self.keyCount where latched[k] > 0.5 { scratch[count] = k; count += 1 }
+            for k in 0..<Self.keyCount where latched[k] > 0.5 { scratch[count] = k; sortKey[count] = order[k]; count += 1 }
         }
-        if touch >= 0 && !(latch && latched[touch] > 0.5) { scratch[count] = touch; count += 1 }
+        let touchLatched = latch && touch >= 0 && touch < Self.keyCount && latched[touch] > 0.5
+        if touch != NO && !touchLatched { scratch[count] = touch; sortKey[count] = Int.max; count += 1 }
+        if midiLast >= 0 && mode != 0 {           // the arp plays every held MIDI note
+            for n in 0..<128 where midiDown[n] > 0 && count < Self.keyCount {
+                let k = n - 60 - baseKey
+                if k == touch && !touchLatched { sortKey[count - 1] = midiOrder[n]; continue }
+                scratch[count] = k; sortKey[count] = midiOrder[n]; count += 1
+            }
+            if mode != 5 {                         // up / down / random: in pitch order
+                for a in 0..<count { for b in (a + 1)..<max(count, a + 1) where scratch[b] < scratch[a] {
+                    let t = scratch[a]; scratch[a] = scratch[b]; scratch[b] = t
+                    let u = sortKey[a]; sortKey[a] = sortKey[b]; sortKey[b] = u } }
+            }
+        }
         if mode == 5 {   // as played: sort by insertion order (touch last)
-            for a in 0..<count { for b in (a + 1)..<max(count, a + 1) where order[scratch[b]] < order[scratch[a]] {
-                let t = scratch[a]; scratch[a] = scratch[b]; scratch[b] = t } }
+            for a in 0..<count { for b in (a + 1)..<max(count, a + 1) where sortKey[b] < sortKey[a] {
+                let t = scratch[a]; scratch[a] = scratch[b]; scratch[b] = t
+                let u = sortKey[a]; sortKey[a] = sortKey[b]; sortKey[b] = u } }
         }
         // expand over octaves
         var total = 0
@@ -226,11 +300,11 @@ public final class KeysNode: DSPNode {
                     note = pn
                     holdLeft = minHold
                 }
-                let held = touch >= 0 ? touch : (holdLeft > 0 ? note : (latch && count > 0 ? scratch[count - 1] : -1))
+                let held = touch != NO ? touch : (holdLeft > 0 ? note : (latch && count > 0 ? scratch[count - 1] : NO))
                 if holdLeft > 0 { holdLeft -= 1 }
-                if held >= 0 { note = held }
-                if touch >= 0 && lastTouch >= 0 && touch != lastTouch { dip = 48 }
-                gateOn = held >= 0 && dip == 0
+                if held != NO { note = held }
+                if touch != NO && lastTouch != NO && touch != lastTouch { dip = 48 }
+                gateOn = held != NO && dip == 0
                 if dip > 0 { dip -= 1 }
             } else {
                 let fire = clock.tick(beat: ctx.beat[i], div: div, spb: ctx.samplesPerBeat, clockIn: nil, sampleRate: sampleRate)
@@ -259,15 +333,20 @@ public final class KeysNode: DSPNode {
                 gateOn = false
             }
             lastTouch = touch
-            let target = (base + Float(max(note, 0)))
+            if note != velFor {                     // a MIDI note keeps its velocity
+                velFor = note
+                let n = note + 60 + baseKey
+                noteVel = note != NO && n >= 0 && n < 128 && midiDown[n] > 0 ? midiDown[n] : 0.8
+            }
+            let target = base + Float(note == NO ? 0 : note)
             pitchNow += (target - pitchNow) * glide
             pOut[i] = pitchCV(pitchNow)
             gOut[i] = (mode == 0 ? gateOn : gateLeft > 0) ? kGateHigh : 0
             if gateLeft > 0 { gateLeft -= 1 }
-            vOut[i] = note >= 0 ? 0.8 : 0
+            vOut[i] = note != NO ? noteVel : 0
         }
         anyHeldBefore = total > 0
-        readouts[0] = Float(gOut[frames - 1] > 0 ? note : -1)
+        readouts[0] = Float(gOut[frames - 1] > 0 && note != NO ? note : -1)
     }
 }
 

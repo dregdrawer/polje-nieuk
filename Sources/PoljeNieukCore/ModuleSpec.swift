@@ -154,7 +154,7 @@ public struct ModuleSpec {
 
     public var bypass: BypassMode {
         switch kind {
-        case "in", "out", "clock", "rec", "mix", "text", "scope": return .none
+        case "in", "out", "clock", "rec", "mix", "text", "scope", "midi": return .none
         case "atten": return .through
         case "macro", "modal", "shapes", "rack", "drumsynth", "wave": return .silent       // sound sources: bypass = mute
         case "keys", "seq", "turing", "roll", "drums", "slider", "knob", "chord": return .silent

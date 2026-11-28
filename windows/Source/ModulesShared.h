@@ -96,7 +96,13 @@ public:
     bool keyLaneOn = false;
     std::atomic<bool> recordingKeys { false }, recordedKeys { false };
 private:
-    int seenPress = 0, holdLeft = 0, orderCounter = 0, note = -1, gateLeft = 0, dip = 0, arpIndex = -1, arpDir = 1, lastTouch = -1;
+    static constexpr int none = -1000;          // "no key" (MIDI notes can land below the keyboard)
+    int seenPress = 0, holdLeft = 0, orderCounter = 0, note = none, gateLeft = 0, dip = 0, arpIndex = -1, arpDir = 1, lastTouch = none;
+    std::array<float, 128> midiDown {};         // MIDI in: velocity of each held note (0 = up)
+    std::array<int, 128> midiOrder {};
+    std::array<int, keyCount> sortKey {};
+    int midiLast = -1, velFor = -1 << 30;
+    float noteVel = 0.8f;
     int recLast = -1, laneKeyPrev = -1;
     bool anyHeldBefore = false, gateOn = false, recStarted = false;
     std::array<int, keyCount> order {};
