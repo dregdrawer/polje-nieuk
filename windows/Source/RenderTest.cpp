@@ -17,6 +17,10 @@ struct Catcher : juce::MidiInputCallback {
 };
 
 static int midiTest() {
+#if JUCE_WINDOWS
+    std::printf("no virtual MIDI ports on Windows\n");
+    return 0;
+#else
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     bool ok = true;
     auto expect = [&](bool c, const char* m) { std::printf(c ? "  PASS  %s\n" : "  FAIL  %s\n", m); if (!c) ok = false; };
@@ -65,6 +69,7 @@ static int midiTest() {
     hub.shutdown();
     std::printf(ok ? "MIDI OK\n" : "MIDI FAILED\n");
     return ok ? 0 : 1;
+#endif
 }
 
 int main(int argc, char** argv) {
